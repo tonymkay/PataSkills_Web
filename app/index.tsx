@@ -1,37 +1,56 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { PlaySession } from '@/components/play/PlaySession';
 import { LandingScreen } from '@/components/landing/LandingScreen';
+import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
 import { QuizQuestion } from '@/types/quiz';
-import questionsDataRaw from '@/data/questions.sample.json';
-import { hydrateQuestionsList } from '@/utils/hydrateQuestions';
+import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
+
+type Stage = 'landing' | 'downloading' | 'session';
 
 export default function PlayEntry() {
   const { colors } = useTheme();
-  const [started, setStarted] = useState(false);
+  const [stage, setStage] = useState<Stage>('landing');
+  const [progress, setProgress] = useState<DownloadProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
 
-  // Load, sanitize, and hydrate questions from local JSON dataset with local sign assets
-  const questions = useMemo<QuizQuestion[]>(() => {
-    try {
-      const data = questionsDataRaw as unknown as QuizQuestion[];
-      if (Array.isArray(data) && data.length > 0) {
-        return hydrateQuestionsList(data);
-      }
-    } catch (e) {
-      console.warn('Failed to load questions data:', e);
+  const runDownload = useCallback(async () => {
+    setStage('downloading');
+    setError(null);
+    setProgress(null);
+    const result = await downloadSession((p) => setProgress(p));
+    if ('error' in result) {
+      setError(result.error);
+      return;
     }
-    return [];
+    setQuestions(result.questions);
+    setStage('session');
   }, []);
 
-  const handleStart = useCallback(() => setStarted(true), []);
-  const handleExit = useCallback(() => setStarted(false), []);
+  const handleStart = useCallback(() => {
+    void runDownload();
+  }, [runDownload]);
+
+  const handleRetry = useCallback(() => {
+    void runDownload();
+  }, [runDownload]);
+
+  const handleExit = useCallback(() => {
+    setStage('landing');
+    setQuestions([]);
+    setError(null);
+    setProgress(null);
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#14171C' }]}>
-      {started ? (
+      {stage === 'session' ? (
         <PlaySession questions={questions} onExit={handleExit} />
+      ) : stage === 'downloading' ? (
+        <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
       ) : (
         <LandingScreen onStart={handleStart} />
       )}

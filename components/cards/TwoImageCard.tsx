@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Image,
   ImageStyle,
   StyleProp,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Svg, { Polygon, Path, Rect, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,7 +72,8 @@ function RoadSignGraphic({
       <Image
         source={imageSource}
         style={[styles.signImage, imageStyle]}
-        resizeMode="contain"
+        contentFit="contain"
+        cachePolicy="disk"
       />
     );
   }

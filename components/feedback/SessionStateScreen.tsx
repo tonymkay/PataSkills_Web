@@ -191,7 +191,7 @@ export function SessionStateScreen({
         </Text>
         {isSessionUnlocked ? (
           <Text style={[Typography.bodyLarge, styles.subtitle, { color: colors.onSurfaceVariant }]}>
-            You have <Text style={{ color: StaticColors.tealAccent }}>{keysLeft} keys</Text> Left
+            You have <Text style={{ color: colors.tealAccent }}>{keysLeft} keys</Text> Left
           </Text>
         ) : (
           <Text style={[Typography.bodyLarge, styles.subtitle, { color: kind === 'topicComplete' ? colors.tealAccent : colors.onSurfaceVariant }]}>
