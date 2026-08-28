@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, BackHandler, Image } from 'react-native';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { StyleSheet, View, Text, Pressable, BackHandler, Image, LayoutChangeEvent } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,7 +13,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeContext';
 import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing } from '@/constants/spacing';
-import { SCREEN_WIDTH } from '@/constants/layout';
 import { BrandGradients } from '@/constants/gradients';
 import { QuizQuestion } from '@/types/quiz';
 import { TwoImageCard } from '@/components/cards/TwoImageCard';
@@ -25,9 +24,7 @@ import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
 const XP_PER_CORRECT = 10;
 
 const DECK_PAD = Spacing.marginMobile;
-const CARD_WIDTH = SCREEN_WIDTH - DECK_PAD * 2;
 const GAP = 16;
-const STRIDE = CARD_WIDTH + GAP;
 const DURATION = 320;
 
 interface CardDeckProps {
@@ -46,6 +43,16 @@ export function CardDeck({
   onClose,
 }: CardDeckProps) {
   const { colors, mode } = useTheme();
+
+  // Card width is measured from the actual rendered viewport, not derived
+  // from window/frame constants — this is what makes it correct regardless
+  // of the web aspect-ratio letterbox, resizes, or native screen size.
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const handleViewportLayout = useCallback((e: LayoutChangeEvent) => {
+    setViewportWidth(e.nativeEvent.layout.width);
+  }, []);
+  const cardWidth = viewportWidth;
+  const stride = cardWidth + GAP;
 
   // Queue state
   const [deck, setDeck] = useState<QuizQuestion[]>(initialQuestions);
@@ -118,7 +125,7 @@ export function CardDeck({
     } catch {}
 
     const nextIndex = currentIndex + 1;
-    const targetX = -(nextIndex * STRIDE);
+    const targetX = -(nextIndex * stride);
 
     // Slide strip continuously forward to the next index
     stripX.value = withTiming(
@@ -133,7 +140,7 @@ export function CardDeck({
         }
       }
     );
-  }, [currentIndex, isTransitioning, currentCard, stripX, activeFillAnim, handleTransitionEnd]);
+  }, [currentIndex, isTransitioning, currentCard, stripX, activeFillAnim, handleTransitionEnd, stride]);
 
   // Check button handler — opens the feedback sheet instead of auto-advancing.
   const handleCheck = () => {
@@ -261,7 +268,8 @@ export function CardDeck({
       </View>
 
       {/* 2. Card Viewport: Continuous horizontal track */}
-      <View style={styles.cardViewport}>
+      <View style={styles.cardViewport} onLayout={handleViewportLayout}>
+        {cardWidth > 0 && (
         <Animated.View style={[styles.cardStrip, stripStyle]}>
           {deck.map((question, idx) => {
             const isCurrent = idx === currentIndex;
@@ -273,7 +281,7 @@ export function CardDeck({
                 style={[
                   styles.cardSlot,
                   {
-                    width: CARD_WIDTH,
+                    width: cardWidth,
                     marginRight: GAP,
                   },
                 ]}
@@ -293,6 +301,7 @@ export function CardDeck({
             );
           })}
         </Animated.View>
+        )}
       </View>
 
       {/* 3. Bottom Controls Area */}
