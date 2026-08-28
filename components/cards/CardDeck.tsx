@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Dimensions, Text, Pressable, BackHandler, Image } from 'react-native';
+import { StyleSheet, View, Text, Pressable, BackHandler, Image } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeContext';
 import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing } from '@/constants/spacing';
+import { SCREEN_WIDTH } from '@/constants/layout';
 import { BrandGradients } from '@/constants/gradients';
 import { QuizQuestion } from '@/types/quiz';
 import { TwoImageCard } from '@/components/cards/TwoImageCard';
@@ -23,7 +24,6 @@ import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
 
 const XP_PER_CORRECT = 10;
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DECK_PAD = Spacing.marginMobile;
 const CARD_WIDTH = SCREEN_WIDTH - DECK_PAD * 2;
 const GAP = 16;
