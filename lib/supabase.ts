@@ -12,11 +12,17 @@ export const isSupabaseConfigured =
   supabaseAnonKey.length > 0 &&
   !supabaseAnonKey.includes('DUMMY');
 
+// AsyncStorage's web backend touches `window` as soon as GoTrue tries to
+// load a session. During Expo's static web export, modules are evaluated
+// on Node (no `window`) to prerender HTML, which crashes the build. Only
+// wire up storage when we're actually running in a browser.
+const isBrowser = typeof window !== 'undefined';
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
+    storage: isBrowser ? AsyncStorage : undefined,
+    autoRefreshToken: isBrowser,
+    persistSession: isBrowser,
     detectSessionInUrl: false,
   },
 });
