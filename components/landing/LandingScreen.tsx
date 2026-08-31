@@ -110,6 +110,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   middle: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
