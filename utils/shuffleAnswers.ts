@@ -18,19 +18,15 @@ function shuffledIndices(length: number): number[] {
  * mid-session retry alike.
  */
 export function shuffleAnswers<T extends QuizQuestion>(question: T): T {
-  // Two-image layout: shuffle the images (and any custom labels attached
-  // to them) together, so a label stays paired with its own image while
-  // the position it lands in (A slot vs B slot) is randomized.
+  // Two-image layout: shuffle which image sits in which slot, but leave
+  // `labels` untouched — A is always slot 0 and B is always slot 1, so the
+  // letters stay fixed to position while the images move under them.
   if (Array.isArray(question.images) && question.images.length >= 2) {
     const order = shuffledIndices(question.images.length);
     const newImages = order.map((i) => question.images![i]);
-    const newLabels = question.labels
-      ? order.map((i) => question.labels![i])
-      : question.labels;
     return {
       ...question,
       images: newImages,
-      labels: newLabels,
       correctAnswer: order.indexOf(question.correctAnswer),
     };
   }
