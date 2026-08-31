@@ -17,6 +17,7 @@ import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing } from '@/constants/spacing';
 import { BrandGradients } from '@/constants/gradients';
 import { QuizQuestion } from '@/types/quiz';
+import { shuffleAnswers } from '@/utils/shuffleAnswers';
 import { TwoImageCard } from '@/components/cards/TwoImageCard';
 import { CheckButton, FeedbackState } from '@/components/feedback/CheckButton';
 import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
@@ -74,8 +75,11 @@ export function CardDeck({
     setShowScrollHint(Boolean(contentH && viewportH && contentH > viewportH + 4));
   }, []);
 
-  // Queue state
-  const [deck, setDeck] = useState<QuizQuestion[]>(initialQuestions);
+  // Queue state — shuffled once per question as it enters the deck (both
+  // here on initial load and again on requeue below), so answer position
+  // is never something a learner can memorize, whether they're retrying a
+  // missed question this session or retaking the whole thing later.
+  const [deck, setDeck] = useState<QuizQuestion[]>(() => initialQuestions.map(shuffleAnswers));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flaggedIds, setFlaggedIds] = useState<Record<string, boolean>>({});
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -108,9 +112,10 @@ export function CardDeck({
         onFinish?.(stats);
       }
     } else {
-      // Requeue wrong card at the end of the queue
+      // Requeue wrong card at the end of the queue, reshuffled so the
+      // retry isn't in the same order the learner just got wrong.
       if (currentCard) {
-        setDeck((prev) => [...prev, currentCard]);
+        setDeck((prev) => [...prev, shuffleAnswers(currentCard)]);
       }
     }
 
