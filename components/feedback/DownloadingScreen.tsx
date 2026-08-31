@@ -13,18 +13,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
-import { DownloadProgress, DownloadStage } from '@/lib/downloadSession';
+import { DownloadProgress } from '@/lib/downloadSession';
 
 // User-facing copy only — deliberately says nothing about "downloading" or
-// "images"; this same screen still covers the curriculum/signs/pairs/
-// hydrating stages under the hood, but the learner just sees that things
-// are getting ready, not implementation detail.
-const STAGE_LABEL: Record<DownloadStage, string> = {
-  curriculum: 'Preparing your questions…',
-  signs: 'Getting everything ready…',
-  pairs: 'Almost there…',
-  hydrating: 'Preparing your session…',
-};
+// "images". The underlying stages (curriculum/signs/pairs/hydrating) move
+// too fast for the user to read stage-by-stage copy, so this is one static
+// label shown for the whole loading period rather than per-stage text.
+const LOADING_LABEL = 'Loading questions…';
 
 interface DownloadingScreenProps {
   progress: DownloadProgress | null;
@@ -98,7 +93,7 @@ export function DownloadingScreen({ progress, error, onRetry }: DownloadingScree
         ) : (
           <>
             <Text style={[Typography.scoreMainTitle, styles.title, { color: colors.onSurface }]}>
-              {STAGE_LABEL[progress?.stage ?? 'curriculum']}
+              {LOADING_LABEL}
             </Text>
             <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
           </>
