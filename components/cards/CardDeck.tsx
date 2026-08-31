@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, BackHandler, Image, LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, Text, Pressable, BackHandler, Image, LayoutChangeEvent, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -287,15 +287,22 @@ export function CardDeck({
                 ]}
               >
                 {shouldRender ? (
-                  <TwoImageCard
-                    question={question}
-                    selectedOption={isCurrent ? selectedOption : null}
-                    onSelectOption={isCurrent && !isTransitioning ? setSelectedOption : () => {}}
-                    onOpenLearnMore={isCurrent ? () => setIsLearnMoreOpen(true) : () => {}}
-                    onToggleFlag={(flagged) => handleToggleFlag(question.id, flagged)}
-                    isFlagged={Boolean(flaggedIds[question.id])}
-                    evaluatedResult={isCurrent ? evaluatedResult : null}
-                  />
+                  <ScrollView
+                    style={styles.cardSlotScroll}
+                    contentContainerStyle={styles.cardSlotScrollContent}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                  >
+                    <TwoImageCard
+                      question={question}
+                      selectedOption={isCurrent ? selectedOption : null}
+                      onSelectOption={isCurrent && !isTransitioning ? setSelectedOption : () => {}}
+                      onOpenLearnMore={isCurrent ? () => setIsLearnMoreOpen(true) : () => {}}
+                      onToggleFlag={(flagged) => handleToggleFlag(question.id, flagged)}
+                      isFlagged={Boolean(flaggedIds[question.id])}
+                      evaluatedResult={isCurrent ? evaluatedResult : null}
+                    />
+                  </ScrollView>
                 ) : null}
               </View>
             );
@@ -418,10 +425,19 @@ const styles = StyleSheet.create({
   },
   cardStrip: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
+    height: '100%',
   },
   cardSlot: {
     flexShrink: 0,
+    height: '100%',
+  },
+  cardSlotScroll: {
+    flex: 1,
+  },
+  cardSlotScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   controlsArea: {
     width: '100%',
