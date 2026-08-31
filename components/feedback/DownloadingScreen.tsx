@@ -1,15 +1,28 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
 import { DownloadProgress, DownloadStage } from '@/lib/downloadSession';
 
+// User-facing copy only — deliberately says nothing about "downloading" or
+// "images"; this same screen still covers the curriculum/signs/pairs/
+// hydrating stages under the hood, but the learner just sees that things
+// are getting ready, not implementation detail.
 const STAGE_LABEL: Record<DownloadStage, string> = {
-  curriculum: 'Downloading questions…',
-  signs: 'Downloading sign images…',
-  pairs: 'Downloading sign pairs…',
+  curriculum: 'Preparing your questions…',
+  signs: 'Getting everything ready…',
+  pairs: 'Almost there…',
   hydrating: 'Preparing your session…',
 };
 
@@ -19,10 +32,47 @@ interface DownloadingScreenProps {
   onRetry: () => void;
 }
 
+// Three dots bouncing in a staggered wave — communicates "something is
+// happening" without implying a measurable, watchable percentage.
+function BouncingDots({ color }: { color: string }) {
+  const dot0 = useSharedValue(0);
+  const dot1 = useSharedValue(0);
+  const dot2 = useSharedValue(0);
+
+  useEffect(() => {
+    const bounce = (delay: number) =>
+      withDelay(
+        delay,
+        withRepeat(
+          withSequence(
+            withTiming(-8, { duration: 300, easing: Easing.out(Easing.quad) }),
+            withTiming(0, { duration: 300, easing: Easing.in(Easing.quad) })
+          ),
+          -1,
+          false
+        )
+      );
+    dot0.value = bounce(0);
+    dot1.value = bounce(120);
+    dot2.value = bounce(240);
+  }, [dot0, dot1, dot2]);
+
+  const style0 = useAnimatedStyle(() => ({ transform: [{ translateY: dot0.value }] }));
+  const style1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }));
+  const style2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
+
+  return (
+    <View style={styles.dotsRow}>
+      <Animated.View style={[styles.dot, { backgroundColor: color }, style0]} />
+      <Animated.View style={[styles.dot, { backgroundColor: color }, style1]} />
+      <Animated.View style={[styles.dot, { backgroundColor: color }, style2]} />
+    </View>
+  );
+}
+
 export function DownloadingScreen({ progress, error, onRetry }: DownloadingScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const pct = Math.round((progress?.fraction ?? 0) * 100);
 
   return (
     <View
@@ -50,17 +100,7 @@ export function DownloadingScreen({ progress, error, onRetry }: DownloadingScree
             <Text style={[Typography.scoreMainTitle, styles.title, { color: colors.onSurface }]}>
               {STAGE_LABEL[progress?.stage ?? 'curriculum']}
             </Text>
-            <View style={[styles.progressTrack, { backgroundColor: colors.surfaceContainerHigh }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${pct}%`, backgroundColor: colors.tealAccent || '#2BD9C4' },
-                ]}
-              />
-            </View>
-            <Text style={[Typography.bodyLarge, styles.subtitle, { color: colors.onSurfaceVariant }]}>
-              {pct}%
-            </Text>
+            <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
           </>
         )}
       </View>
@@ -95,16 +135,15 @@ const styles = StyleSheet.create({
     marginTop: Spacing.base,
     maxWidth: 640,
   },
-  progressTrack: {
-    width: '80%',
-    height: 8,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginTop: Spacing.lg,
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: Radius.full,
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   actions: {
     gap: Spacing.gutter,
