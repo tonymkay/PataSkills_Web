@@ -1,9 +1,11 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View, Text, Pressable, BackHandler, Image, LayoutChangeEvent, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withRepeat,
+  cancelAnimation,
   runOnJS,
   Easing,
 } from 'react-native-reanimated';
@@ -53,6 +55,24 @@ export function CardDeck({
   }, []);
   const cardWidth = viewportWidth;
   const stride = cardWidth + GAP;
+
+  // Scroll-hint chevron: shown on the current card only, when its measured
+  // content height exceeds its measured viewport height (i.e. the card
+  // actually needs scrolling on this device/question). Heights are
+  // captured per-slot as each ScrollView lays out / its content resizes,
+  // so the hint is correct the instant a card becomes current — no need
+  // to wait for a fresh layout pass.
+  const contentHeightsRef = useRef<Record<number, number>>({});
+  const viewportHeightsRef = useRef<Record<number, number>>({});
+  const scrollRefs = useRef<Record<number, ScrollView | null>>({});
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const hintBounce = useSharedValue(0);
+
+  const recomputeHint = useCallback((idx: number) => {
+    const contentH = contentHeightsRef.current[idx];
+    const viewportH = viewportHeightsRef.current[idx];
+    setShowScrollHint(Boolean(contentH && viewportH && contentH > viewportH + 4));
+  }, []);
 
   // Queue state
   const [deck, setDeck] = useState<QuizQuestion[]>(initialQuestions);
@@ -180,6 +200,37 @@ export function CardDeck({
     return () => sub.remove();
   }, []);
 
+  // Re-check the hint whenever the active card changes (heights are
+  // usually already known since the next card was pre-rendered).
+  useEffect(() => {
+    recomputeHint(currentIndex);
+  }, [currentIndex, recomputeHint]);
+
+  // Bounce the chevron in a smooth up/down loop while it's visible, and
+  // stop cleanly (no snap) when it's dismissed.
+  useEffect(() => {
+    if (showScrollHint) {
+      hintBounce.value = withRepeat(
+        withTiming(8, { duration: 550, easing: Easing.inOut(Easing.quad) }),
+        -1,
+        true
+      );
+    } else {
+      cancelAnimation(hintBounce);
+      hintBounce.value = withTiming(0, { duration: 150 });
+    }
+  }, [showScrollHint, hintBounce]);
+
+  const hintStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: hintBounce.value }],
+  }));
+
+  const handleScrollHintPress = useCallback((idx: number) => {
+    const targetY = contentHeightsRef.current[idx] ?? 99999;
+    scrollRefs.current[idx]?.scrollTo({ y: targetY, animated: true });
+    setShowScrollHint(false);
+  }, []);
+
   // Flag toggle handler
   const handleToggleFlag = (id: string, flagged: boolean) => {
     setFlaggedIds((prev) => ({
@@ -287,22 +338,49 @@ export function CardDeck({
                 ]}
               >
                 {shouldRender ? (
-                  <ScrollView
-                    style={styles.cardSlotScroll}
-                    contentContainerStyle={styles.cardSlotScrollContent}
-                    showsVerticalScrollIndicator={false}
-                    bounces={false}
-                  >
-                    <TwoImageCard
-                      question={question}
-                      selectedOption={isCurrent ? selectedOption : null}
-                      onSelectOption={isCurrent && !isTransitioning ? setSelectedOption : () => {}}
-                      onOpenLearnMore={isCurrent ? () => setIsLearnMoreOpen(true) : () => {}}
-                      onToggleFlag={(flagged) => handleToggleFlag(question.id, flagged)}
-                      isFlagged={Boolean(flaggedIds[question.id])}
-                      evaluatedResult={isCurrent ? evaluatedResult : null}
-                    />
-                  </ScrollView>
+                  <>
+                    <ScrollView
+                      ref={(r) => { scrollRefs.current[idx] = r; }}
+                      style={styles.cardSlotScroll}
+                      contentContainerStyle={styles.cardSlotScrollContent}
+                      showsVerticalScrollIndicator={false}
+                      bounces={false}
+                      onLayout={(e) => {
+                        viewportHeightsRef.current[idx] = e.nativeEvent.layout.height;
+                        if (idx === currentIndex) recomputeHint(idx);
+                      }}
+                      onContentSizeChange={(_w, h) => {
+                        contentHeightsRef.current[idx] = h;
+                        if (idx === currentIndex) recomputeHint(idx);
+                      }}
+                      onScroll={(e) => {
+                        if (idx !== currentIndex) return;
+                        if (e.nativeEvent.contentOffset.y > 12) setShowScrollHint(false);
+                      }}
+                      scrollEventThrottle={32}
+                    >
+                      <TwoImageCard
+                        question={question}
+                        selectedOption={isCurrent ? selectedOption : null}
+                        onSelectOption={isCurrent && !isTransitioning ? setSelectedOption : () => {}}
+                        onOpenLearnMore={isCurrent ? () => setIsLearnMoreOpen(true) : () => {}}
+                        onToggleFlag={(flagged) => handleToggleFlag(question.id, flagged)}
+                        isFlagged={Boolean(flaggedIds[question.id])}
+                        evaluatedResult={isCurrent ? evaluatedResult : null}
+                      />
+                    </ScrollView>
+                    {isCurrent && showScrollHint ? (
+                      <Pressable
+                        onPress={() => handleScrollHintPress(idx)}
+                        hitSlop={10}
+                        style={styles.scrollHintButton}
+                      >
+                        <Animated.View style={[styles.scrollHintBubble, hintStyle]}>
+                          <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
+                        </Animated.View>
+                      </Pressable>
+                    ) : null}
+                  </>
                 ) : null}
               </View>
             );
@@ -437,6 +515,19 @@ const styles = StyleSheet.create({
   },
   cardSlotScrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
+  },
+  scrollHintButton: {
+    position: 'absolute',
+    bottom: 6,
+    alignSelf: 'center',
+  },
+  scrollHintBubble: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   controlsArea: {
