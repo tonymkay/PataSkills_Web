@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, Modal } from 'react-native';
 import { supabase, getPlayAssetPublicUrl } from '@/lib/supabase';
+import { useTheme, Spacing, Radius, FontFamily } from '@/theme/tokens';
+import { Upload, Download, X } from 'lucide-react-native';
 
 interface SignQuestionItem {
   id: string;
@@ -126,6 +128,7 @@ async function loadSignQuestions(): Promise<{
 }
 
 export default function AdminSignsScreen() {
+  const { colors } = useTheme();
   const [items, setItems] = useState<SignQuestionItem[]>([]);
   const [availableAssets, setAvailableAssets] = useState<SignAssetOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -233,65 +236,166 @@ export default function AdminSignsScreen() {
     input.click();
   }
 
+  async function loadJSZip(): Promise<any> {
+    if (typeof window === 'undefined') throw new Error('Not in browser');
+    if ((window as any).JSZip) return (window as any).JSZip;
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      script.onload = () => resolve((window as any).JSZip);
+      script.onerror = () => reject(new Error('Failed to load zip library'));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function handleDownloadAll() {
+    if (typeof window === 'undefined') return;
+    setSaving(true);
+    setToast('Preparing zip file with all named sign images…');
+    try {
+      const JSZip = await loadJSZip();
+      const zip = new JSZip();
+      let added = 0;
+
+      for (const item of items) {
+        if (!item.image_path) continue;
+        const url = getPlayAssetPublicUrl(item.image_path);
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const ext = item.image_path.split('.').pop() || 'webp';
+          const safeName = `${item.expectedAnswer.replace(/[/\\?%*:|"<>]/g, '_')}.${ext}`;
+          zip.file(safeName, blob);
+          added++;
+        } catch (e) {
+          console.warn(`Failed to bundle image for ${item.expectedAnswer}`, e);
+        }
+      }
+
+      if (added === 0) {
+        throw new Error('No images available to zip');
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `driving_theory_signs_named_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+      setToast(`Successfully downloaded ${added} sign images in ZIP!`);
+    } catch (err: any) {
+      setToast(`Download failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setToast(null), 4000);
+    }
+  }
+
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
-        <ActivityIndicator color="#fff" size="large" />
-        <Text style={{ color: '#fff', marginTop: 12, fontSize: 14 }}>Loading signs from curriculum…</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.primary} size="large" />
+        <Text style={{ color: colors.onSurface, marginTop: Spacing.sm, fontFamily: FontFamily.medium, fontSize: 14 }}>
+          Loading signs from curriculum…
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#111' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: '#222' }}>
-        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>
-          Signs ({items.length})
-        </Text>
-        <Text style={{ color: '#888', fontSize: 13, marginTop: 4 }}>
-          Targeting "What is this sign called?" questions. Tap any sign to swap or upload its image.
-        </Text>
+      <View
+        style={{
+          padding: Spacing.gutter,
+          borderBottomWidth: 1,
+          borderColor: colors.surfaceContainerHigh,
+          backgroundColor: colors.surface,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: Spacing.sm,
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 200 }}>
+          <Text style={{ color: colors.onSurface, fontSize: 22, fontFamily: FontFamily.bold }}>
+            Signs ({items.length})
+          </Text>
+          <Text style={{ color: colors.onSurfaceVariant, fontSize: 13, marginTop: 2, fontFamily: FontFamily.regular }}>
+            Targeting "What is this sign called?" questions. Tap any sign to swap or upload.
+          </Text>
+        </View>
+
+        <Pressable
+          onPress={handleDownloadAll}
+          style={{
+            backgroundColor: colors.surfaceContainerHigh,
+            borderWidth: 1,
+            borderColor: colors.outlineVariant,
+            paddingHorizontal: Spacing.gutter,
+            paddingVertical: 10,
+            borderRadius: Radius.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.base,
+          }}
+        >
+          <Download size={17} color={colors.actionBlue} />
+          <Text style={{ color: colors.actionBlue, fontSize: 13, fontFamily: FontFamily.semiBold }}>
+            Download All (ZIP)
+          </Text>
+        </Pressable>
       </View>
 
       {/* Notification Toast */}
       {toast && (
-        <View style={{ backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 16 }}>
-          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{toast}</Text>
+        <View
+          style={{
+            backgroundColor: colors.primary,
+            paddingVertical: Spacing.base,
+            paddingHorizontal: Spacing.gutter,
+          }}
+        >
+          <Text style={{ color: colors.onPrimary, fontSize: 13, fontFamily: FontFamily.medium }}>
+            {toast}
+          </Text>
         </View>
       )}
 
       {/* Main Grid: Images + Expected Answers */}
-      <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 12 }}>
+      <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', padding: Spacing.sm, gap: Spacing.sm }}>
         {items.map((item) => (
           <Pressable
             key={item.id}
             onPress={() => setSwapTarget(item)}
             style={{
-              width: 150,
-              backgroundColor: '#1a1a1a',
-              borderRadius: 10,
-              padding: 10,
+              width: 154,
+              backgroundColor: colors.surfaceContainer,
+              borderRadius: Radius.md,
+              padding: Spacing.sm,
               borderWidth: 1,
-              borderColor: '#2a2a2a',
+              borderColor: colors.surfaceContainerHigh,
             }}
           >
             <Image
               source={{ uri: getPlayAssetPublicUrl(item.image_path) }}
               style={{
                 width: '100%',
-                height: 95,
-                borderRadius: 6,
-                backgroundColor: '#000',
+                height: 96,
+                borderRadius: Radius.default,
+                backgroundColor: colors.black,
               }}
               resizeMode="contain"
             />
             <Text
               style={{
-                color: '#fff',
+                color: colors.onSurface,
                 fontSize: 12,
-                marginTop: 8,
-                fontWeight: '600',
+                marginTop: Spacing.base,
+                fontFamily: FontFamily.semiBold,
                 lineHeight: 16,
               }}
               numberOfLines={2}
@@ -304,54 +408,102 @@ export default function AdminSignsScreen() {
 
       {/* Visual Image Swap Modal */}
       <Modal visible={!!swapTarget} transparent animationType="fade" onRequestClose={() => setSwapTarget(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', padding: 16 }}>
-          <View style={{ backgroundColor: '#181818', borderRadius: 12, flex: 1, padding: 16, borderWidth: 1, borderColor: '#333' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={{ color: '#888', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', padding: Spacing.gutter }}>
+          <View
+            style={{
+              backgroundColor: colors.surfaceContainer,
+              borderRadius: Radius.lg,
+              flex: 1,
+              padding: Spacing.gutter,
+              borderWidth: 1,
+              borderColor: colors.surfaceContainerHigh,
+            }}
+          >
+            {/* Modal Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.gutter }}>
+              <View style={{ flex: 1, paddingRight: Spacing.gutter }}>
+                <Text style={{ color: colors.onSurfaceVariant, fontSize: 11, fontFamily: FontFamily.medium, textTransform: 'uppercase', letterSpacing: 0.8 }}>
                   Replace image for:
                 </Text>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
+                <Text style={{ color: colors.onSurface, fontSize: 17, fontFamily: FontFamily.bold, marginTop: 2 }}>
                   {swapTarget?.expectedAnswer}
                 </Text>
               </View>
               <Pressable
                 onPress={() => setSwapTarget(null)}
-                style={{ padding: 4, borderRadius: 6, backgroundColor: '#222' }}
+                style={{
+                  padding: Spacing.xs,
+                  borderRadius: Radius.sm,
+                  backgroundColor: colors.surfaceContainerHigh,
+                }}
               >
-                <Text style={{ color: '#aaa', fontSize: 18, paddingHorizontal: 6 }}>✕</Text>
+                <X size={20} color={colors.onSurfaceVariant} />
               </Pressable>
             </View>
 
             {/* Action Toolbar */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-              <Text style={{ color: '#777', fontSize: 12 }}>
-                Select a graphic below or upload a new one:
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: Spacing.gutter,
+                flexWrap: 'wrap',
+                gap: Spacing.base,
+              }}
+            >
+              <Text style={{ color: colors.onSurfaceVariant, fontSize: 13, fontFamily: FontFamily.regular }}>
+                Pick a sign graphic or upload a new one:
               </Text>
-              <Pressable
-                onPress={() => swapTarget && handleUpload(swapTarget)}
-                style={{
-                  backgroundColor: '#2563eb',
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderRadius: 6,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
-                  ⬆ Upload from Computer
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: Spacing.base, alignItems: 'center' }}>
+                <Pressable
+                  onPress={handleDownloadAll}
+                  style={{
+                    backgroundColor: colors.surfaceContainerHigh,
+                    borderWidth: 1,
+                    borderColor: colors.outlineVariant,
+                    paddingHorizontal: Spacing.gutter,
+                    paddingVertical: Spacing.base,
+                    borderRadius: Radius.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Download size={15} color={colors.actionBlue} />
+                  <Text style={{ color: colors.actionBlue, fontSize: 12, fontFamily: FontFamily.semiBold }}>
+                    ZIP
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => swapTarget && handleUpload(swapTarget)}
+                  style={{
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: Spacing.gutter,
+                    paddingVertical: Spacing.base,
+                    borderRadius: Radius.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Upload size={15} color={colors.onPrimary} />
+                  <Text style={{ color: colors.onPrimary, fontSize: 12, fontFamily: FontFamily.bold }}>
+                    Upload from Computer
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
             {saving ? (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                <ActivityIndicator color="#fff" size="large" />
-                <Text style={{ color: '#aaa', marginTop: 10 }}>Saving image swap…</Text>
+                <ActivityIndicator color={colors.primary} size="large" />
+                <Text style={{ color: colors.onSurfaceVariant, marginTop: Spacing.sm, fontFamily: FontFamily.medium }}>
+                  Processing image…
+                </Text>
               </View>
             ) : (
-              <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.base }}>
                 {availableAssets.map((asset) => (
                   <Pressable
                     key={asset.id}
@@ -359,18 +511,18 @@ export default function AdminSignsScreen() {
                     style={{
                       width: 96,
                       height: 80,
-                      backgroundColor: '#0a0a0a',
-                      borderRadius: 8,
+                      backgroundColor: colors.black,
+                      borderRadius: Radius.default,
                       padding: 6,
                       borderWidth: 1,
-                      borderColor: '#2e2e2e',
+                      borderColor: colors.surfaceContainerHigh,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
                     <Image
                       source={{ uri: getPlayAssetPublicUrl(asset.image_path) }}
-                      style={{ width: '100%', height: '100%', borderRadius: 4 }}
+                      style={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
                       resizeMode="contain"
                     />
                   </Pressable>
@@ -383,4 +535,5 @@ export default function AdminSignsScreen() {
     </View>
   );
 }
+
 
