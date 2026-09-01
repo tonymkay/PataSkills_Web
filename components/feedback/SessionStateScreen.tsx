@@ -141,7 +141,7 @@ export function SessionStateScreen({
 
   // Default actions if not explicitly passed
   const handleBuyKeys = onBuyKeysPress || (() => router.push('/keys-packs'));
-  const handleSubscribe = onSubscribePress || (() => router.push('/subscription-confirm'));
+  const handleSubscribe = onSubscribePress || (() => router.push('/subscription-plans'));
 
   // The timer is the source of truth: tick a clock reading and derive the
   // remaining time from the real `resetAt` timestamp each render, rather

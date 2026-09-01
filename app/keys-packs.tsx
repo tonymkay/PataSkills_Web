@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Info, ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { KEY_PACKS, type KeyPack } from '@/lib/premium';
@@ -47,6 +47,24 @@ export default function KeysPacksScreen() {
             Keys left in balance
           </Text>
         </View>
+
+        {/* Info Link Bar: How Keys Work */}
+        <Pressable
+          onPress={() => router.push('/how-keys-work')}
+          style={({ pressed }) => [
+            styles.infoLinkBar,
+            { backgroundColor: colors.surfaceContainer, borderColor: colors.surfaceContainerHigh },
+            pressed && { opacity: 0.75 },
+          ]}
+        >
+          <View style={styles.infoLinkLeft}>
+            <Info size={18} color={StaticColors.achievementAmber} />
+            <Text style={[styles.infoLinkLabel, { color: colors.onSurface }]}>
+              How Keys work
+            </Text>
+          </View>
+          <ChevronRight size={18} color={colors.onSurfaceVariant} />
+        </Pressable>
 
         {/* Key Packs List */}
         <View style={styles.packsList}>
@@ -116,7 +134,8 @@ const styles = StyleSheet.create({
   },
   balanceHero: {
     alignItems: 'center',
-    paddingVertical: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
   heroRow: {
     flexDirection: 'row',
@@ -138,9 +157,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: Spacing.xs,
   },
+  infoLinkBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: 12,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  infoLinkLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  infoLinkLabel: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 14,
+  },
   packsList: {
     gap: Spacing.sm,
-    marginTop: Spacing.base,
+    marginTop: Spacing.sm,
   },
   packCard: {
     flexDirection: 'row',

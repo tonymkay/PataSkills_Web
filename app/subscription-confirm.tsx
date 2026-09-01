@@ -4,8 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
-import { planById } from '@/lib/premium';
-import { formatUSDAmount } from '@/lib/currency';
+import { planById, planDisplay } from '@/lib/premium';
 import { purchasePlan } from '@/lib/billing';
 
 export default function SubscriptionConfirmScreen() {
@@ -16,10 +15,17 @@ export default function SubscriptionConfirmScreen() {
   const plan = planById(params.plan);
   const [busy, setBusy] = useState(false);
 
-  const priceString = plan ? formatUSDAmount(plan.monthlyUSD, 'USD') : '$12.00';
+  if (!plan) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: colors.onSurface }}>Plan not found</Text>
+      </View>
+    );
+  }
+
+  const display = planDisplay(plan, 'USD');
 
   const onConfirm = async () => {
-    if (!plan) return;
     setBusy(true);
     const result = await purchasePlan(plan.packageId);
     setBusy(false);
@@ -45,7 +51,8 @@ export default function SubscriptionConfirmScreen() {
             styles.confirmCard,
             {
               backgroundColor: colors.surfaceContainer,
-              borderColor: colors.surfaceContainerHigh,
+              borderColor: plan.popular ? StaticColors.successLime : colors.surfaceContainerHigh,
+              borderWidth: plan.popular ? 1.8 : 1,
             },
           ]}
         >
@@ -56,10 +63,15 @@ export default function SubscriptionConfirmScreen() {
           />
 
           <Text style={[styles.planTitle, { color: colors.onSurface }]}>
-            {plan?.name || 'Unlimited'} Pass
+            {plan.name} Pass
           </Text>
-          <Text style={[styles.cardPrice, { color: colors.primary }]}>
-            {priceString} <Text style={[styles.pricePeriod, { color: colors.onSurfaceVariant }]}>/ month</Text>
+          
+          <Text style={[styles.cardPrice, { color: StaticColors.successLime }]}>
+            {display.price}
+          </Text>
+
+          <Text style={[styles.cardTerm, { color: colors.onSurfaceVariant }]}>
+            {display.term} {display.note ? `• ${display.note}` : ''}
           </Text>
 
           <View style={[styles.divider, { backgroundColor: colors.surfaceContainerHigh }]} />
@@ -72,7 +84,7 @@ export default function SubscriptionConfirmScreen() {
             </View>
             <View style={styles.benefitRow}>
               <Check size={18} color={StaticColors.successLime} strokeWidth={2.5} />
-              <Text style={[styles.benefitText, { color: colors.onSurface }]}>Access to all road signs & theory questions</Text>
+              <Text style={[styles.benefitText, { color: colors.onSurface }]}>Access to all road signs & driving questions</Text>
             </View>
             <View style={styles.benefitRow}>
               <Check size={18} color={StaticColors.successLime} strokeWidth={2.5} />
@@ -89,14 +101,14 @@ export default function SubscriptionConfirmScreen() {
           disabled={busy}
           style={({ pressed }) => [
             styles.confirmButton,
-            { backgroundColor: colors.primary },
+            { backgroundColor: StaticColors.successLime },
             (pressed || busy) && { opacity: 0.8 },
           ]}
         >
           {busy ? (
-            <ActivityIndicator color={colors.onPrimary} size="small" />
+            <ActivityIndicator color="#000" size="small" />
           ) : (
-            <Text style={[styles.confirmButtonText, { color: colors.onPrimary }]}>
+            <Text style={styles.confirmButtonText}>
               Subscribe with Paystack
             </Text>
           )}
@@ -133,7 +145,6 @@ const styles = StyleSheet.create({
   },
   confirmCard: {
     borderRadius: Radius.xl,
-    borderWidth: 1,
     padding: Spacing.xl,
     alignItems: 'center',
   },
@@ -153,9 +164,10 @@ const styles = StyleSheet.create({
     lineHeight: 40,
     marginTop: Spacing.xs,
   },
-  pricePeriod: {
+  cardTerm: {
     fontFamily: FontFamily.medium,
-    fontSize: 16,
+    fontSize: 14,
+    marginTop: 2,
   },
   divider: {
     height: 1,
@@ -187,6 +199,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   confirmButtonText: {
+    color: '#000',
     fontFamily: FontFamily.extraBold,
     fontSize: 16,
     letterSpacing: 0.5,

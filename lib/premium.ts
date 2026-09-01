@@ -1,4 +1,4 @@
-import { formatPrice, usdToKES, formatUSDAmount, type CurrencyCode } from '@/lib/currency';
+import { formatUSDAmount, formatPrice, usdToKES, type CurrencyCode } from '@/lib/currency';
 
 export interface Plan {
   id: string;
@@ -18,6 +18,22 @@ export const PLANS: Plan[] = [
 
 export function planById(id?: string): Plan | undefined {
   return PLANS.find((p) => p.id === id) || PLANS[1];
+}
+
+export function planDisplay(plan: Plan, currency: CurrencyCode = 'USD') {
+  if (plan.weeklyUSD) {
+    const price = currency === 'KES' ? `Ksh ${usdToKES(plan.weeklyUSD).toLocaleString()}/wk` : `$${plan.weeklyUSD.toFixed(2)}/wk`;
+    return { price, term: 'Billed each week', note: undefined };
+  }
+
+  if (plan.annualUSD) {
+    const price = currency === 'KES' ? `Ksh ${usdToKES(plan.annualUSD).toLocaleString()}` : `$${plan.annualUSD.toFixed(2)}`;
+    const term = currency === 'KES' ? `Billed at Ksh ${usdToKES(plan.monthlyUSD).toLocaleString()}/mo` : `Billed at $${plan.monthlyUSD.toFixed(2)}/mo`;
+    return { price, term, note: 'Save 10%' };
+  }
+
+  const price = currency === 'KES' ? `Ksh ${usdToKES(plan.monthlyUSD).toLocaleString()}/mo` : `$${plan.monthlyUSD.toFixed(2)}/mo`;
+  return { price, term: 'Billed each month', note: undefined };
 }
 
 export interface KeyPack {
