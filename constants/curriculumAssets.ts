@@ -9,7 +9,7 @@
 // screen show it with zero network-roundtrip latency before the user has
 // even tapped "Start Practice" (loadRemoteCurriculum only runs after that).
 export const CurriculumCoverImagePaths = {
-  'driving-theory': 'driving.webp',
+  'driving-theory': 'curricula/driving.webp',
 } as const;
 
 export type CurriculumSlug = keyof typeof CurriculumCoverImagePaths;
