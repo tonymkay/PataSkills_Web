@@ -12,6 +12,8 @@ import { StaticColors } from '@/constants/colors';
 import { Toggle } from '@/components/ui/Toggle';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
+import { FreeModeInfoModal } from '@/components/feedback/FreeModeInfoModal';
+import { WatchAdPromptSheet } from '@/components/feedback/WatchAdPromptSheet';
 
 export type SessionStateKind =
   | 'topicComplete'
@@ -137,9 +139,11 @@ export function SessionStateScreen({
   const config = stateCopy[kind];
   const Icon = config.icon;
 
-  const [selectedProceedOption, setSelectedProceedOption] = useState<'keys' | 'unlimited' | 'trial' | null>('keys');
+  const [selectedProceedOption, setSelectedProceedOption] = useState<'keys' | 'unlimited' | 'trial' | null>('trial');
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+  const [freeModeInfoVisible, setFreeModeInfoVisible] = useState(false);
+  const [watchAdSheetVisible, setWatchAdSheetVisible] = useState(false);
 
   const handleRestoreSuccess = () => {
     if (onPrimaryPress) {
@@ -147,6 +151,23 @@ export function SessionStateScreen({
     } else {
       router.replace({ pathname: '/', params: { resume: 'true' } });
     }
+  };
+
+  const handleAdRewarded = () => {
+    if (onPrimaryPress) {
+      onPrimaryPress();
+    } else {
+      router.replace({ pathname: '/', params: { resume: 'true' } });
+    }
+  };
+
+  const handleDismissToHome = () => {
+    setWatchAdSheetVisible(false);
+    onSecondaryPress?.();
+  };
+
+  const handleAttemptExit = () => {
+    setWatchAdSheetVisible(true);
   };
 
   useEffect(() => {
@@ -201,7 +222,7 @@ export function SessionStateScreen({
     } else if (selectedProceedOption === 'unlimited') {
       handleSubscribe();
     } else if (selectedProceedOption === 'trial') {
-      onSecondaryPress?.();
+      setFreeModeInfoVisible(true);
     }
   };
 
@@ -231,96 +252,19 @@ export function SessionStateScreen({
         ]}
       >
         <View style={styles.proceedContent}>
-          {/* Header Title */}
-          <Text style={[styles.proceedTitle, { color: colors.onSurface }]}>
-            {title || config.title}
-          </Text>
+          {/* Header with Title & Dismiss Button */}
+          <View style={styles.proceedHeaderRow}>
+            <Text style={[styles.proceedTitle, { color: colors.onSurface }]}>
+              {title || config.title}
+            </Text>
+            <Pressable onPress={handleAttemptExit} hitSlop={12} style={styles.proceedCloseBtn}>
+              <X size={22} color={colors.onSurfaceVariant} />
+            </Pressable>
+          </View>
 
           {/* Options List */}
           <View style={styles.proceedOptions}>
-            {/* Option 1: Buy one time keys */}
-            <Pressable
-              onPress={() => setSelectedProceedOption('keys')}
-              style={({ pressed }) => [
-                styles.proceedCard,
-                {
-                  backgroundColor: colors.surfaceContainer,
-                  borderColor: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.surfaceContainerHigh,
-                  borderWidth: selectedProceedOption === 'keys' ? 2 : 1,
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <View style={styles.proceedCardRow}>
-                <View style={styles.proceedCardLeft}>
-                  <Image
-                    source={require('@/assets/premium/key.webp')}
-                    style={styles.proceedCardImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.proceedCardTextWrap}>
-                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                      Buy one time keys
-                    </Text>
-                    <Text
-                      style={[
-                        styles.proceedCardSubtitle,
-                        { color: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant },
-                      ]}
-                    >
-                      Packs of 20, 40, 80 or 120 keys
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight
-                  size={22}
-                  color={selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant}
-                />
-              </View>
-            </Pressable>
-
-            {/* Option 2: Subscribe for Unlimited */}
-            <Pressable
-              onPress={() => setSelectedProceedOption('unlimited')}
-              style={({ pressed }) => [
-                styles.proceedCard,
-                {
-                  backgroundColor: colors.surfaceContainer,
-                  borderColor: selectedProceedOption === 'unlimited' ? '#FFFFFF' : colors.surfaceContainerHigh,
-                  borderWidth: selectedProceedOption === 'unlimited' ? 2 : 1,
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <View style={styles.proceedCardRow}>
-                <View style={styles.proceedCardLeft}>
-                  <Image
-                    source={require('@/assets/premium/crown.webp')}
-                    style={styles.proceedCardImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.proceedCardTextWrap}>
-                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                      Subscribe for Unlimited
-                    </Text>
-                    <Text
-                      style={[
-                        styles.proceedCardSubtitle,
-                        { color: selectedProceedOption === 'unlimited' ? '#FFFFFF' : colors.onSurfaceVariant },
-                      ]}
-                    >
-                      Get full experience with premium
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight
-                  size={22}
-                  color={selectedProceedOption === 'unlimited' ? '#FFFFFF' : colors.onSurfaceVariant}
-                />
-              </View>
-            </Pressable>
-
-            {/* Option 3: Use Free trial */}
+            {/* Option 1: Use Free trial */}
             <Pressable
               onPress={() => setSelectedProceedOption('trial')}
               style={({ pressed }) => [
@@ -370,6 +314,88 @@ export function SessionStateScreen({
               </View>
             </Pressable>
 
+            {/* Option 2: Buy one time keys */}
+            <Pressable
+              onPress={() => setSelectedProceedOption('keys')}
+              style={({ pressed }) => [
+                styles.proceedCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.surfaceContainerHigh,
+                  borderWidth: selectedProceedOption === 'keys' ? 2 : 1,
+                },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <View style={styles.proceedCardRow}>
+                <View style={styles.proceedCardLeft}>
+                  <Image
+                    source={require('@/assets/premium/key.webp')}
+                    style={styles.proceedCardImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.proceedCardTextWrap}>
+                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                      Buy one time keys
+                    </Text>
+                    <Text
+                      style={[
+                        styles.proceedCardSubtitle,
+                        { color: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Packs of 20, 40, 80 or 120 keys
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight
+                  size={22}
+                  color={selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant}
+                />
+              </View>
+            </Pressable>
+
+            {/* Option 3: Subscribe for Unlimited (Green Highlight) */}
+            <Pressable
+              onPress={() => setSelectedProceedOption('unlimited')}
+              style={({ pressed }) => [
+                styles.proceedCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.surfaceContainerHigh,
+                  borderWidth: selectedProceedOption === 'unlimited' ? 2 : 1,
+                },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <View style={styles.proceedCardRow}>
+                <View style={styles.proceedCardLeft}>
+                  <Image
+                    source={require('@/assets/premium/crown.webp')}
+                    style={styles.proceedCardImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.proceedCardTextWrap}>
+                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                      Subscribe for Unlimited
+                    </Text>
+                    <Text
+                      style={[
+                        styles.proceedCardSubtitle,
+                        { color: selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Get full experience with premium
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight
+                  size={22}
+                  color={selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.onSurfaceVariant}
+                />
+              </View>
+            </Pressable>
+
             {/* Restore Account Text Link (Centered & Underlined) */}
             <Pressable
               onPress={() => setRestoreModalVisible(true)}
@@ -414,6 +440,24 @@ export function SessionStateScreen({
           visible={restoreModalVisible}
           onClose={() => setRestoreModalVisible(false)}
           onSuccess={handleRestoreSuccess}
+        />
+
+        {/* Free Mode Explanatory Modal */}
+        <FreeModeInfoModal
+          visible={freeModeInfoVisible}
+          onClose={() => setFreeModeInfoVisible(false)}
+          onProceed={() => {
+            setFreeModeInfoVisible(false);
+            onSecondaryPress?.();
+          }}
+        />
+
+        {/* Rewarded Ad Exit Prompt Bottom Sheet */}
+        <WatchAdPromptSheet
+          visible={watchAdSheetVisible}
+          onClose={() => setWatchAdSheetVisible(false)}
+          onAdRewarded={handleAdRewarded}
+          onDismissToHome={handleDismissToHome}
         />
       </View>
     );
@@ -570,13 +614,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  proceedHeaderRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginBottom: Spacing.xl,
+  },
   proceedTitle: {
     fontFamily: FontFamily.bold,
     fontSize: 28,
     lineHeight: 36,
     textAlign: 'center',
-    marginBottom: Spacing.xl,
-    maxWidth: 300,
+    maxWidth: 280,
+  },
+  proceedCloseBtn: {
+    position: 'absolute',
+    right: 0,
+    top: 4,
+    padding: Spacing.xs,
   },
   proceedOptions: {
     width: '100%',

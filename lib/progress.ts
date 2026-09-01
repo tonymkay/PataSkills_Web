@@ -12,7 +12,7 @@ export interface ProgressState {
 
 const DEFAULT_PROGRESS: ProgressState = {
   completedTopics: 0,
-  totalTopics: 34,
+  totalTopics: 46,
   lastUpdated: new Date().toISOString(),
 };
 
@@ -34,7 +34,7 @@ export async function getLocalProgress(): Promise<ProgressState> {
  */
 export async function markTopicCompleted(
   topicIndex: number,
-  totalTopics: number = 34
+  totalTopics: number = 46
 ): Promise<ProgressState> {
   const current = await getLocalProgress();
   const nextCompleted = Math.max(current.completedTopics, topicIndex + 1);

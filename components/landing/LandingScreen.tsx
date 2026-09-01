@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, Spacing, Radius, Typography, FontFamily } from '@/theme/tokens';
-import { BrandGradients } from '@/constants/gradients';
 import { LandingIllustration } from './LandingIllustration';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { RestoreResult } from '@/lib/restore';
@@ -26,13 +25,13 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   const [index] = useState(0);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [completedTopics, setCompletedTopics] = useState(0);
-  const [totalTopics, setTotalTopics] = useState(34);
+  const [totalTopics, setTotalTopics] = useState(46);
   const slide = SLIDES[index];
 
   const refreshProgress = () => {
     getLocalProgress().then((p) => {
       if (p) {
-        setCompletedTopics(p.completedTopics);
+        setCompletedTopics(p.completedTopics || 0);
         if (p.totalTopics > 0) setTotalTopics(p.totalTopics);
       }
     }).catch(() => {});
@@ -44,7 +43,6 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
 
   const handleRestoreSuccess = (_result: RestoreResult) => {
     refreshProgress();
-    // Proceed directly into practice/resume
     onStart();
   };
 
@@ -53,24 +51,19 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
 
   return (
     <View style={styles.container}>
-      {/* 1. Header & Dynamic Progress */}
+      {/* 1. Header & Real Progress (Hidden when 0 completed) */}
       <View style={styles.top}>
         <Text style={[Typography.headlineXl, styles.title, { color: colors.onSurface }]}>
           {slide.title}
         </Text>
 
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressSegment,
-              { backgroundColor: '#2B303C' },
-            ]}
-          >
-            {completedTopics > 0 ? (
+        {completedTopics > 0 ? (
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressSegment, { backgroundColor: '#2B303C' }]}>
               <View
                 style={{
                   height: '100%',
-                  width: `${Math.max(6, progressPercent)}%`,
+                  width: `${Math.max(4, progressPercent)}%`,
                   borderRadius: Radius.full,
                   overflow: 'hidden',
                 }}
@@ -82,22 +75,20 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
                   style={StyleSheet.absoluteFill}
                 />
               </View>
-            ) : (
-              <LinearGradient
-                colors={['#2BD964', '#2BD9C4']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[StyleSheet.absoluteFill, { width: '45%' }]}
-              />
-            )}
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <Text
           style={[
             Typography.bodyLg,
             styles.subtitle,
-            { color: completedTopics > 0 ? (colors.tealAccent || '#2BD9C4') : (colors.onSurfaceVariant || '#9CA3AF') },
+            {
+              color: completedTopics > 0
+                ? (colors.tealAccent || '#2BD9C4')
+                : (colors.onSurfaceVariant || '#9CA3AF'),
+              marginTop: completedTopics > 0 ? Spacing.sm : Spacing.md,
+            },
           ]}
         >
           {completedTopics > 0
@@ -110,7 +101,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
       <View style={styles.middle}>
         <LandingIllustration />
 
-        {/* Triple Pill Carousel Indicators matching design */}
+        {/* Triple Pill Carousel Indicators */}
         <View style={styles.dotsRow}>
           <View style={[styles.dotPill, styles.dotInactive]} />
           <View style={[styles.dotPill, styles.dotActive]} />
@@ -180,7 +171,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   subtitle: {
-    marginTop: Spacing.sm,
     fontFamily: FontFamily.semiBold,
     fontSize: 15,
   },
