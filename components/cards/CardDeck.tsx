@@ -32,18 +32,22 @@ const DURATION = 320;
 
 interface CardDeckProps {
   questions: QuizQuestion[];
+  sessionTitle?: string;
   keyBalance?: number;
   onSessionComplete?: (stats: { totalAnswered: number; correctCount: number }) => void;
   onFinish?: (stats: { totalAnswered: number; correctCount: number }) => void;
   onClose?: () => void;
+  onExit?: () => void;
 }
 
 export function CardDeck({
   questions: initialQuestions,
+  sessionTitle,
   keyBalance,
   onSessionComplete,
   onFinish,
   onClose,
+  onExit,
 }: CardDeckProps) {
   const { colors, mode } = useTheme();
 

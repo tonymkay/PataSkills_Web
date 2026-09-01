@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Image } from 'react-native';
-import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight } from 'lucide-react-native';
+import { Pressable, StyleSheet, Text, View, Image, Switch, Platform } from 'react-native';
+import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Clock, Bell, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
@@ -52,30 +53,29 @@ const stateCopy: Record<
   }
 > = {
   topicComplete: {
-    icon: Sparkles,
-    iconColor: StaticColors.runPurple,
+    icon: Medal,
+    iconColor: StaticColors.successLime,
     title: 'Great Progress!',
-    subtitle: 'Nice work. You finished this sign pair.',
+    subtitle: '',
     primary: 'NEXT SESSION',
     secondary: 'REDO SESSION',
   },
   chapterComplete: {
     icon: Medal,
-    iconColor: StaticColors.runPurple,
-    title: 'Great Progress!',
-    subtitle: 'You finished this chapter.',
-    primary: 'NEXT SESSION',
-    secondary: 'REDO SESSION',
+    iconColor: StaticColors.successLime,
+    title: 'Chapter Completed!',
+    subtitle: 'Great Job, keep up the good work',
+    primary: 'CONTINUE',
   },
   sessionUnlocked: {
-    icon: KeyRound, // unused — sessionUnlocked renders the unlock.webp image instead
-    iconColor: StaticColors.successLime,
-    title: 'You have unlocked\nNext Session!',
+    icon: Lock,
+    iconColor: StaticColors.tealAccent,
+    title: 'Session Unlocked!',
     subtitle: '',
     primary: 'START SESSION',
   },
   keysReset: {
-    icon: KeyRound, // unused — keysReset renders the key.webp image + count instead
+    icon: Lock,
     iconColor: StaticColors.achievementAmber,
     title: 'You have new Keys!',
     subtitle: 'Keys Added',
@@ -83,35 +83,34 @@ const stateCopy: Record<
   },
   rewardUnlocked: {
     icon: KeyRound,
-    iconColor: StaticColors.successLime,
-    title: 'Reward unlocked!',
-    subtitle: 'You earned 1 key, enough for one more session. Nice.',
-    primary: 'COLLECT',
+    iconColor: StaticColors.achievementAmber,
+    title: 'Reward Unlocked!',
+    subtitle: 'Earned 1 Key for Completing Section',
+    primary: 'CLAIM REWARD',
   },
   outOfKeys: {
     icon: Lock,
-    iconColor: StaticColors.runPurpleDim,
-    title: 'Choose how to\nproceed',
-    subtitle: '',
-    primary: '',
+    iconColor: StaticColors.achievementAmber,
+    title: 'Choose how to proceed',
+    subtitle: 'Packs of 20, 40, 80 or 120 keys',
+    primary: 'CONTINUE',
     secondary: 'WAIT UNTIL TOMORROW',
   },
   shareApp: {
     icon: Share2,
-    iconColor: '#2BD964',
-    title: 'Share App with friends',
-    subtitle: 'Recommend PataSkills to your friends and get 1 key.',
-    primary: 'SHARE WITH FRIENDS',
-    secondary: 'MAYBE LATER',
-    primaryDisabled: true,
+    iconColor: StaticColors.achievementAmber,
+    title: 'Share the app to keep learning',
+    subtitle: 'Share with friends to instantly unlock the next session and earn bonus keys.',
+    primary: 'SHARE APP',
+    secondary: 'WAIT UNTIL TOMORROW',
   },
   rateApp: {
     icon: Star,
     iconColor: StaticColors.achievementAmber,
-    title: 'Enjoying PataSkills?',
-    subtitle: 'Rate the app to help us keep improving.',
-    primary: 'RATE THE APP',
-    secondary: 'MAYBE LATER',
+    title: 'Rate the app to keep learning',
+    subtitle: 'Leave a quick rating on the store to unlock the next session immediately.',
+    primary: 'RATE APP',
+    secondary: 'WAIT UNTIL TOMORROW',
   },
 };
 
@@ -121,8 +120,9 @@ export function SessionStateScreen({
   subtitle,
   totalXp = 0,
   scoreText = '0/0',
+  progressText,
   keysLeft = 0,
-  resetAt = null,
+  resetAt,
   onPrimaryPress,
   onSecondaryPress,
   onBuyKeysPress,
@@ -133,20 +133,54 @@ export function SessionStateScreen({
   const insets = useSafeAreaInsets();
   const config = stateCopy[kind];
   const Icon = config.icon;
+
+  const [selectedProceedOption, setSelectedProceedOption] = useState<'keys' | 'unlimited' | 'trial' | null>('keys');
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@play/timer_reminders').then((val) => {
+      if (val === 'true') setRemindersEnabled(true);
+    }).catch(() => {});
+  }, []);
+
+  const handleToggleReminders = (val: boolean) => {
+    setRemindersEnabled(val);
+    AsyncStorage.setItem('@play/timer_reminders', val ? 'true' : 'false').catch(() => {});
+  };
+
+  const isOutOfKeys = kind === 'outOfKeys';
   const showStats = kind === 'topicComplete' || kind === 'chapterComplete';
-  const showRewardValue = kind === 'shareApp';
+  const showRewardValue = kind === 'rewardUnlocked';
   const isSessionUnlocked = kind === 'sessionUnlocked';
   const isKeysReset = kind === 'keysReset';
-  const isOutOfKeys = kind === 'outOfKeys';
-  const useTrophy = showStats;
+  const useTrophy = kind === 'topicComplete' || kind === 'chapterComplete';
 
-  // Default actions if not explicitly passed
-  const handleBuyKeys = onBuyKeysPress || (() => router.push('/keys-packs'));
-  const handleSubscribe = onSubscribePress || (() => router.push('/subscription-plans'));
+  const handleBuyKeys = () => {
+    if (onBuyKeysPress) {
+      onBuyKeysPress();
+    } else {
+      router.push('/keys-packs');
+    }
+  };
 
-  // The timer is the source of truth: tick a clock reading and derive the
-  // remaining time from the real `resetAt` timestamp each render, rather
-  // than counting down a locally-invented duration.
+  const handleSubscribe = () => {
+    if (onSubscribePress) {
+      onSubscribePress();
+    } else {
+      router.push('/subscription-plans');
+    }
+  };
+
+  const handleProceedContinue = () => {
+    if (selectedProceedOption === 'keys') {
+      handleBuyKeys();
+    } else if (selectedProceedOption === 'unlimited') {
+      handleSubscribe();
+    } else if (selectedProceedOption === 'trial') {
+      onSecondaryPress?.();
+    }
+  };
+
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -180,87 +214,165 @@ export function SessionStateScreen({
 
           {/* Options List */}
           <View style={styles.proceedOptions}>
-            {/* Option 1: Buy one time keys (HIGHLIGHTED) */}
+            {/* Option 1: Buy one time keys */}
             <Pressable
-              onPress={handleBuyKeys}
+              onPress={() => setSelectedProceedOption('keys')}
               style={({ pressed }) => [
                 styles.proceedCard,
                 {
                   backgroundColor: colors.surfaceContainer,
-                  borderColor: StaticColors.achievementAmber,
-                  borderWidth: 1.6,
+                  borderColor: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.surfaceContainerHigh,
+                  borderWidth: selectedProceedOption === 'keys' ? 2 : 1,
                 },
-                pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
+                pressed && { opacity: 0.8 },
               ]}
             >
-              <View style={styles.proceedCardLeft}>
-                <Image
-                  source={require('@/assets/premium/key.webp')}
-                  style={styles.proceedCardImage}
-                  resizeMode="contain"
-                />
-                <View style={styles.proceedCardTextWrap}>
-                  <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                    Buy one time keys
-                  </Text>
-                  <Text style={[styles.proceedCardSubtitle, { color: StaticColors.achievementAmber }]}>
-                    Packs of 20, 40, 80 or 120 keys
-                  </Text>
+              <View style={styles.proceedCardRow}>
+                <View style={styles.proceedCardLeft}>
+                  <Image
+                    source={require('@/assets/premium/key.webp')}
+                    style={styles.proceedCardImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.proceedCardTextWrap}>
+                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                      Buy one time keys
+                    </Text>
+                    <Text
+                      style={[
+                        styles.proceedCardSubtitle,
+                        { color: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Packs of 20, 40, 80 or 120 keys
+                    </Text>
+                  </View>
                 </View>
+                <ChevronRight
+                  size={22}
+                  color={selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant}
+                />
               </View>
-              <ChevronRight size={22} color={StaticColors.achievementAmber} />
             </Pressable>
 
-            {/* Option 2: Subscribe for unlimited */}
+            {/* Option 2: Subscribe for Unlimited */}
             <Pressable
-              onPress={handleSubscribe}
+              onPress={() => setSelectedProceedOption('unlimited')}
               style={({ pressed }) => [
                 styles.proceedCard,
                 {
                   backgroundColor: colors.surfaceContainer,
-                  borderColor: colors.surfaceContainerHigh,
+                  borderColor: selectedProceedOption === 'unlimited' ? '#FFFFFF' : colors.surfaceContainerHigh,
+                  borderWidth: selectedProceedOption === 'unlimited' ? 2 : 1,
                 },
-                pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
+                pressed && { opacity: 0.8 },
               ]}
             >
-              <View style={styles.proceedCardLeft}>
-                <Image
-                  source={require('@/assets/premium/crown.webp')}
-                  style={styles.proceedCardImage}
-                  resizeMode="contain"
+              <View style={styles.proceedCardRow}>
+                <View style={styles.proceedCardLeft}>
+                  <Image
+                    source={require('@/assets/premium/crown.webp')}
+                    style={styles.proceedCardImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.proceedCardTextWrap}>
+                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                      Subscribe for Unlimited
+                    </Text>
+                    <Text
+                      style={[
+                        styles.proceedCardSubtitle,
+                        { color: selectedProceedOption === 'unlimited' ? '#FFFFFF' : colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Get full experience with premium
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight
+                  size={22}
+                  color={selectedProceedOption === 'unlimited' ? '#FFFFFF' : colors.onSurfaceVariant}
                 />
-                <View style={styles.proceedCardTextWrap}>
-                  <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                    Subscribe for Unlimited
-                  </Text>
-                  <Text style={[styles.proceedCardSubtitle, { color: colors.onSurfaceVariant }]}>
-                    Get full experience with premium
+              </View>
+            </Pressable>
+
+            {/* Option 3: Use Free trial */}
+            <Pressable
+              onPress={() => setSelectedProceedOption('trial')}
+              style={({ pressed }) => [
+                styles.proceedCard,
+                styles.trialCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: selectedProceedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.surfaceContainerHigh,
+                  borderWidth: selectedProceedOption === 'trial' ? 2 : 1,
+                },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <View style={styles.proceedCardRow}>
+                <View style={styles.proceedCardLeft}>
+                  <View style={[styles.trialIconBox, { backgroundColor: 'rgba(43, 217, 196, 0.14)' }]}>
+                    <Clock size={28} color={colors.tealAccent || '#2BD9C4'} strokeWidth={2.4} />
+                  </View>
+                  <View style={styles.proceedCardTextWrap}>
+                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                      Use Free trial
+                    </Text>
+                    <Text style={[styles.proceedCardSubtitle, { color: colors.tealAccent || '#2BD9C4', fontFamily: FontFamily.semiBold }]}>
+                      {resetAt ? timerText : 'Free session timer active'}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight
+                  size={22}
+                  color={selectedProceedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant}
+                />
+              </View>
+
+              {/* Reminders Toggle Subrow inside Free Trial card */}
+              <View style={[styles.reminderSubrow, { borderTopColor: colors.surfaceContainerHigh }]}>
+                <View style={styles.reminderLeft}>
+                  <Bell size={16} color={remindersEnabled ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant} />
+                  <Text style={[styles.reminderLabel, { color: colors.onSurfaceVariant }]}>
+                    Get reminders when timer resets
                   </Text>
                 </View>
+                <Switch
+                  value={remindersEnabled}
+                  onValueChange={handleToggleReminders}
+                  trackColor={{ false: '#374151', true: colors.tealAccent || '#2BD9C4' }}
+                  thumbColor="#FFFFFF"
+                />
               </View>
-              <ChevronRight size={22} color={colors.onSurfaceVariant} />
             </Pressable>
           </View>
         </View>
 
-        {/* Bottom Actions */}
+        {/* Bottom Single Continue Button (Like CheckButton) */}
         <View style={styles.actions}>
-          {config.secondary ? (
-            <Pressable
-              onPress={onSecondaryPress}
-              style={[styles.secondaryButton, { borderColor: colors.outlineVariant }]}
+          <Pressable
+            disabled={!selectedProceedOption}
+            onPress={handleProceedContinue}
+            style={({ pressed }) => [
+              styles.continueCheckBtn,
+              selectedProceedOption
+                ? styles.continueCheckBtnActive
+                : styles.continueCheckBtnDisabled,
+              pressed && selectedProceedOption ? { opacity: 0.85, transform: [{ scale: 0.99 }] } : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.continueCheckBtnText,
+                selectedProceedOption
+                  ? styles.continueCheckBtnTextActive
+                  : styles.continueCheckBtnTextDisabled,
+              ]}
             >
-              <Text style={[styles.secondaryText, { color: colors.onSurfaceVariant }]}>
-                {config.secondary}
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {resetAt ? (
-            <Text style={[styles.timerText, { color: colors.tealAccent }]}>
-              {timerText}
+              CONTINUE
             </Text>
-          ) : null}
+          </Pressable>
         </View>
       </View>
     );
@@ -370,41 +482,28 @@ export function SessionStateScreen({
               </Text>
             </LinearGradient>
           </Pressable>
-        ) : config.primary ? (
+        ) : (
           <Pressable
             onPress={config.primaryDisabled ? undefined : onPrimaryPress}
             disabled={config.primaryDisabled}
-            style={[
-              styles.primaryButton,
-              config.primaryDisabled && styles.disabledButton,
-            ]}
+            style={[styles.primaryButton, config.primaryDisabled && styles.disabledButton]}
           >
-            <Text style={styles.primaryText}>{config.primary}</Text>
+            <Text style={styles.primaryText}>
+              {config.primary}
+            </Text>
           </Pressable>
-        ) : null}
+        )}
 
-        {/* Secondary */}
+        {/* Secondary — Redo or Wait */}
         {config.secondary ? (
           <Pressable
             onPress={onSecondaryPress}
-            style={[
-              styles.secondaryButton,
-              useTrophy
-                ? {
-                    borderColor: colors.outlineVariant,
-                    backgroundColor: colors.surfaceContainerLow,
-                  }
-                : { borderColor: colors.outlineVariant },
-            ]}
+            style={[styles.secondaryButton, { borderColor: colors.outlineVariant }]}
           >
-            <Text style={[styles.secondaryText, { color: colors.onSurface }]}>
+            <Text style={[styles.secondaryText, { color: colors.onSurfaceVariant }]}>
               {config.secondary}
             </Text>
           </Pressable>
-        ) : null}
-
-        {isOutOfKeys && resetAt ? (
-          <Text style={[styles.timerText, { color: colors.tealAccent }]}>{timerText}</Text>
         ) : null}
       </View>
     </View>
@@ -426,7 +525,7 @@ const styles = StyleSheet.create({
   /* Proceed / Out of Keys Screen */
   proceedContent: {
     flex: 1,
-    paddingTop: Spacing.xxl,
+    paddingTop: Spacing.xl,
     alignItems: 'center',
     width: '100%',
   },
@@ -443,13 +542,18 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   proceedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.gutter,
     paddingVertical: Spacing.gutter,
     borderWidth: 1,
+  },
+  trialCard: {
+    paddingBottom: Spacing.sm,
+  },
+  proceedCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   proceedCardLeft: {
     flexDirection: 'row',
@@ -458,8 +562,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   proceedCardImage: {
-    width: 54,
-    height: 54,
+    width: 50,
+    height: 50,
+  },
+  trialIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   proceedCardTextWrap: {
     flex: 1,
@@ -474,6 +585,50 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 12,
     lineHeight: 16,
+  },
+  reminderSubrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+  },
+  reminderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    flex: 1,
+  },
+  reminderLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+  },
+
+  /* Bottom Continue Button (Like CheckButton) */
+  continueCheckBtn: {
+    width: '100%',
+    minHeight: 52,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueCheckBtnActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  continueCheckBtnDisabled: {
+    backgroundColor: '#2A2E38',
+  },
+  continueCheckBtnText: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 15,
+    letterSpacing: 0.5,
+  },
+  continueCheckBtnTextActive: {
+    color: '#000000',
+  },
+  continueCheckBtnTextDisabled: {
+    color: '#6B7280',
   },
 
   trophyImage: {
@@ -531,89 +686,80 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: FontFamily.extraBold,
     fontSize: 36,
-    lineHeight: 42,
+    lineHeight: 40,
   },
   statLabel: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 13,
-    lineHeight: 17,
-    marginTop: Spacing.xs,
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
+    lineHeight: 16,
     letterSpacing: 0.5,
+    marginTop: 4,
   },
   rewardBox: {
-    width: '100%',
-    minHeight: 132,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    marginTop: Spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
     flexDirection: 'row',
-    gap: Spacing.lg,
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.lg,
   },
   rewardNumber: {
     fontFamily: FontFamily.extraBold,
-    fontSize: 58,
-    lineHeight: 64,
+    fontSize: 32,
+    lineHeight: 38,
   },
   actions: {
     gap: Spacing.sm,
+    width: '100%',
   },
-  /* Green gradient primary (topic/chapter complete) */
-  gradientButton: {
-    minHeight: 56,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  gradientButtonText: {
-    color: '#1A1D24',
-    fontFamily: FontFamily.extraBold,
-    fontSize: 16,
-    lineHeight: 20,
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  /* White primary (other states) */
   primaryButton: {
-    minHeight: 56,
-    borderRadius: Radius.full,
-    backgroundColor: '#F8F8FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  disabledButton: {
-    opacity: 0.45,
-  },
-  primaryText: {
-    color: '#1A1D24',
-    fontFamily: FontFamily.extraBold,
-    fontSize: 16,
-    lineHeight: 20,
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  secondaryButton: {
+    width: '100%',
     minHeight: 52,
     borderRadius: Radius.full,
-    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
   },
-  secondaryText: {
+  primaryText: {
+    color: '#000',
     fontFamily: FontFamily.extraBold,
     fontSize: 15,
-    lineHeight: 19,
-    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  gradientButton: {
+    width: '100%',
+    minHeight: 54,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gradientButtonText: {
+    color: '#000',
+    fontFamily: FontFamily.extraBold,
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  disabledButton: {
+    opacity: 0.4,
+  },
+  secondaryButton: {
+    width: '100%',
+    minHeight: 52,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
     letterSpacing: 0.5,
   },
   timerText: {
-    fontFamily: FontFamily.medium,
+    fontFamily: FontFamily.bold,
     fontSize: 13,
-    lineHeight: 17,
     textAlign: 'center',
     marginTop: Spacing.xs,
   },
