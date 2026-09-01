@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { PLANS, keyPackById } from '@/lib/premium';
 import { usdToKES } from '@/lib/currency';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PAYSTACK_PUBLIC_KEY = process.env.EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder';
 
@@ -26,6 +27,7 @@ function loadPaystackScript(): Promise<void> {
 
 async function openCheckout(
   amountKES: number,
+  email: string,
   label: string,
   kind: 'subscription' | 'keys',
   productId: string,
@@ -33,11 +35,6 @@ async function openCheckout(
   expiresAt?: string,
 ): Promise<string | null> {
   await loadPaystackScript();
-
-  const { data: userRes } = await supabase.auth.getUser();
-  const user = userRes?.user;
-  const userEmail = user?.email || 'guest@pataskills.com';
-  const userId = user?.id || 'guest';
 
   const reference = `pataplay_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -50,13 +47,13 @@ async function openCheckout(
     try {
       const handler = (window as any).PaystackPop.setup({
         key: process.env.EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder',
-        email: userEmail,
+        email,
         amount: Math.round(amountKES * 100),
         currency: 'KES',
         ref: reference,
         label,
         metadata: {
-          user_id: userId,
+          email,
           kind,
           product_id: productId,
           keys: keysCount ?? null,
@@ -74,31 +71,49 @@ async function openCheckout(
 
 export type PurchaseResult = 'purchased' | 'cancelled' | 'unavailable' | 'error';
 
-export async function purchasePlan(packageId: string): Promise<PurchaseResult> {
+export async function purchasePlan(packageId: string, email: string): Promise<PurchaseResult> {
   const plan = PLANS.find((p) => p.packageId === packageId) || PLANS[1];
   const amountKES = usdToKES(plan.annualUSD ?? plan.weeklyUSD ?? plan.monthlyUSD);
   const periodDays = plan.weeklyUSD ? 7 : plan.annualUSD ? 365 : 30;
   const expiresAt = new Date(Date.now() + periodDays * 86_400_000).toISOString();
   try {
-    const reference = await openCheckout(amountKES, `PataSkills ${plan.name}`, 'subscription', plan.packageId, undefined, expiresAt);
+    // Save email locally before payment
+    await AsyncStorage.setItem('@play/user_email', email);
+    const reference = await openCheckout(amountKES, email, `PataSkills ${plan.name}`, 'subscription', plan.packageId, undefined, expiresAt);
     if (!reference) return 'cancelled';
+    // Save purchase to Supabase
+    try {
+      await supabase.from('play_purchases').upsert(
+        { email, paystack_ref: reference, keys: 0, is_premium: true, updated_at: new Date().toISOString() },
+        { onConflict: 'paystack_ref' }
+      );
+    } catch {}
     const { router } = await import('expo-router');
-    router.replace({ pathname: '/payment-complete', params: { reference, type: 'subscription' } });
+    router.replace({ pathname: '/payment-complete', params: { reference, type: 'subscription', email } });
     return 'purchased';
   } catch {
     return 'error';
   }
 }
 
-export async function purchaseKeyPack(packId: string): Promise<PurchaseResult> {
+export async function purchaseKeyPack(packId: string, email: string): Promise<PurchaseResult> {
   const pack = keyPackById(packId);
   if (!pack) return 'error';
   const amountKES = usdToKES(pack.priceUSD);
   try {
-    const reference = await openCheckout(amountKES, `PataSkills ${pack.keys} keys`, 'keys', pack.productId, pack.keys);
+    // Save email locally before payment
+    await AsyncStorage.setItem('@play/user_email', email);
+    const reference = await openCheckout(amountKES, email, `PataSkills ${pack.keys} keys`, 'keys', pack.productId, pack.keys);
     if (!reference) return 'cancelled';
+    // Save purchase to Supabase
+    try {
+      await supabase.from('play_purchases').upsert(
+        { email, paystack_ref: reference, keys: pack.keys, is_premium: false, updated_at: new Date().toISOString() },
+        { onConflict: 'paystack_ref' }
+      );
+    } catch {}
     const { router } = await import('expo-router');
-    router.replace({ pathname: '/payment-complete', params: { reference, type: 'keys', count: String(pack.keys) } });
+    router.replace({ pathname: '/payment-complete', params: { reference, type: 'keys', count: String(pack.keys), email } });
     return 'purchased';
   } catch {
     return 'error';

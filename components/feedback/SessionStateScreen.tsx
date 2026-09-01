@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Image, Switch, Platform } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Image, Platform } from 'react-native';
 import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Clock, Bell, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -9,6 +9,9 @@ import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
+import { Toggle } from '@/components/ui/Toggle';
+import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
+import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 
 export type SessionStateKind =
   | 'topicComplete'
@@ -136,16 +139,37 @@ export function SessionStateScreen({
 
   const [selectedProceedOption, setSelectedProceedOption] = useState<'keys' | 'unlimited' | 'trial' | null>('keys');
   const [remindersEnabled, setRemindersEnabled] = useState(false);
+  const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+
+  const handleRestoreSuccess = () => {
+    if (onPrimaryPress) {
+      onPrimaryPress();
+    } else {
+      router.replace({ pathname: '/', params: { resume: 'true' } });
+    }
+  };
 
   useEffect(() => {
     AsyncStorage.getItem('@play/timer_reminders').then((val) => {
-      if (val === 'true') setRemindersEnabled(true);
+      const enabled = val === 'true';
+      setRemindersEnabled(enabled);
+      if (enabled && resetAt) {
+        scheduleResetReminder(resetAt);
+      }
     }).catch(() => {});
-  }, []);
+  }, [resetAt]);
 
-  const handleToggleReminders = (val: boolean) => {
+  const handleToggleReminders = async (val: boolean) => {
     setRemindersEnabled(val);
     AsyncStorage.setItem('@play/timer_reminders', val ? 'true' : 'false').catch(() => {});
+    if (val) {
+      const granted = await ensureNotificationPermission();
+      if (granted && resetAt) {
+        scheduleResetReminder(resetAt);
+      }
+    } else {
+      cancelResetReminder();
+    }
   };
 
   const isOutOfKeys = kind === 'outOfKeys';
@@ -338,13 +362,23 @@ export function SessionStateScreen({
                     Get reminders when timer resets
                   </Text>
                 </View>
-                <Switch
+                <Toggle
                   value={remindersEnabled}
                   onValueChange={handleToggleReminders}
-                  trackColor={{ false: '#374151', true: colors.tealAccent || '#2BD9C4' }}
-                  thumbColor="#FFFFFF"
+                  activeColor={colors.tealAccent || '#2BD9C4'}
                 />
               </View>
+            </Pressable>
+
+            {/* Restore Account Text Link (Centered & Underlined) */}
+            <Pressable
+              onPress={() => setRestoreModalVisible(true)}
+              hitSlop={10}
+              style={styles.restoreAccountLinkWrap}
+            >
+              <Text style={[styles.restoreAccountLinkText, { color: colors.onSurfaceVariant }]}>
+                Existing user, login
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -374,6 +408,13 @@ export function SessionStateScreen({
             </Text>
           </Pressable>
         </View>
+
+        {/* Restore Account Modal */}
+        <RestoreAccountModal
+          visible={restoreModalVisible}
+          onClose={() => setRestoreModalVisible(false)}
+          onSuccess={handleRestoreSuccess}
+        />
       </View>
     );
   }
@@ -762,5 +803,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginTop: Spacing.xs,
+  },
+  restoreAccountLinkWrap: {
+    marginTop: Spacing.md,
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+  },
+  restoreAccountLinkText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });

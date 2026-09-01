@@ -6,6 +6,7 @@ import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
 import { useKeys } from '@/hooks/useKeys';
 import { groupQuestionsBySession } from '@/utils/groupSessions';
 import { QuizQuestion } from '@/types/quiz';
+import { getLocalProgress, markTopicCompleted } from '@/lib/progress';
 
 const XP_PER_CORRECT = 10;
 
@@ -27,6 +28,8 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
   const { colors } = useTheme();
   const sessions = useMemo(() => groupQuestionsBySession(questions), [questions]);
   const {
+    balance,
+    isPremium,
     resetAt,
     ready,
     spendKey,
@@ -42,43 +45,59 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
 
   const [outOfKeysReason, setOutOfKeysReason] = useState<OutOfKeysReason>(null);
 
+  // Resume from last completed topic index
+  React.useEffect(() => {
+    getLocalProgress().then((p) => {
+      if (p && p.completedTopics > 0 && sessions.length > 0) {
+        setSessionIndex(Math.min(p.completedTopics, sessions.length - 1));
+      }
+    }).catch(() => {});
+  }, [sessions]);
+
   const currentSession = sessions[sessionIndex];
   const hasMoreSessions = sessionIndex + 1 < sessions.length;
 
+  // ── Initial spend on entry ──────────────────────────────────────────
+  // Uses a ref so the async spend only happens once, even if React
+  // re-fires the effect due to state updates inside spendKey → refresh.
   const entryStartedRef = React.useRef(false);
 
-  // Initial spend on entry
   React.useEffect(() => {
     if (!ready || entryStartedRef.current) return;
     entryStartedRef.current = true;
 
-    async function tryStart() {
+    (async () => {
       if (isOutOfKeys) {
         setOutOfKeysReason('entry');
         setFlowState('outOfKeys');
         return;
       }
 
-      const remaining = await spendKey();
-      if (remaining === null) {
+      try {
+        const remaining = await spendKey();
+        if (remaining === null) {
+          setOutOfKeysReason('entry');
+          setFlowState('outOfKeys');
+          return;
+        }
+        setSessionStarted(true);
+      } catch (err) {
+        console.warn('[PlaySession] entry spendKey failed:', err);
         setOutOfKeysReason('entry');
         setFlowState('outOfKeys');
-        return;
       }
-
-      setSessionStarted(true);
-    }
-
-    void tryStart();
-  }, [ready, isOutOfKeys, spendKey]);
+    })();
+  }, [ready]); // minimal deps — ref guards re-entry
 
   const handleSessionComplete = useCallback(
     (stats: SessionStats) => {
       setLastStats(stats);
       setTotalXp((prev) => prev + stats.correctCount * XP_PER_CORRECT);
+      // Source of truth: hitting topic complete screen marks topic done
+      void markTopicCompleted(sessionIndex, sessions.length);
       setFlowState('topicComplete');
     },
-    [],
+    [sessionIndex, sessions.length],
   );
 
   // Directly advances to next session if keys available, or shows outOfKeys
@@ -158,6 +177,8 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
       onExit?.();
     }
   }, [showingExhaustedFallback, isOutOfKeys, onExit]);
+
+  // ── Render gates ────────────────────────────────────────────────────
 
   if (!ready) {
     return (
