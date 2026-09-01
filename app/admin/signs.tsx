@@ -13,13 +13,23 @@ interface SignRow {
 // "What is this sign called?" answer text — NOT the filename. Falls back
 // to play_signs.name (filename-derived) only if no question uses it.
 async function deriveMeaningsByKey(): Promise<Map<string, string[]>> {
-  const { data: curRow } = await supabase
-    .from('play_curricula')
-    .select('json_path')
-    .eq('slug', 'driving-theory')
-    .eq('is_active', true)
-    .single();
+  const [{ data: curRow }, { data: pairRows }] = await Promise.all([
+    supabase
+      .from('play_curricula')
+      .select('json_path')
+      .eq('slug', 'driving-theory')
+      .eq('is_active', true)
+      .single(),
+    supabase.from('play_sign_pairs').select('pair_id, key_a, key_b'),
+  ]);
   if (!curRow) return new Map();
+
+  // pairId -> { A: key_a, B: key_b }, so signRef-based questions can be
+  // resolved to an actual play_signs.key even when q.image is null.
+  const pairKeyByRef = new Map<string, { A: string; B: string }>();
+  for (const p of pairRows ?? []) {
+    pairKeyByRef.set(p.pair_id, { A: p.key_a, B: p.key_b });
+  }
 
   const url = getPlayAssetPublicUrl(curRow.json_path);
   const res = await fetch(url);
@@ -31,7 +41,15 @@ async function deriveMeaningsByKey(): Promise<Map<string, string[]>> {
     if (!label.includes('this sign called')) continue;
     if (typeof q.correctAnswer !== 'number' || !Array.isArray(q.answers)) continue;
     const meaning = q.answers[q.correctAnswer];
-    const key = typeof q.image === 'string' ? q.image : null;
+
+    // Resolve the sign key: prefer a direct q.image string (older format),
+    // otherwise resolve pairId + signRef ('A'/'B') via play_sign_pairs.
+    let key: string | null = typeof q.image === 'string' ? q.image : null;
+    if (!key && q.pairId && (q.signRef === 'A' || q.signRef === 'B')) {
+      const refs = pairKeyByRef.get(q.pairId);
+      key = refs ? refs[q.signRef as 'A' | 'B'] : null;
+    }
+
     if (!meaning || !key) continue;
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key)!.push(meaning);
@@ -113,7 +131,6 @@ export default function AdminSignsScreen() {
       <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 12 }}>
         {signs.map((sign) => {
           const meaning = pickMeaning(meanings.get(sign.key), sign.name);
-          const usageCount = meanings.get(sign.key)?.length ?? 0;
           return (
             <Pressable
               key={sign.id}
@@ -127,9 +144,6 @@ export default function AdminSignsScreen() {
               />
               <Text style={{ color: '#fff', fontSize: 12, marginTop: 6, fontWeight: '600' }} numberOfLines={2}>
                 {meaning}
-              </Text>
-              <Text style={{ color: '#777', fontSize: 10, marginTop: 2 }}>
-                used by {usageCount} question{usageCount === 1 ? '' : 's'}
               </Text>
             </Pressable>
           );
