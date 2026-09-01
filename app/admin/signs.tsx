@@ -2,18 +2,24 @@ import { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, Modal } from 'react-native';
 import { supabase, getPlayAssetPublicUrl } from '@/lib/supabase';
 
-interface SignRow {
-  id: string;
+interface SignQuestionItem {
+  id: string; // play_signs.id
   key: string;
-  name: string;
+  expectedAnswer: string; // directly from q.answers[q.correctAnswer]
   image_path: string;
 }
 
-// Derives a human-meaning label per sign key from the curriculum's own
-// "What is this sign called?" answer text — NOT the filename. Falls back
-// to play_signs.name (filename-derived) only if no question uses it.
-async function deriveMeaningsByKey(): Promise<Map<string, string[]>> {
-  const [{ data: curRow }, { data: pairRows }] = await Promise.all([
+interface SignAssetOption {
+  id: string;
+  key: string;
+  image_path: string;
+}
+
+async function loadSignQuestions(): Promise<{
+  items: SignQuestionItem[];
+  allSignAssets: SignAssetOption[];
+}> {
+  const [{ data: curRow }, { data: pairRows }, { data: signRows }] = await Promise.all([
     supabase
       .from('play_curricula')
       .select('json_path')
@@ -21,84 +27,113 @@ async function deriveMeaningsByKey(): Promise<Map<string, string[]>> {
       .eq('is_active', true)
       .single(),
     supabase.from('play_sign_pairs').select('pair_id, key_a, key_b'),
+    supabase.from('play_signs').select('id, key, name, image_path'),
   ]);
-  if (!curRow) return new Map();
 
-  // pairId -> { A: key_a, B: key_b }, so signRef-based questions can be
-  // resolved to an actual play_signs.key even when q.image is null.
+  if (!curRow || !signRows) {
+    return { items: [], allSignAssets: signRows ?? [] };
+  }
+
+  // Build lookup maps
+  const signByKey = new Map<string, { id: string; key: string; image_path: string }>();
+  for (const s of signRows) {
+    if (s.key) signByKey.set(s.key, s);
+    if (s.image_path) signByKey.set(s.image_path, s);
+  }
+
   const pairKeyByRef = new Map<string, { A: string; B: string }>();
   for (const p of pairRows ?? []) {
     pairKeyByRef.set(p.pair_id, { A: p.key_a, B: p.key_b });
   }
 
+  // Fetch curriculum JSON
   const url = getPlayAssetPublicUrl(curRow.json_path);
   const res = await fetch(url);
   const questions = await res.json();
 
-  const byKey = new Map<string, string[]>();
-  for (const q of questions) {
-    const label = (q.question || '').toLowerCase();
-    if (!label.includes('this sign called')) continue;
-    if (typeof q.correctAnswer !== 'number' || !Array.isArray(q.answers)) continue;
-    const meaning = q.answers[q.correctAnswer];
+  // Extract all questions asking "What is this sign called?"
+  // Formula: Strictly target these questions, use the image used, and use q.answers[q.correctAnswer]
+  const itemsByKey = new Map<string, SignQuestionItem>();
 
-    // Resolve the sign key: prefer a direct q.image string (older format),
-    // otherwise resolve pairId + signRef ('A'/'B') via play_sign_pairs.
+  for (const q of questions) {
+    const questionText = (q.question || '').toLowerCase();
+    if (!questionText.includes('this sign called')) continue;
+    if (typeof q.correctAnswer !== 'number' || !Array.isArray(q.answers)) continue;
+
+    const expectedAnswer = q.answers[q.correctAnswer];
+    if (!expectedAnswer) continue;
+
+    // Resolve the sign key
     let key: string | null = typeof q.image === 'string' ? q.image : null;
     if (!key && q.pairId && (q.signRef === 'A' || q.signRef === 'B')) {
       const refs = pairKeyByRef.get(q.pairId);
       key = refs ? refs[q.signRef as 'A' | 'B'] : null;
     }
 
-    if (!meaning || !key) continue;
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key)!.push(meaning);
-  }
-  return byKey;
-}
+    if (!key) continue;
 
-function pickMeaning(names: string[] | undefined, fallback: string): string {
-  if (!names || names.length === 0) return fallback;
-  const counts = new Map<string, number>();
-  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const sign = signByKey.get(key);
+    if (!sign) continue;
+
+    if (!itemsByKey.has(key)) {
+      itemsByKey.set(key, {
+        id: sign.id,
+        key: sign.key,
+        expectedAnswer,
+        image_path: sign.image_path,
+      });
+    }
+  }
+
+  const items = Array.from(itemsByKey.values()).sort((a, b) =>
+    a.expectedAnswer.localeCompare(b.expectedAnswer)
+  );
+
+  return {
+    items,
+    allSignAssets: signRows,
+  };
 }
 
 export default function AdminSignsScreen() {
-  const [signs, setSigns] = useState<SignRow[]>([]);
-  const [meanings, setMeanings] = useState<Map<string, string[]>>(new Map());
+  const [items, setItems] = useState<SignQuestionItem[]>([]);
+  const [availableAssets, setAvailableAssets] = useState<SignAssetOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [swapTarget, setSwapTarget] = useState<SignRow | null>(null);
+  const [swapTarget, setSwapTarget] = useState<SignQuestionItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: signRows }, meaningsByKey] = await Promise.all([
-      supabase.from('play_signs').select('id, key, name, image_path').order('name'),
-      deriveMeaningsByKey(),
-    ]);
-    setSigns(signRows ?? []);
-    setMeanings(meaningsByKey);
-    setLoading(false);
+    try {
+      const { items: loadedItems, allSignAssets } = await loadSignQuestions();
+      setItems(loadedItems);
+      setAvailableAssets(allSignAssets);
+    } catch (err: any) {
+      setToast(`Error loading signs: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  async function handleSwap(target: SignRow, replacement: SignRow) {
+  async function handleSwap(target: SignQuestionItem, replacement: SignAssetOption) {
     setSaving(true);
     const { error } = await supabase
       .from('play_signs')
       .update({ image_path: replacement.image_path })
       .eq('id', target.id);
+
     setSaving(false);
     setSwapTarget(null);
+
     if (error) {
       setToast(`Swap failed: ${error.message}`);
     } else {
-      setToast(`Updated "${target.name}" to use ${replacement.image_path}`);
+      setToast(`Updated image for "${target.expectedAnswer}"`);
       await load();
     }
     setTimeout(() => setToast(null), 4000);
@@ -107,83 +142,125 @@ export default function AdminSignsScreen() {
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
-        <ActivityIndicator color="#fff" />
-        <Text style={{ color: '#fff', marginTop: 8 }}>Loading signs…</Text>
+        <ActivityIndicator color="#fff" size="large" />
+        <Text style={{ color: '#fff', marginTop: 12, fontSize: 14 }}>Loading signs from curriculum…</Text>
       </View>
     );
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#111' }}>
-      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: '#333' }}>
-        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>Signs ({signs.length})</Text>
-        <Text style={{ color: '#999', fontSize: 13, marginTop: 4 }}>
-          Tap a sign to swap its image. Changes apply everywhere instantly.
+      {/* Header */}
+      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: '#222' }}>
+        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>
+          Signs ({items.length})
+        </Text>
+        <Text style={{ color: '#888', fontSize: 13, marginTop: 4 }}>
+          Targeting "What is this sign called?" questions. Tap any sign to swap its image.
         </Text>
       </View>
 
+      {/* Notification Toast */}
       {toast && (
-        <View style={{ backgroundColor: '#1d4ed8', padding: 10 }}>
-          <Text style={{ color: '#fff', fontSize: 13 }}>{toast}</Text>
+        <View style={{ backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 16 }}>
+          <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{toast}</Text>
         </View>
       )}
 
+      {/* Main Grid: Images + Expected Answers */}
       <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 12 }}>
-        {signs.map((sign) => {
-          const meaning = pickMeaning(meanings.get(sign.key), sign.name);
-          return (
-            <Pressable
-              key={sign.id}
-              onPress={() => setSwapTarget(sign)}
-              style={{ width: 140, backgroundColor: '#1a1a1a', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#333' }}
+        {items.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() => setSwapTarget(item)}
+            style={{
+              width: 150,
+              backgroundColor: '#1a1a1a',
+              borderRadius: 10,
+              padding: 10,
+              borderWidth: 1,
+              borderColor: '#2a2a2a',
+            }}
+          >
+            <Image
+              source={{ uri: getPlayAssetPublicUrl(item.image_path) }}
+              style={{
+                width: '100%',
+                height: 95,
+                borderRadius: 6,
+                backgroundColor: '#000',
+              }}
+              resizeMode="contain"
+            />
+            <Text
+              style={{
+                color: '#fff',
+                fontSize: 12,
+                marginTop: 8,
+                fontWeight: '600',
+                lineHeight: 16,
+              }}
+              numberOfLines={2}
             >
-              <Image
-                source={{ uri: getPlayAssetPublicUrl(sign.image_path) }}
-                style={{ width: '100%', height: 90, borderRadius: 6, backgroundColor: '#000' }}
-                resizeMode="contain"
-              />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 6, fontWeight: '600' }} numberOfLines={2}>
-                {meaning}
-              </Text>
-            </Pressable>
-          );
-        })}
+              {item.expectedAnswer}
+            </Text>
+          </Pressable>
+        ))}
       </ScrollView>
 
+      {/* Visual Image Swap Modal */}
       <Modal visible={!!swapTarget} transparent animationType="fade" onRequestClose={() => setSwapTarget(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', padding: 16 }}>
-          <View style={{ backgroundColor: '#1a1a1a', borderRadius: 12, flex: 1, padding: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
-                Replace image for "{swapTarget ? pickMeaning(meanings.get(swapTarget.key), swapTarget.name) : ''}"
-              </Text>
-              <Pressable onPress={() => setSwapTarget(null)}>
-                <Text style={{ color: '#999', fontSize: 20 }}>✕</Text>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', padding: 16 }}>
+          <View style={{ backgroundColor: '#181818', borderRadius: 12, flex: 1, padding: 16, borderWidth: 1, borderColor: '#333' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={{ color: '#888', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Replace image for:
+                </Text>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
+                  {swapTarget?.expectedAnswer}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setSwapTarget(null)}
+                style={{ padding: 4, borderRadius: 6, backgroundColor: '#222' }}
+              >
+                <Text style={{ color: '#aaa', fontSize: 18, paddingHorizontal: 6 }}>✕</Text>
               </Pressable>
             </View>
+
             <Text style={{ color: '#777', fontSize: 12, marginBottom: 12 }}>
-              Pick the correct image below. This updates the sign everywhere it's used.
+              Select the correct visual road sign graphic below:
             </Text>
+
             {saving ? (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#fff" size="large" />
+                <Text style={{ color: '#aaa', marginTop: 10 }}>Saving image swap…</Text>
               </View>
             ) : (
               <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                {signs.map((candidate) => (
+                {availableAssets.map((asset) => (
                   <Pressable
-                    key={candidate.id}
-                    onPress={() => swapTarget && handleSwap(swapTarget, candidate)}
-                    style={{ width: 100, backgroundColor: '#000', borderRadius: 8, padding: 6, borderWidth: 1, borderColor: '#333' }}
+                    key={asset.id}
+                    onPress={() => swapTarget && handleSwap(swapTarget, asset)}
+                    style={{
+                      width: 96,
+                      height: 80,
+                      backgroundColor: '#0a0a0a',
+                      borderRadius: 8,
+                      padding: 6,
+                      borderWidth: 1,
+                      borderColor: '#2e2e2e',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                   >
                     <Image
-                      source={{ uri: getPlayAssetPublicUrl(candidate.image_path) }}
-                      style={{ width: '100%', height: 60, borderRadius: 4 }}
+                      source={{ uri: getPlayAssetPublicUrl(asset.image_path) }}
+                      style={{ width: '100%', height: '100%', borderRadius: 4 }}
                       resizeMode="contain"
                     />
-                    <Text style={{ color: '#999', fontSize: 9, marginTop: 4 }} numberOfLines={2}>
-                      {pickMeaning(meanings.get(candidate.key), candidate.name)}
-                    </Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -194,3 +271,4 @@ export default function AdminSignsScreen() {
     </View>
   );
 }
+
