@@ -3,8 +3,9 @@ import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, Modal } fr
 import { supabase, getPlayAssetPublicUrl } from '@/lib/supabase';
 
 interface SignQuestionItem {
-  id: string; // play_signs.id
-  key: string;
+  id: string;
+  signDbId?: string; // play_signs.id if present
+  signKey: string;
   expectedAnswer: string; // directly from q.answers[q.correctAnswer]
   image_path: string;
 }
@@ -13,6 +14,14 @@ interface SignAssetOption {
   id: string;
   key: string;
   image_path: string;
+}
+
+function normalize(s: string): string {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\bsigns?\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 async function loadSignQuestions(): Promise<{
@@ -30,13 +39,11 @@ async function loadSignQuestions(): Promise<{
     supabase.from('play_signs').select('id, key, name, image_path'),
   ]);
 
-  if (!curRow || !signRows) {
-    return { items: [], allSignAssets: signRows ?? [] };
-  }
+  const signs = signRows ?? [];
 
   // Build lookup maps
-  const signByKey = new Map<string, { id: string; key: string; image_path: string }>();
-  for (const s of signRows) {
+  const signByKey = new Map<string, { id: string; key: string; image_path: string; name?: string }>();
+  for (const s of signs) {
     if (s.key) signByKey.set(s.key, s);
     if (s.image_path) signByKey.set(s.image_path, s);
   }
@@ -46,14 +53,33 @@ async function loadSignQuestions(): Promise<{
     pairKeyByRef.set(p.pair_id, { A: p.key_a, B: p.key_b });
   }
 
-  // Fetch curriculum JSON
-  const url = getPlayAssetPublicUrl(curRow.json_path);
-  const res = await fetch(url);
-  const questions = await res.json();
+  // Fetch curriculum JSON (fallback to local if remote fails)
+  let questions: any[] = [];
+  try {
+    if (curRow?.json_path) {
+      const url = getPlayAssetPublicUrl(curRow.json_path);
+      const res = await fetch(url);
+      if (res.ok) {
+        questions = await res.json();
+      }
+    }
+  } catch {
+    // fallback
+  }
 
-  // Extract all questions asking "What is this sign called?"
-  // Formula: Strictly target these questions, use the image used, and use q.answers[q.correctAnswer]
-  const itemsByKey = new Map<string, SignQuestionItem>();
+  if (!Array.isArray(questions) || questions.length === 0) {
+    try {
+      const fallbackUrl = getPlayAssetPublicUrl('curricula/questions.linked.json');
+      const res = await fetch(fallbackUrl);
+      if (res.ok) questions = await res.json();
+    } catch {
+      // ignore
+    }
+  }
+
+  // Group strictly by expectedAnswer from "What is this sign called?" questions
+  // Formula: Strictly unique signs by q.answers[q.correctAnswer]
+  const itemsByAnswer = new Map<string, SignQuestionItem>();
 
   for (const q of questions) {
     const questionText = (q.question || '').toLowerCase();
@@ -63,35 +89,39 @@ async function loadSignQuestions(): Promise<{
     const expectedAnswer = q.answers[q.correctAnswer];
     if (!expectedAnswer) continue;
 
-    // Resolve the sign key
-    let key: string | null = typeof q.image === 'string' ? q.image : null;
-    if (!key && q.pairId && (q.signRef === 'A' || q.signRef === 'B')) {
-      const refs = pairKeyByRef.get(q.pairId);
-      key = refs ? refs[q.signRef as 'A' | 'B'] : null;
-    }
+    if (!itemsByAnswer.has(expectedAnswer)) {
+      // 1. Try resolving key from question image
+      let resolvedKey: string | null = typeof q.image === 'string' ? q.image : null;
+      if (!resolvedKey && q.pairId && (q.signRef === 'A' || q.signRef === 'B')) {
+        const refs = pairKeyByRef.get(q.pairId);
+        resolvedKey = refs ? refs[q.signRef as 'A' | 'B'] : null;
+      }
 
-    if (!key) continue;
+      let matchedSign = resolvedKey ? signByKey.get(resolvedKey) : null;
 
-    const sign = signByKey.get(key);
-    if (!sign) continue;
+      // 2. If not matched, try matching by normalized name in signRows
+      if (!matchedSign) {
+        const normAnswer = normalize(expectedAnswer);
+        matchedSign = signs.find((s) => s.name && normalize(s.name) === normAnswer) ?? null;
+      }
 
-    if (!itemsByKey.has(key)) {
-      itemsByKey.set(key, {
-        id: sign.id,
-        key: sign.key,
+      itemsByAnswer.set(expectedAnswer, {
+        id: matchedSign?.id ?? `custom-${expectedAnswer}`,
+        signDbId: matchedSign?.id,
+        signKey: matchedSign?.key ?? normalize(expectedAnswer).replace(/\s+/g, '_'),
         expectedAnswer,
-        image_path: sign.image_path,
+        image_path: matchedSign?.image_path ?? '',
       });
     }
   }
 
-  const items = Array.from(itemsByKey.values()).sort((a, b) =>
+  const items = Array.from(itemsByAnswer.values()).sort((a, b) =>
     a.expectedAnswer.localeCompare(b.expectedAnswer)
   );
 
   return {
     items,
-    allSignAssets: signRows,
+    allSignAssets: signs,
   };
 }
 
@@ -122,10 +152,24 @@ export default function AdminSignsScreen() {
 
   async function handleSwap(target: SignQuestionItem, replacement: SignAssetOption) {
     setSaving(true);
-    const { error } = await supabase
-      .from('play_signs')
-      .update({ image_path: replacement.image_path })
-      .eq('id', target.id);
+    let error: any = null;
+
+    if (target.signDbId) {
+      const res = await supabase
+        .from('play_signs')
+        .update({ image_path: replacement.image_path })
+        .eq('id', target.signDbId);
+      error = res.error;
+    } else {
+      const res = await supabase
+        .from('play_signs')
+        .upsert({
+          key: target.signKey,
+          name: target.expectedAnswer,
+          image_path: replacement.image_path,
+        });
+      error = res.error;
+    }
 
     setSaving(false);
     setSwapTarget(null);
