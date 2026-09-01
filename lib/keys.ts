@@ -10,9 +10,10 @@ export const INITIAL_KEYS = 4;
  *  will move to a real daily window later. */
 export const KEYS_RESET_DURATION_MS = 4 * 60 * 1000;
 
-interface KeysState {
+export interface KeysState {
   balance: number;
   initialized: boolean;
+  isPremium?: boolean;
   /** Epoch ms when balance refills. Set the moment balance hits 0; null
    *  whenever balance is > 0. */
   resetAt: number | null;
@@ -23,7 +24,7 @@ async function read(): Promise<KeysState> {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as KeysState;
   } catch {}
-  return { balance: INITIAL_KEYS, initialized: false, resetAt: null };
+  return { balance: INITIAL_KEYS, initialized: false, resetAt: null, isPremium: false };
 }
 
 async function write(state: KeysState): Promise<void> {
@@ -38,6 +39,7 @@ async function write(state: KeysState): Promise<void> {
 function applyReset(state: KeysState): KeysState {
   if (state.balance <= 0 && state.resetAt !== null && Date.now() >= state.resetAt) {
     return {
+      ...state,
       balance: INITIAL_KEYS,
       initialized: true,
       resetAt: null,
@@ -53,6 +55,7 @@ export async function getKeysState(): Promise<KeysState> {
       balance: INITIAL_KEYS,
       initialized: true,
       resetAt: null,
+      isPremium: false,
     };
     await write(fresh);
     return fresh;
@@ -67,11 +70,12 @@ export async function getKeysState(): Promise<KeysState> {
 
 export async function getKeyBalance(): Promise<number> {
   const state = await getKeysState();
-  return state.balance;
+  return state.isPremium ? 999999 : state.balance;
 }
 
 export async function spendKey(): Promise<number | null> {
   const state = await getKeysState();
+  if (state.isPremium) return 999999;
   if (state.balance <= 0) return null;
   const nextBalance = state.balance - 1;
   const next: KeysState = { ...state, balance: nextBalance };
@@ -79,12 +83,26 @@ export async function spendKey(): Promise<number | null> {
   return next.balance;
 }
 
+export async function grantBonusKey(count: number, _reason?: string, _ref?: string): Promise<number> {
+  const state = await getKeysState();
+  const nextBalance = Math.max(0, state.balance) + count;
+  const next: KeysState = { ...state, balance: nextBalance, resetAt: null };
+  await write(next);
+  return next.balance;
+}
+
+export async function setPremium(isPremium: boolean): Promise<void> {
+  const state = await getKeysState();
+  const next: KeysState = { ...state, isPremium };
+  await write(next);
+}
+
 /** Starts the reset countdown — call this when the "out of keys" screen is
  *  actually shown to the user, not whenever the balance happens to hit 0.
  *  Idempotent: does nothing if a timer is already running. */
 export async function startResetTimer(): Promise<KeysState> {
   const state = await getKeysState();
-  if (state.balance <= 0 && state.resetAt === null) {
+  if (!state.isPremium && state.balance <= 0 && state.resetAt === null) {
     const next: KeysState = { ...state, resetAt: Date.now() + KEYS_RESET_DURATION_MS };
     await write(next);
     return next;

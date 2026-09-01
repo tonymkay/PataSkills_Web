@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Image } from 'react-native';
 import { KeyRound, Lock, Medal, Share2, Sparkles, Star } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
@@ -32,6 +34,8 @@ interface SessionStateScreenProps {
   resetAt?: number | null;
   onPrimaryPress?: () => void;
   onSecondaryPress?: () => void;
+  onBuyKeysPress?: () => void;
+  onSubscribePress?: () => void;
 }
 
 const stateCopy: Record<
@@ -49,16 +53,18 @@ const stateCopy: Record<
   topicComplete: {
     icon: Sparkles,
     iconColor: StaticColors.runPurple,
-    title: 'Topic complete!',
+    title: 'Great Progress!',
     subtitle: 'Nice work. You finished this sign pair.',
-    primary: 'CONTINUE',
+    primary: 'NEXT SESSION',
+    secondary: 'REDO SESSION',
   },
   chapterComplete: {
     icon: Medal,
     iconColor: StaticColors.runPurple,
-    title: 'Chapter complete!',
+    title: 'Great Progress!',
     subtitle: 'You finished this chapter.',
-    primary: 'CONTINUE',
+    primary: 'NEXT SESSION',
+    secondary: 'REDO SESSION',
   },
   sessionUnlocked: {
     icon: KeyRound, // unused — sessionUnlocked renders the unlock.webp image instead
@@ -84,11 +90,10 @@ const stateCopy: Record<
   outOfKeys: {
     icon: Lock,
     iconColor: StaticColors.runPurpleDim,
-    title: "You're out of keys for today",
-    subtitle: 'Buy more Keys to keep going.',
-    primary: 'BUY KEYS',
+    title: 'Choose how to\nproceed',
+    subtitle: '',
+    primary: '',
     secondary: 'WAIT UNTIL TOMORROW',
-    primaryDisabled: true,
   },
   shareApp: {
     icon: Share2,
@@ -119,7 +124,10 @@ export function SessionStateScreen({
   resetAt = null,
   onPrimaryPress,
   onSecondaryPress,
+  onBuyKeysPress,
+  onSubscribePress,
 }: SessionStateScreenProps) {
+  const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const config = stateCopy[kind];
@@ -129,6 +137,11 @@ export function SessionStateScreen({
   const isSessionUnlocked = kind === 'sessionUnlocked';
   const isKeysReset = kind === 'keysReset';
   const isOutOfKeys = kind === 'outOfKeys';
+  const useTrophy = showStats;
+
+  // Default actions if not explicitly passed
+  const handleBuyKeys = onBuyKeysPress || (() => router.push('/keys-packs'));
+  const handleSubscribe = onSubscribePress || (() => router.push('/subscription-confirm'));
 
   // The timer is the source of truth: tick a clock reading and derive the
   // remaining time from the real `resetAt` timestamp each render, rather
@@ -146,6 +159,87 @@ export function SessionStateScreen({
   const seconds = secondsLeft % 60;
   const timerText = `Resets in ${minutes}:${String(seconds).padStart(2, '0')} mins`;
 
+  if (isOutOfKeys) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: colors.background || '#1A1D24',
+            paddingTop: Math.max(insets.top, Spacing.xl),
+            paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.md),
+          },
+        ]}
+      >
+        <View style={styles.proceedContent}>
+          {/* Header Title */}
+          <Text style={[styles.proceedTitle, { color: colors.onSurface }]}>
+            {title || config.title}
+          </Text>
+
+          {/* Options List */}
+          <View style={styles.proceedOptions}>
+            {/* Option 1: Buy one time keys */}
+            <Pressable
+              onPress={handleBuyKeys}
+              style={({ pressed }) => [
+                styles.proceedRow,
+                pressed && { opacity: 0.75 },
+              ]}
+            >
+              <Image
+                source={require('@/assets/premium/key.webp')}
+                style={styles.proceedImage}
+                resizeMode="contain"
+              />
+              <Text style={[styles.proceedOptionText, { color: colors.onSurface }]}>
+                Buy one time{'\n'}keys
+              </Text>
+            </Pressable>
+
+            {/* Option 2: Subscribe for unlimited */}
+            <Pressable
+              onPress={handleSubscribe}
+              style={({ pressed }) => [
+                styles.proceedRow,
+                pressed && { opacity: 0.75 },
+              ]}
+            >
+              <Image
+                source={require('@/assets/premium/crown.webp')}
+                style={styles.proceedImage}
+                resizeMode="contain"
+              />
+              <Text style={[styles.proceedOptionText, { color: colors.onSurface }]}>
+                Subscribe for{'\n'}unlimited
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Bottom Actions */}
+        <View style={styles.actions}>
+          {config.secondary ? (
+            <Pressable
+              onPress={onSecondaryPress}
+              style={[styles.secondaryButton, { borderColor: colors.outlineVariant }]}
+            >
+              <Text style={[styles.secondaryText, { color: colors.onSurfaceVariant }]}>
+                {config.secondary}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {resetAt ? (
+            <Text style={[styles.timerText, { color: colors.tealAccent }]}>
+              {timerText}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -158,7 +252,14 @@ export function SessionStateScreen({
       ]}
     >
       <View style={styles.content}>
-        {isSessionUnlocked ? (
+        {/* Hero Image / Icon */}
+        {useTrophy ? (
+          <Image
+            source={require('@/assets/homepage/trophy.webp')}
+            style={styles.trophyImage}
+            resizeMode="contain"
+          />
+        ) : isSessionUnlocked ? (
           <Image
             source={require('@/assets/premium/unlock.webp')}
             style={styles.unlockImage}
@@ -176,23 +277,28 @@ export function SessionStateScreen({
         ) : (
           <Icon size={64} color={config.iconColor} strokeWidth={2.5} />
         )}
-        <Text style={[Typography.scoreMainTitle, styles.title, { color: colors.onSurface }]}>
+
+        {/* Title */}
+        <Text style={[styles.title, { color: colors.onSurface }]}>
           {title || config.title}
         </Text>
+
+        {/* Subtitle */}
         {isSessionUnlocked ? (
-          <Text style={[Typography.bodyLarge, styles.subtitle, { color: colors.onSurfaceVariant }]}>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
             You have <Text style={{ color: colors.tealAccent }}>{keysLeft} keys</Text> Left
           </Text>
         ) : (
-          <Text style={[Typography.bodyLarge, styles.subtitle, { color: kind === 'topicComplete' ? colors.tealAccent : colors.onSurfaceVariant }]}>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
             {subtitle || config.subtitle}
           </Text>
         )}
 
+        {/* Stats Cards */}
         {showStats ? (
           <View style={styles.statsRow}>
             <View style={[styles.statCard, { backgroundColor: colors.surfaceContainerLow }]}>
-              <Text style={[styles.statValue, { color: '#2BD964' }]}>{totalXp}</Text>
+              <Text style={[styles.statValue, { color: StaticColors.successLime }]}>{totalXp}</Text>
               <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>TOTAL XP</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.surfaceContainerLow }]}>
@@ -218,28 +324,60 @@ export function SessionStateScreen({
         ) : null}
       </View>
 
+      {/* Action Buttons */}
       <View style={styles.actions}>
-        <Pressable
-          onPress={config.primaryDisabled ? undefined : onPrimaryPress}
-          disabled={config.primaryDisabled}
-          style={[
-            styles.primaryButton,
-            config.primaryDisabled && styles.disabledButton,
-          ]}
-        >
-          <Text style={styles.primaryText}>{config.primary}</Text>
-        </Pressable>
-
-        {config.secondary ? (
+        {/* Primary — green gradient for topic/chapter, white for others */}
+        {useTrophy ? (
           <Pressable
-            onPress={onSecondaryPress}
-            style={[styles.secondaryButton, { borderColor: colors.outlineVariant }]}
+            onPress={config.primaryDisabled ? undefined : onPrimaryPress}
+            disabled={config.primaryDisabled}
+            style={[config.primaryDisabled && styles.disabledButton]}
           >
-            <Text style={[styles.secondaryText, { color: colors.onSurface }]}>{config.secondary}</Text>
+            <LinearGradient
+              colors={['#2BD964', '#93F205']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.gradientButton}
+            >
+              <Text style={styles.gradientButtonText}>
+                {config.primary}
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        ) : config.primary ? (
+          <Pressable
+            onPress={config.primaryDisabled ? undefined : onPrimaryPress}
+            disabled={config.primaryDisabled}
+            style={[
+              styles.primaryButton,
+              config.primaryDisabled && styles.disabledButton,
+            ]}
+          >
+            <Text style={styles.primaryText}>{config.primary}</Text>
           </Pressable>
         ) : null}
 
-        {isOutOfKeys ? (
+        {/* Secondary */}
+        {config.secondary ? (
+          <Pressable
+            onPress={onSecondaryPress}
+            style={[
+              styles.secondaryButton,
+              useTrophy
+                ? {
+                    borderColor: colors.outlineVariant,
+                    backgroundColor: colors.surfaceContainerLow,
+                  }
+                : { borderColor: colors.outlineVariant },
+            ]}
+          >
+            <Text style={[styles.secondaryText, { color: colors.onSurface }]}>
+              {config.secondary}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {isOutOfKeys && resetAt ? (
           <Text style={[styles.timerText, { color: colors.tealAccent }]}>{timerText}</Text>
         ) : null}
       </View>
@@ -258,9 +396,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  /* Proceed / Out of Keys Screen */
+  proceedContent: {
+    flex: 1,
+    paddingTop: Spacing.xl,
+  },
+  proceedTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 32,
+    lineHeight: 38,
+    textAlign: 'left',
+    marginBottom: Spacing.xxl,
+  },
+  proceedOptions: {
+    gap: Spacing.xl,
+  },
+  proceedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.gutter,
+  },
+  proceedImage: {
+    width: 76,
+    height: 76,
+  },
+  proceedOptionText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 22,
+    lineHeight: 28,
+  },
+
+  trophyImage: {
+    width: 120,
+    height: 120,
+    marginBottom: Spacing.base,
+  },
   title: {
+    fontFamily: FontFamily.bold,
+    fontSize: 28,
+    lineHeight: 36,
     textAlign: 'center',
-    marginTop: Spacing.md,
+    marginTop: Spacing.gutter,
   },
   unlockImage: {
     width: 160,
@@ -282,33 +458,37 @@ const styles = StyleSheet.create({
     height: 90,
   },
   subtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 16,
+    lineHeight: 22,
     textAlign: 'center',
     marginTop: Spacing.base,
     maxWidth: 640,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: Spacing.lg,
+    gap: Spacing.sm,
     marginTop: Spacing.lg,
     width: '100%',
   },
   statCard: {
     flex: 1,
     minHeight: 102,
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
-    justifyContent: 'center',
+    borderRadius: Radius.md,
+    padding: Spacing.gutter,
+    justifyContent: 'flex-end',
   },
   statValue: {
     fontFamily: FontFamily.extraBold,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 36,
+    lineHeight: 42,
   },
   statLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: 14,
-    lineHeight: 18,
+    fontFamily: FontFamily.semiBold,
+    fontSize: 13,
+    lineHeight: 17,
     marginTop: Spacing.xs,
+    letterSpacing: 0.5,
   },
   rewardBox: {
     width: '100%',
@@ -327,8 +507,25 @@ const styles = StyleSheet.create({
     lineHeight: 64,
   },
   actions: {
-    gap: Spacing.gutter,
+    gap: Spacing.sm,
   },
+  /* Green gradient primary (topic/chapter complete) */
+  gradientButton: {
+    minHeight: 56,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  gradientButtonText: {
+    color: '#1A1D24',
+    fontFamily: FontFamily.extraBold,
+    fontSize: 16,
+    lineHeight: 20,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  /* White primary (other states) */
   primaryButton: {
     minHeight: 56,
     borderRadius: Radius.full,
@@ -361,7 +558,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 19,
     textAlign: 'center',
-    letterSpacing: 0,
+    letterSpacing: 0.5,
   },
   timerText: {
     fontFamily: FontFamily.medium,

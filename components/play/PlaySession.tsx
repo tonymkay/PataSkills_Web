@@ -162,6 +162,12 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
     void advanceToNextSession();
   }, [advanceToNextSession]);
 
+  // Redo = replay the same session from scratch (no key spend — already paid).
+  const handleRedoSession = useCallback(() => {
+    setLastStats({ correctCount: 0, totalAnswered: 0 });
+    setFlowState('playing');
+  }, []);
+
   // True exactly when the "out of keys" screen is the one being shown to
   // the user right now — covers both the explicit flowState and the
   // sessions-exhausted fallback below, which reuses the same screen. Used
@@ -236,6 +242,7 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
         totalXp={totalXp}
         scoreText={`${lastStats.correctCount}/${lastStats.totalAnswered}`}
         onPrimaryPress={() => {}}
+        onSecondaryPress={handleRedoSession}
       />
     );
   }
@@ -258,6 +265,7 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
         totalXp={lastStats.correctCount * XP_PER_CORRECT}
         scoreText={`${lastStats.correctCount}/${lastStats.totalAnswered}`}
         onPrimaryPress={handleTopicContinue}
+        onSecondaryPress={handleRedoSession}
       />
     );
   }
