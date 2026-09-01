@@ -2,9 +2,10 @@ import { QuizQuestion } from '@/types/quiz';
 import { SignPair } from '@/lib/signs';
 
 /**
- * Hydrates raw JSON quiz questions with sign image URLs. DB-only: assets
- * and pairs must be supplied by the caller (the remote-resolved maps from
- * lib/signs.ts) — there is no bundled local registry to default to anymore.
+ * Hydrates raw JSON quiz questions with sign image URLs.
+ * Strict Single Source of Truth:
+ * - Uses exact `pairId` + `signRef` mapped in `play_sign_pairs` and `play_signs`.
+ * - No fuzzy text matching, no heuristic guesses.
  */
 export function hydrateQuestion(
   question: QuizQuestion,
@@ -13,45 +14,40 @@ export function hydrateQuestion(
 ): QuizQuestion {
   const q = { ...question };
 
-  // 1. Check if pairId exists and has mapped signs
+  // 1. Direct explicit sign key in question.image (if given as a sign key)
+  if (typeof q.image === 'string' && assets[q.image]) {
+    q.image = assets[q.image];
+  }
+
+  // 2. Resolve via pairId
   if (q.pairId && pairs[q.pairId]) {
     const pair = pairs[q.pairId];
 
-    // Format: Two Image Choice (imageChoice / twoImageChoice)
+    // Format: Two Image Choice
     if (
       q.format === 'twoImageChoice' ||
       q.format === 'imageChoice' ||
       (Array.isArray(q.images) && q.images.length >= 2)
     ) {
-      q.images = [
-        q.images?.[0] || pair.urlA,
-        q.images?.[1] || pair.urlB,
-      ];
+      q.images = [pair.urlA, pair.urlB];
       return q;
     }
 
-    // Format: Single Image with Sign Ref (e.g. signRef: 'A' or 'B')
-    if (q.signRef === 'A' || q.signRef === 'B') {
-      q.image = q.image || (q.signRef === 'A' ? pair.urlA : pair.urlB);
+    // Format: Single Image with Sign Ref ('A' or 'B')
+    if (q.signRef === 'A') {
+      q.image = pair.urlA;
       return q;
     }
 
-    // Fallback: If single image choice without explicit signRef, assign pair.A or pair.B
+    if (q.signRef === 'B') {
+      q.image = pair.urlB;
+      return q;
+    }
+
+    // Single image format without explicit signRef: assign based on correctAnswer
     if (q.format === 'singleImageChoice' || q.format === 'imageTextChoice') {
-      q.image = q.image || (q.correctAnswer === 1 ? pair.urlB : pair.urlA);
+      q.image = q.correctAnswer === 1 ? pair.urlB : pair.urlA;
       return q;
-    }
-  }
-
-  // 2. Keyword fallback matching from question text or answer names
-  if (!q.image && (q.format === 'singleImageChoice' || q.format === 'imageTextChoice')) {
-    const lowerQ = (q.question + ' ' + (q.answers?.join(' ') || '')).toLowerCase();
-    for (const [key, url] of Object.entries(assets)) {
-      const cleanKey = key.replace(/_/g, ' ');
-      if (lowerQ.includes(cleanKey)) {
-        q.image = url;
-        break;
-      }
     }
   }
 
