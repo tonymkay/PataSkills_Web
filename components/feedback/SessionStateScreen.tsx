@@ -140,7 +140,7 @@ export function SessionStateScreen({
   const config = stateCopy[kind];
   const Icon = config.icon;
 
-  const [selectedProceedOption, setSelectedProceedOption] = useState<'keys' | 'unlimited' | 'trial' | null>('trial');
+  const [selectedProceedOption, setSelectedProceedOption] = useState<'keys' | 'unlimited' | 'trial' | null>('keys');
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [freeModeInfoVisible, setFreeModeInfoVisible] = useState(false);
@@ -313,7 +313,48 @@ export function SessionStateScreen({
               </View>
             </Pressable>
 
-            {/* Option 2: Use Free trial */}
+            {/* Option 2: Subscribe for Unlimited (Green Highlight) */}
+            <Pressable
+              onPress={() => setSelectedProceedOption('unlimited')}
+              style={({ pressed }) => [
+                styles.proceedCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.surfaceContainerHigh,
+                  borderWidth: selectedProceedOption === 'unlimited' ? 2 : 1,
+                },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <View style={styles.proceedCardRow}>
+                <View style={styles.proceedCardLeft}>
+                  <Image
+                    source={require('@/assets/premium/crown.webp')}
+                    style={styles.proceedCardImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.proceedCardTextWrap}>
+                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                      Subscribe for Unlimited
+                    </Text>
+                    <Text
+                      style={[
+                        styles.proceedCardSubtitle,
+                        { color: selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Get full experience with premium
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight
+                  size={22}
+                  color={selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.onSurfaceVariant}
+                />
+              </View>
+            </Pressable>
+
+            {/* Option 3: Use Free trial */}
             <Pressable
               onPress={() => setSelectedProceedOption('trial')}
               style={({ pressed }) => [
@@ -359,47 +400,6 @@ export function SessionStateScreen({
                   value={remindersEnabled}
                   onValueChange={handleToggleReminders}
                   activeColor={colors.tealAccent || '#2BD9C4'}
-                />
-              </View>
-            </Pressable>
-
-            {/* Option 3: Subscribe for Unlimited (Green Highlight) */}
-            <Pressable
-              onPress={() => setSelectedProceedOption('unlimited')}
-              style={({ pressed }) => [
-                styles.proceedCard,
-                {
-                  backgroundColor: colors.surfaceContainer,
-                  borderColor: selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.surfaceContainerHigh,
-                  borderWidth: selectedProceedOption === 'unlimited' ? 2 : 1,
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <View style={styles.proceedCardRow}>
-                <View style={styles.proceedCardLeft}>
-                  <Image
-                    source={require('@/assets/premium/crown.webp')}
-                    style={styles.proceedCardImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.proceedCardTextWrap}>
-                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                      Subscribe for Unlimited
-                    </Text>
-                    <Text
-                      style={[
-                        styles.proceedCardSubtitle,
-                        { color: selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.onSurfaceVariant },
-                      ]}
-                    >
-                      Get full experience with premium
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight
-                  size={22}
-                  color={selectedProceedOption === 'unlimited' ? StaticColors.successLime : colors.onSurfaceVariant}
                 />
               </View>
             </Pressable>
@@ -536,7 +536,21 @@ export function SessionStateScreen({
               <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>TOTAL XP</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.surfaceContainerLow }]}>
-              <Text style={[styles.statValue, { color: colors.onSurface }]}>{progressText || scoreText}</Text>
+              <Text style={[styles.statValue, { color: colors.onSurface }]}>
+                {(() => {
+                  const text = progressText || scoreText;
+                  const slashIndex = text.indexOf('/');
+                  if (slashIndex === -1) return text;
+                  return (
+                    <>
+                      <Text style={{ color: StaticColors.achievementAmber }}>
+                        {text.slice(0, slashIndex)}
+                      </Text>
+                      {text.slice(slashIndex)}
+                    </>
+                  );
+                })()}
+              </Text>
               <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>TOPICS DONE</Text>
             </View>
           </View>
@@ -621,7 +635,6 @@ const styles = StyleSheet.create({
   /* Proceed / Out of Keys Screen */
   proceedContent: {
     flex: 1,
-    paddingTop: Spacing.xl,
     alignItems: 'center',
     width: '100%',
   },

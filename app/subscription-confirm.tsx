@@ -164,7 +164,7 @@ export default function SubscriptionConfirmScreen() {
             <ActivityIndicator color="#000" size="small" />
           ) : (
             <Text style={styles.confirmButtonText}>
-              Subscribe with Paystack
+              SUBSCRIBE WITH PAYSTACK
             </Text>
           )}
         </Pressable>

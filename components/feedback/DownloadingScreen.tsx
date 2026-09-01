@@ -14,7 +14,7 @@ interface DownloadingScreenProps {
   onRetry: () => void;
 }
 
-function BouncingDots({ color }: { color: string }) {
+export function BouncingDots({ color }: { color: string }) {
   const anim0 = React.useRef(new Animated.Value(0)).current;
   const anim1 = React.useRef(new Animated.Value(0)).current;
   const anim2 = React.useRef(new Animated.Value(0)).current;

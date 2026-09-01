@@ -151,7 +151,7 @@ export default function KeysConfirmScreen() {
           {busy ? (
             <ActivityIndicator color="#000" size="small" />
           ) : (
-            <Text style={styles.confirmButtonText}>Pay with Paystack</Text>
+            <Text style={styles.confirmButtonText}>PAY WITH PAYSTACK</Text>
           )}
         </Pressable>
       </View>

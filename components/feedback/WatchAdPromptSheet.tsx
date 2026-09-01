@@ -59,6 +59,7 @@ export function WatchAdPromptSheet({
       onRequestClose={onClose}
     >
       <View style={styles.backdrop}>
+        <View style={styles.sheetWrapper}>
         <View
           style={[
             styles.sheet,
@@ -121,6 +122,7 @@ export function WatchAdPromptSheet({
             </Text>
           </Pressable>
         </View>
+        </View>
       </View>
     </Modal>
     <KeyRewardSuccessModal
@@ -136,6 +138,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  sheetWrapper: {
+    width: '100%',
+    maxWidth: 480,
   },
   sheet: {
     borderTopLeftRadius: Radius.xxl,

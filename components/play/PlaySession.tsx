@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
+import { BouncingDots } from '@/components/feedback/DownloadingScreen';
 import { useKeys } from '@/hooks/useKeys';
 import { groupQuestionsBySession } from '@/utils/groupSessions';
 import { QuizQuestion } from '@/types/quiz';
@@ -190,7 +191,7 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
   if (!ready) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.onSurface} />
+        <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
       </View>
     );
   }
@@ -247,7 +248,7 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
   if (!sessionStarted) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.onSurface} />
+        <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
       </View>
     );
   }
