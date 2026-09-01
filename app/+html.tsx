@@ -78,14 +78,17 @@ export default function Root({ children }: PropsWithChildren) {
 // (constants/typography.ts), so every existing `fontFamily: 'Sora-Regular'`
 // style just resolves correctly with zero code changes elsewhere.
 //
-// font-display: optional means: if a weight isn't ready within the
-// browser's short block period (~100ms), don't wait and don't swap in
-// later either — just keep the fallback for that paint. That trades "the
-// exact right font, slightly late" for "never a visible swap", which is
-// the right trade for a quiz app where a mid-session font pop is more
-// jarring than a near-identical fallback. Because every weight is also
-// preloaded above, in practice the real font is normally ready in time
-// anyway.
+// font-display: swap means: paint with the fallback immediately, then
+// swap to the real font the moment it's ready — no block period, no risk
+// of silently keeping the fallback forever. We tried `optional` first
+// (paint with fallback, swap only within a very short ~100ms window,
+// otherwise keep the fallback for the rest of that page view even if the
+// font finishes loading a moment later) but it proved too aggressive in
+// practice: on real loads the swap window kept expiring before the font
+// was ready, so the custom font just never appeared. `swap` guarantees
+// the real font is used as soon as it's available, at the cost of a
+// brief flash of fallback text on a cold cache — a better trade than a
+// brand font that silently never shows up.
 const FALLBACK_STACK = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 const fontFaceStyle = `
 @font-face {
@@ -93,35 +96,35 @@ const fontFaceStyle = `
   src: url(${soraRegularWoff2}) format('woff2'), url(${soraRegular}) format('truetype');
   font-weight: 400;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 @font-face {
   font-family: 'Sora-Medium';
   src: url(${soraMediumWoff2}) format('woff2'), url(${soraMedium}) format('truetype');
   font-weight: 500;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 @font-face {
   font-family: 'Sora-SemiBold';
   src: url(${soraSemiBoldWoff2}) format('woff2'), url(${soraSemiBold}) format('truetype');
   font-weight: 600;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 @font-face {
   font-family: 'Sora-Bold';
   src: url(${soraBoldWoff2}) format('woff2'), url(${soraBold}) format('truetype');
   font-weight: 700;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 @font-face {
   font-family: 'Sora-ExtraBold';
   src: url(${soraExtraBoldWoff2}) format('woff2'), url(${soraExtraBold}) format('truetype');
   font-weight: 800;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 /* Matched-metrics fallback for the brief window (if any) before a weight
    is ready, so layout doesn't jump when the real font does apply. */

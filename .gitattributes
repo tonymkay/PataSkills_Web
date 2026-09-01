@@ -1,0 +1,18 @@
+# Prevent Git for Windows from mangling binary assets via autocrlf line-ending
+# conversion. Without this, compressed/binary formats like .woff2 can get
+# silently corrupted on commit (CRLF/LF byte-stripping), producing files that
+# fetch fine over HTTP but fail to parse as valid fonts/images in the browser.
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg binary
+*.mp4 binary
+*.mp3 binary
+*.pdf binary
