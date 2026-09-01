@@ -31,3 +31,20 @@ export function sanitizeAndValidateEmail(raw: string): { valid: boolean; email: 
 
   return { valid: true, email: sanitized };
 }
+
+/**
+ * Shortens an email for display: keeps a short prefix of the local part and
+ * the full domain, with an ellipsis in between (e.g. "tonymk...@gmail.com").
+ * Leaves short emails untouched.
+ */
+export function truncateEmailMiddle(email: string, prefixLength: number = 6): string {
+  const at = email.indexOf('@');
+  if (at === -1) return email;
+
+  const local = email.slice(0, at);
+  const domain = email.slice(at); // includes leading '@'
+
+  if (local.length <= prefixLength) return email;
+
+  return `${local.slice(0, prefixLength)}...${domain}`;
+}

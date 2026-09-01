@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, Radius, Typography, FontFamily } from '@/theme/tokens';
 import { LandingIllustration } from './LandingIllustration';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { RestoreResult } from '@/lib/restore';
+import { truncateEmailMiddle } from '@/lib/email';
 import { getLocalProgress } from '@/lib/progress';
 
 export interface LandingSlide {
@@ -26,6 +28,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [completedTopics, setCompletedTopics] = useState(0);
   const [totalTopics, setTotalTopics] = useState(46);
+  const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
   const slide = SLIDES[index];
 
   const refreshProgress = () => {
@@ -39,10 +42,14 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
 
   useEffect(() => {
     refreshProgress();
+    AsyncStorage.getItem('@play/user_email').then((email) => {
+      if (email) setLinkedEmail(email);
+    }).catch(() => {});
   }, []);
 
-  const handleRestoreSuccess = (_result: RestoreResult) => {
+  const handleRestoreSuccess = (result: RestoreResult) => {
     refreshProgress();
+    setLinkedEmail(result.email);
     onStart();
   };
 
@@ -130,7 +137,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
           style={styles.restoreLinkWrap}
         >
           <Text style={[styles.restoreLinkText, { color: colors.onSurfaceVariant || '#9CA3AF' }]}>
-            Existing user, login
+            {linkedEmail ? `Logged in as ${truncateEmailMiddle(linkedEmail)}` : 'Existing user, login'}
           </Text>
         </Pressable>
       </View>

@@ -11,6 +11,7 @@ import { Radius, Spacing } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
 import { Toggle } from '@/components/ui/Toggle';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
+import { truncateEmailMiddle } from '@/lib/email';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { FreeModeInfoModal } from '@/components/feedback/FreeModeInfoModal';
 import { WatchAdPromptSheet } from '@/components/feedback/WatchAdPromptSheet';
@@ -144,6 +145,13 @@ export function SessionStateScreen({
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [freeModeInfoVisible, setFreeModeInfoVisible] = useState(false);
   const [watchAdSheetVisible, setWatchAdSheetVisible] = useState(false);
+  const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@play/user_email').then((email) => {
+      if (email) setLinkedEmail(email);
+    }).catch(() => {});
+  }, []);
 
   const handleRestoreSuccess = () => {
     if (onPrimaryPress) {
@@ -252,19 +260,60 @@ export function SessionStateScreen({
         ]}
       >
         <View style={styles.proceedContent}>
-          {/* Header with Title & Dismiss Button */}
-          <View style={styles.proceedHeaderRow}>
-            <Text style={[styles.proceedTitle, { color: colors.onSurface }]}>
-              {title || config.title}
-            </Text>
-            <Pressable onPress={handleAttemptExit} hitSlop={12} style={styles.proceedCloseBtn}>
-              <X size={22} color={colors.onSurfaceVariant} />
-            </Pressable>
-          </View>
+          {/* Dismiss Button — top-left, above the title */}
+          <Pressable onPress={handleAttemptExit} hitSlop={12} style={styles.proceedCloseBtnTopLeft}>
+            <X size={22} color={colors.onSurfaceVariant} />
+          </Pressable>
+
+          {/* Title */}
+          <Text style={[styles.proceedTitle, { color: colors.onSurface }]}>
+            {title || config.title}
+          </Text>
 
           {/* Options List */}
           <View style={styles.proceedOptions}>
-            {/* Option 1: Use Free trial */}
+            {/* Option 1: Buy one time keys */}
+            <Pressable
+              onPress={() => setSelectedProceedOption('keys')}
+              style={({ pressed }) => [
+                styles.proceedCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.surfaceContainerHigh,
+                  borderWidth: selectedProceedOption === 'keys' ? 2 : 1,
+                },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <View style={styles.proceedCardRow}>
+                <View style={styles.proceedCardLeft}>
+                  <Image
+                    source={require('@/assets/premium/key.webp')}
+                    style={styles.proceedCardImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.proceedCardTextWrap}>
+                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                      Buy one time keys
+                    </Text>
+                    <Text
+                      style={[
+                        styles.proceedCardSubtitle,
+                        { color: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Packs of 20, 40, 80 or 120 keys
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight
+                  size={22}
+                  color={selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant}
+                />
+              </View>
+            </Pressable>
+
+            {/* Option 2: Use Free trial */}
             <Pressable
               onPress={() => setSelectedProceedOption('trial')}
               style={({ pressed }) => [
@@ -314,47 +363,6 @@ export function SessionStateScreen({
               </View>
             </Pressable>
 
-            {/* Option 2: Buy one time keys */}
-            <Pressable
-              onPress={() => setSelectedProceedOption('keys')}
-              style={({ pressed }) => [
-                styles.proceedCard,
-                {
-                  backgroundColor: colors.surfaceContainer,
-                  borderColor: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.surfaceContainerHigh,
-                  borderWidth: selectedProceedOption === 'keys' ? 2 : 1,
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <View style={styles.proceedCardRow}>
-                <View style={styles.proceedCardLeft}>
-                  <Image
-                    source={require('@/assets/premium/key.webp')}
-                    style={styles.proceedCardImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.proceedCardTextWrap}>
-                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                      Buy one time keys
-                    </Text>
-                    <Text
-                      style={[
-                        styles.proceedCardSubtitle,
-                        { color: selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant },
-                      ]}
-                    >
-                      Packs of 20, 40, 80 or 120 keys
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight
-                  size={22}
-                  color={selectedProceedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant}
-                />
-              </View>
-            </Pressable>
-
             {/* Option 3: Subscribe for Unlimited (Green Highlight) */}
             <Pressable
               onPress={() => setSelectedProceedOption('unlimited')}
@@ -396,14 +404,14 @@ export function SessionStateScreen({
               </View>
             </Pressable>
 
-            {/* Restore Account Text Link (Centered & Underlined) */}
+            {/* Existing user, login link */}
             <Pressable
               onPress={() => setRestoreModalVisible(true)}
               hitSlop={10}
               style={styles.restoreAccountLinkWrap}
             >
               <Text style={[styles.restoreAccountLinkText, { color: colors.onSurfaceVariant }]}>
-                Existing user, login
+                {linkedEmail ? `Logged in as ${truncateEmailMiddle(linkedEmail)}` : 'Existing user, login'}
               </Text>
             </Pressable>
           </View>
@@ -439,7 +447,10 @@ export function SessionStateScreen({
         <RestoreAccountModal
           visible={restoreModalVisible}
           onClose={() => setRestoreModalVisible(false)}
-          onSuccess={handleRestoreSuccess}
+          onSuccess={(result) => {
+            setLinkedEmail(result.email);
+            handleRestoreSuccess();
+          }}
         />
 
         {/* Free Mode Explanatory Modal */}
@@ -614,26 +625,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  proceedHeaderRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: Spacing.xl,
-  },
   proceedTitle: {
     fontFamily: FontFamily.bold,
     fontSize: 28,
     lineHeight: 36,
     textAlign: 'center',
     maxWidth: 280,
+    marginBottom: Spacing.xl,
   },
-  proceedCloseBtn: {
-    position: 'absolute',
-    right: 0,
-    top: 4,
+  proceedCloseBtnTopLeft: {
+    alignSelf: 'flex-start',
     padding: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   proceedOptions: {
     width: '100%',

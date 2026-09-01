@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 
 const STORAGE_KEY = '@play/keys';
+const EMAIL_KEY = '@play/user_email';
 
 export const INITIAL_KEYS = 3;
 
@@ -30,6 +32,26 @@ async function read(): Promise<KeysState> {
 async function write(state: KeysState): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+
+  // Best-effort sync to the linked account (if any) so the balance survives
+  // logout/login and reinstalls — the account record, not this local copy,
+  // is the source of truth once a device has ever logged in. Failure here
+  // never blocks gameplay; the local write above already succeeded.
+  try {
+    const email = await AsyncStorage.getItem(EMAIL_KEY);
+    if (email) {
+      await supabase.from('play_accounts').upsert(
+        {
+          email,
+          balance: state.balance,
+          is_premium: !!state.isPremium,
+          reset_at: state.resetAt ? new Date(state.resetAt).toISOString() : null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'email' },
+      );
+    }
   } catch {}
 }
 

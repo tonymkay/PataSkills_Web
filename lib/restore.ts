@@ -15,35 +15,36 @@ export interface RestoreResult {
 }
 
 /**
- * Updates local @play/keys with the restored balance / subscription.
+ * Overwrites local @play/keys with the account's persisted balance. Once an
+ * account record exists, it is the sole source of truth for that email —
+ * this never merges with whatever balance happened to be sitting locally,
+ * because that's exactly what let a re-login re-grant already-spent keys.
  */
-async function applyRestoredState(email: string, totalKeys: number, isPremium: boolean): Promise<void> {
+async function applyRestoredState(
+  email: string,
+  balance: number,
+  isPremium: boolean,
+  resetAtIso: string | null,
+): Promise<void> {
   await AsyncStorage.setItem('@play/user_email', email);
 
-  // Read existing state to retain any bonus
-  let existingBalance = INITIAL_KEYS;
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as KeysState;
-      existingBalance = parsed.balance;
-    }
-  } catch {}
-
-  const finalBalance = Math.max(existingBalance, totalKeys);
-
   const restoredState: KeysState = {
-    balance: isPremium ? 999999 : finalBalance,
+    balance: isPremium ? 999999 : balance,
     isPremium,
     initialized: true,
-    resetAt: null,
+    resetAt: resetAtIso ? new Date(resetAtIso).getTime() : null,
   };
 
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(restoredState));
 }
 
 /**
- * Restores purchases from Supabase for a given email.
+ * Restores an account by email. A persistent `play_accounts` row — kept in
+ * sync with the local balance on every spend/grant (see lib/keys.ts) — is
+ * the source of truth once it exists. Only the very first time an email is
+ * ever seen do we seed it (from any past `play_purchases`, defaulting to
+ * the free starting balance), and that seed is written back immediately so
+ * it can never be granted again on a later login.
  */
 export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreResult> {
   const { valid, email, error } = sanitizeAndValidateEmail(rawEmail);
@@ -58,37 +59,66 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
   }
 
   try {
-    const { data: purchases, error: dbError } = await supabase
-      .from('play_purchases')
-      .select('keys, is_premium')
-      .eq('email', email);
+    // 1. An account record already exists — it's the durable balance for
+    //    this email; use it as-is, however many times this email logs in.
+    const { data: account, error: acctError } = await supabase
+      .from('play_accounts')
+      .select('balance, is_premium, reset_at')
+      .eq('email', email)
+      .maybeSingle();
 
-    if (dbError) {
-      // Fallback if table doesn't exist yet: acknowledge email link
-      await AsyncStorage.setItem('@play/user_email', email);
+    if (!acctError && account) {
+      const isPremium = !!account.is_premium;
+      const balance = isPremium ? 999999 : account.balance;
+      await applyRestoredState(email, account.balance, isPremium, account.reset_at);
+      await syncProgressWithCloud(email);
+
       return {
         success: true,
         email,
-        keys: INITIAL_KEYS,
-        isPremium: false,
-        message: 'Account linked! Active keys ready.',
+        keys: balance,
+        isPremium,
+        message: isPremium
+          ? 'Unlimited Subscription restored!'
+          : `${balance} keys restored to your balance.`,
       };
     }
 
+    // 2. First time this email has ever logged in on any device — seed the
+    //    account from historical purchases (if the table/lookup works),
+    //    otherwise just the free starting balance.
     let totalKeys = 0;
     let isPremium = false;
-
-    if (purchases && purchases.length > 0) {
-      for (const p of purchases) {
+    try {
+      const { data: purchases } = await supabase
+        .from('play_purchases')
+        .select('keys, is_premium')
+        .eq('email', email);
+      for (const p of purchases || []) {
         if (p.is_premium) isPremium = true;
         if (typeof p.keys === 'number') totalKeys += p.keys;
       }
-    }
+    } catch {}
 
-    // Default to initial free keys if no past purchases
     const resolvedKeys = Math.max(INITIAL_KEYS, totalKeys);
 
-    await applyRestoredState(email, resolvedKeys, isPremium);
+    await applyRestoredState(email, resolvedKeys, isPremium, null);
+
+    // Persist the seed immediately so this branch is never taken again for
+    // this email — every future login goes through path 1 above.
+    try {
+      await supabase.from('play_accounts').upsert(
+        {
+          email,
+          balance: isPremium ? 999999 : resolvedKeys,
+          is_premium: isPremium,
+          reset_at: null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'email' },
+      );
+    } catch {}
+
     await syncProgressWithCloud(email);
 
     return {

@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
@@ -26,6 +27,7 @@ interface PlaySessionProps {
 
 export function PlaySession({ questions, onExit }: PlaySessionProps) {
   const { colors } = useTheme();
+  const isFocused = useIsFocused();
   const sessions = useMemo(() => groupQuestionsBySession(questions), [questions]);
   const {
     balance,
@@ -165,12 +167,17 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
     }
   }, [showingOutOfKeysScreen, startResetTimer]);
 
-  // Once keys refill or are purchased, immediately jump straight into the session
+  // Once keys refill or are purchased, immediately jump straight into the session.
+  // Gated on focus: this screen can sit mounted-but-backgrounded behind the
+  // buy-keys/checkout flow (those routes are pushed, not replaced), and the
+  // balance can change while it's back there. Without the focus check this
+  // fires invisibly in the background AND again when the user actually
+  // returns and taps "Continue Playing" — spending 2 keys for one unlock.
   React.useEffect(() => {
-    if (flowState === 'outOfKeys' && !isOutOfKeys) {
+    if (isFocused && flowState === 'outOfKeys' && !isOutOfKeys) {
       void resumeSessionWithNewKeys();
     }
-  }, [flowState, isOutOfKeys, resumeSessionWithNewKeys]);
+  }, [isFocused, flowState, isOutOfKeys, resumeSessionWithNewKeys]);
 
   React.useEffect(() => {
     if (showingExhaustedFallback && !isOutOfKeys) {
