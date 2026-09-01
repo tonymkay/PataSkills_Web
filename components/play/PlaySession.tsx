@@ -191,7 +191,8 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
         title="All caught up!"
         subtitle="You've finished every sign pair in this set."
         totalXp={totalXp}
-        scoreText={`${lastStats.correctCount}/${lastStats.totalAnswered}`}
+        progressText={`${sessions.length}/${sessions.length}`}
+        scoreText={`${sessions.length}/${sessions.length}`}
         onPrimaryPress={() => {}}
         onSecondaryPress={handleRedoSession}
       />
@@ -204,7 +205,8 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
         kind="topicComplete"
         subtitle={currentSession?.title}
         totalXp={lastStats.correctCount * XP_PER_CORRECT}
-        scoreText={`${lastStats.correctCount}/${lastStats.totalAnswered}`}
+        progressText={`${sessionIndex + 1}/${sessions.length}`}
+        scoreText={`${sessionIndex + 1}/${sessions.length}`}
         onPrimaryPress={handleTopicContinue}
         onSecondaryPress={handleRedoSession}
       />
@@ -235,6 +237,7 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
         key={`session-${sessionIndex}`}
         questions={currentSession.questions}
         sessionTitle={currentSession.title}
+        keyBalance={isPremium ? 999999 : (balance ?? 0)}
         onSessionComplete={handleSessionComplete}
         onExit={onExit}
       />

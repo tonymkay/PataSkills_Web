@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -10,8 +10,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2, Mail, X, ShieldCheck } from 'lucide-react-native';
@@ -20,6 +18,37 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { grantBonusKey, setPremium } from '@/lib/keys';
 import { supabase } from '@/lib/supabase';
+
+function sanitizeAndValidateEmail(raw: string): { valid: boolean; email: string; error?: string } {
+  const sanitized = raw.trim().toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, '');
+  if (!sanitized) {
+    return { valid: false, email: sanitized, error: 'Email address is required' };
+  }
+
+  // RFC-compliant email format checking user, domain, and TLD
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  if (!emailRegex.test(sanitized)) {
+    return { valid: false, email: sanitized, error: 'Please enter a valid email address' };
+  }
+
+  const parts = sanitized.split('@');
+  if (parts.length !== 2) {
+    return { valid: false, email: sanitized, error: 'Please enter a valid email address' };
+  }
+
+  const [userPart, domainPart] = parts;
+  if (userPart.length > 64) {
+    return { valid: false, email: sanitized, error: 'Email username is too long' };
+  }
+
+  const domainSubparts = domainPart.split('.');
+  const tld = domainSubparts[domainSubparts.length - 1];
+  if (!tld || tld.length < 2 || !/^[a-z]{2,24}$/.test(tld)) {
+    return { valid: false, email: sanitized, error: 'Please enter a valid domain (e.g. .com, .org)' };
+  }
+
+  return { valid: true, email: sanitized };
+}
 
 export default function PaymentCompleteScreen() {
   const router = useRouter();
@@ -36,6 +65,7 @@ export default function PaymentCompleteScreen() {
   const [saving, setSaving] = useState(false);
   const [savedEmail, setSavedEmail] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (isKeys) {
@@ -45,10 +75,19 @@ export default function PaymentCompleteScreen() {
     }
   }, [isKeys, keysCount, paystackRef]);
 
+  useEffect(() => {
+    if (modalVisible) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [modalVisible]);
+
   const handleSaveEmail = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !trimmed.includes('@') || !trimmed.includes('.')) {
-      setSaveError('Enter a valid email');
+    const { valid, email: sanitized, error } = sanitizeAndValidateEmail(email);
+    if (!valid) {
+      setSaveError(error || 'Please enter a valid email');
       return;
     }
 
@@ -56,10 +95,10 @@ export default function PaymentCompleteScreen() {
     setSaveError(null);
 
     try {
-      await AsyncStorage.setItem('@play/user_email', trimmed);
+      await AsyncStorage.setItem('@play/user_email', sanitized);
       await supabase.from('play_purchases').upsert(
         {
-          email: trimmed,
+          email: sanitized,
           paystack_ref: paystackRef,
           keys: isKeys ? keysCount : 0,
           is_premium: !isKeys,
@@ -67,10 +106,10 @@ export default function PaymentCompleteScreen() {
         },
         { onConflict: 'paystack_ref' }
       );
-      setSavedEmail(trimmed);
+      setSavedEmail(sanitized);
       setModalVisible(false);
     } catch {
-      setSavedEmail(trimmed);
+      setSavedEmail(sanitized);
       setModalVisible(false);
     } finally {
       setSaving(false);
@@ -170,100 +209,105 @@ export default function PaymentCompleteScreen() {
         )}
       </View>
 
-      {/* Email Save Pop-up Modal with Keyboard Avoidance */}
+      {/* Email Save Pop-up Modal */}
       <Modal
         visible={modalVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setModalVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.modalBackdrop}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'position'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 20}
-              style={{ width: '100%', maxWidth: 420 }}
+        <View style={styles.modalBackdrop}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardAvoidWrap}
+          >
+            <View
+              style={[
+                styles.modalCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: colors.surfaceContainerHigh,
+                },
+              ]}
             >
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleRow}>
+                  <Mail size={20} color={StaticColors.achievementAmber} />
+                  <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
+                    Save Payment
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setModalVisible(false)}
+                  hitSlop={8}
+                  style={styles.closeBtn}
+                >
+                  <X size={20} color={colors.onSurfaceVariant} />
+                </Pressable>
+              </View>
+
+              <Text style={[styles.modalDescription, { color: colors.onSurfaceVariant }]}>
+                Enter email to restore your purchase on any device anytime.
+              </Text>
+
+              {/* Email Input */}
               <View
                 style={[
-                  styles.modalCard,
+                  styles.inputWrapper,
                   {
-                    backgroundColor: colors.surfaceContainer,
-                    borderColor: colors.surfaceContainerHigh,
+                    backgroundColor: colors.background,
+                    borderColor: saveError ? '#ef4444' : colors.surfaceContainerHigh,
                   },
                 ]}
               >
-                {/* Modal Header */}
-                <View style={styles.modalHeader}>
-                  <View style={styles.modalTitleRow}>
-                    <Mail size={20} color={StaticColors.achievementAmber} />
-                    <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
-                      Save Payment
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => setModalVisible(false)}
-                    style={styles.closeBtn}
-                  >
-                    <X size={20} color={colors.onSurfaceVariant} />
-                  </Pressable>
-                </View>
-
-                <Text style={[styles.modalDescription, { color: colors.onSurfaceVariant }]}>
-                  Enter email to restore your purchase on any device anytime.
-                </Text>
-
-                {/* Email Input */}
-                <View
+                <TextInput
+                  ref={inputRef}
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (saveError) setSaveError(null);
+                  }}
+                  placeholder="you@example.com"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus={true}
+                  editable={!saving}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSaveEmail}
                   style={[
-                    styles.inputWrapper,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: saveError ? '#ef4444' : colors.surfaceContainerHigh,
-                    },
+                    styles.input,
+                    { color: colors.onSurface },
+                    Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
                   ]}
-                >
-                  <TextInput
-                    value={email}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (saveError) setSaveError(null);
-                    }}
-                    placeholder="you@example.com"
-                    placeholderTextColor={colors.onSurfaceVariant}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    onSubmitEditing={handleSaveEmail}
-                    style={[styles.input, { color: colors.onSurface }]}
-                  />
-                </View>
-
-                {saveError && (
-                  <Text style={styles.errorText}>{saveError}</Text>
-                )}
-
-                {/* Submit CTA */}
-                <Pressable
-                  onPress={handleSaveEmail}
-                  disabled={saving}
-                  style={({ pressed }) => [
-                    styles.submitButton,
-                    { backgroundColor: StaticColors.achievementAmber },
-                    (pressed || saving) && { opacity: 0.8 },
-                  ]}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#000" size="small" />
-                  ) : (
-                    <Text style={styles.submitButtonText}>Save</Text>
-                  )}
-                </Pressable>
+                />
               </View>
-            </KeyboardAvoidingView>
-          </View>
-        </TouchableWithoutFeedback>
+
+              {saveError && (
+                <Text style={styles.errorText}>{saveError}</Text>
+              )}
+
+              {/* Submit CTA */}
+              <Pressable
+                onPress={handleSaveEmail}
+                disabled={saving}
+                style={({ pressed }) => [
+                  styles.submitButton,
+                  { backgroundColor: StaticColors.achievementAmber },
+                  (pressed || saving) && { opacity: 0.8 },
+                ]}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#000" size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
@@ -372,10 +416,14 @@ const styles = StyleSheet.create({
   /* Modal */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.gutter,
+  },
+  keyboardAvoidWrap: {
+    width: '100%',
+    maxWidth: 420,
   },
   modalCard: {
     width: '100%',
@@ -410,11 +458,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.gutter,
-    paddingVertical: 10,
+    paddingVertical: Platform.OS === 'web' ? 12 : 8,
   },
   input: {
     fontFamily: FontFamily.medium,
     fontSize: 15,
+    width: '100%',
   },
   errorText: {
     color: '#ef4444',

@@ -312,14 +312,14 @@ export function CardDeck({
         </View>
 
         <View style={styles.keyBadge}>
-          {keyBalance !== undefined ? (
-            <>
-              <Text style={[styles.keyCount, { color: colors.onSurface }]}>{keyBalance}</Text>
-              <Image source={require('@/assets/premium/key.webp')} style={styles.keyIcon} />
-            </>
-          ) : (
-            <Text style={{ fontSize: 18 }}>⚡</Text>
-          )}
+          <Text style={[styles.keyCount, { color: colors.onSurface }]}>
+            {keyBalance !== undefined ? (keyBalance >= 99999 ? '∞' : keyBalance) : '3'}
+          </Text>
+          <Image
+            source={require('@/assets/premium/key.webp')}
+            style={styles.keyIcon}
+            resizeMode="contain"
+          />
         </View>
       </View>
 
@@ -491,12 +491,12 @@ const styles = StyleSheet.create({
   },
   keyCount: {
     fontFamily: FontFamily.bold,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
   },
   keyIcon: {
-    width: 16,
-    height: 16,
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
   },
   cardViewport: {

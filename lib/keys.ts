@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = '@play/keys';
 
-export const INITIAL_KEYS = 4;
+export const INITIAL_KEYS = 3;
 
 /** How long a depleted balance takes to refill, counted from the moment the
  *  "out of keys" screen is actually shown (not from the moment the balance

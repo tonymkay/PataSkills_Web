@@ -25,6 +25,7 @@ interface SessionStateScreenProps {
   subtitle?: string;
   totalXp?: number;
   scoreText?: string;
+  progressText?: string;
   /** sessionUnlocked only: keys remaining, highlighted in the subtitle.
    *  keysReset also uses this for the "N keys added" count. */
   keysLeft?: number;
@@ -230,10 +231,10 @@ export function SessionStateScreen({
                 />
                 <View style={styles.proceedCardTextWrap}>
                   <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                    Subscribe for unlimited
+                    Subscribe for Unlimited
                   </Text>
                   <Text style={[styles.proceedCardSubtitle, { color: colors.onSurfaceVariant }]}>
-                    Play with 0 key limits
+                    Get full experience with premium
                   </Text>
                 </View>
               </View>
@@ -327,8 +328,8 @@ export function SessionStateScreen({
               <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>TOTAL XP</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.surfaceContainerLow }]}>
-              <Text style={[styles.statValue, { color: colors.onSurface }]}>{scoreText}</Text>
-              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>SCORE</Text>
+              <Text style={[styles.statValue, { color: colors.onSurface }]}>{progressText || scoreText}</Text>
+              <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>TOPICS DONE</Text>
             </View>
           </View>
         ) : null}
@@ -419,22 +420,23 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: Spacing.xxl,
+    width: '100%',
   },
   /* Proceed / Out of Keys Screen */
   proceedContent: {
     flex: 1,
-    justifyContent: 'center',
+    paddingTop: Spacing.xxl,
     alignItems: 'center',
     width: '100%',
   },
   proceedTitle: {
     fontFamily: FontFamily.bold,
     fontSize: 28,
-    lineHeight: 34,
+    lineHeight: 36,
     textAlign: 'center',
     marginBottom: Spacing.xl,
-    maxWidth: 280,
+    maxWidth: 300,
   },
   proceedOptions: {
     width: '100%',
