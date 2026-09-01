@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
@@ -14,11 +14,9 @@ export default function KeysPacksScreen() {
   const insets = useSafeAreaInsets();
   const [balance, setBalance] = useState<number | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      getKeyBalance().then((b) => setBalance(Number.isFinite(b) ? b : null)).catch(() => {});
-    }, []),
-  );
+  useEffect(() => {
+    getKeyBalance().then((b) => setBalance(Number.isFinite(b) ? b : null)).catch(() => {});
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>

@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { PlaySession } from '@/components/play/PlaySession';
@@ -12,6 +13,7 @@ type Stage = 'landing' | 'downloading' | 'session';
 
 export default function PlayEntry() {
   const { colors } = useTheme();
+  const params = useLocalSearchParams<{ resume?: string }>();
   const [stage, setStage] = useState<Stage>('landing');
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +46,13 @@ export default function PlayEntry() {
     setError(null);
     setProgress(null);
   }, []);
+
+  // Auto-resume session if returning from successful payment
+  useEffect(() => {
+    if (params.resume === 'true') {
+      void runDownload();
+    }
+  }, [params.resume, runDownload]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#14171C' }]}>

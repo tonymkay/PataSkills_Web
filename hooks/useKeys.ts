@@ -8,11 +8,13 @@ import {
 export function useKeys() {
   const [balance, setBalance] = useState<number | null>(null);
   const [resetAt, setResetAt] = useState<number | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
     const state = await getKeysState();
-    setBalance(state.balance);
+    setIsPremium(!!state.isPremium);
+    setBalance(state.isPremium ? 999999 : state.balance);
     setResetAt(state.resetAt);
     return state;
   }, []);
@@ -21,16 +23,14 @@ export function useKeys() {
     void refresh().then(() => setReady(true));
   }, [refresh]);
 
-  // The reset timer is the source of truth: while the balance is depleted
-  // and a reset is pending, keep re-reading state so the refill applies
-  // itself the moment it's due, even if the user just sits on this screen.
+  // The reset timer is the source of truth
   useEffect(() => {
-    if (balance === null || balance > 0 || resetAt === null) return;
+    if (isPremium || balance === null || balance > 0 || resetAt === null) return;
     const interval = setInterval(() => {
       void refresh();
     }, 1000);
     return () => clearInterval(interval);
-  }, [balance, resetAt, refresh]);
+  }, [isPremium, balance, resetAt, refresh]);
 
   const spendKey = useCallback(async (): Promise<number | null> => {
     const next = await spendKeyLib();
@@ -40,20 +40,21 @@ export function useKeys() {
     return next;
   }, [refresh]);
 
-  // Call this when the "out of keys" screen actually mounts — the timer
-  // starts from here, not from whenever the balance happened to hit 0.
   const startResetTimer = useCallback(async () => {
     const state = await startResetTimerLib();
-    setBalance(state.balance);
+    setIsPremium(!!state.isPremium);
+    setBalance(state.isPremium ? 999999 : state.balance);
     setResetAt(state.resetAt);
   }, []);
 
   return {
     balance,
     resetAt,
+    isPremium,
     ready,
     spendKey,
     startResetTimer,
-    isOutOfKeys: balance !== null && balance <= 0,
+    refresh,
+    isOutOfKeys: !isPremium && balance !== null && balance <= 0,
   };
 }

@@ -7,5 +7,6 @@ export { Spacing, Radius } from '@/constants/spacing';
 export { Typography, FontFamily } from '@/constants/typography';
 export { IconSize } from '@/constants/icons';
 export { BrandGradients, SelectionGlow } from '@/constants/gradients';
+export { StaticColors } from '@/constants/colors';
 export { useTheme } from './ThemeContext';
 export type { ThemeScheme } from './ThemeContext';
