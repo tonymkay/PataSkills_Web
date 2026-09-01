@@ -183,6 +183,56 @@ export default function AdminSignsScreen() {
     setTimeout(() => setToast(null), 4000);
   }
 
+  async function handleUpload(target: SignQuestionItem) {
+    if (typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setSaving(true);
+      try {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const uploadPath = `signs/${Date.now()}_${cleanName}`;
+
+        const { error: upErr } = await supabase.storage
+          .from('play-assets')
+          .upload(uploadPath, file, { contentType: file.type || 'image/webp', upsert: true });
+
+        if (upErr) throw upErr;
+
+        if (target.signDbId) {
+          const { error: dbErr } = await supabase
+            .from('play_signs')
+            .update({ image_path: uploadPath })
+            .eq('id', target.signDbId);
+          if (dbErr) throw dbErr;
+        } else {
+          const { error: dbErr } = await supabase
+            .from('play_signs')
+            .upsert({
+              key: target.signKey,
+              name: target.expectedAnswer,
+              image_path: uploadPath,
+            });
+          if (dbErr) throw dbErr;
+        }
+
+        setToast(`Uploaded & assigned image for "${target.expectedAnswer}"`);
+        setSwapTarget(null);
+        await load();
+      } catch (err: any) {
+        setToast(`Upload failed: ${err.message || 'Unknown error'}`);
+      } finally {
+        setSaving(false);
+        setTimeout(() => setToast(null), 4000);
+      }
+    };
+    input.click();
+  }
+
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
@@ -200,7 +250,7 @@ export default function AdminSignsScreen() {
           Signs ({items.length})
         </Text>
         <Text style={{ color: '#888', fontSize: 13, marginTop: 4 }}>
-          Targeting "What is this sign called?" questions. Tap any sign to swap its image.
+          Targeting "What is this sign called?" questions. Tap any sign to swap or upload its image.
         </Text>
       </View>
 
@@ -273,9 +323,27 @@ export default function AdminSignsScreen() {
               </Pressable>
             </View>
 
-            <Text style={{ color: '#777', fontSize: 12, marginBottom: 12 }}>
-              Select the correct visual road sign graphic below:
-            </Text>
+            {/* Action Toolbar */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <Text style={{ color: '#777', fontSize: 12 }}>
+                Select a graphic below or upload a new one:
+              </Text>
+              <Pressable
+                onPress={() => swapTarget && handleUpload(swapTarget)}
+                style={{
+                  backgroundColor: '#2563eb',
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+                  ⬆ Upload from Computer
+                </Text>
+              </Pressable>
+            </View>
 
             {saving ? (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
