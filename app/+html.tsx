@@ -1,6 +1,17 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
 import { fontAssets, fontAssetsWebWoff2, FontFamily } from '../constants/typography';
+import { CurriculumCoverImagePaths } from '../constants/curriculumAssets';
+
+// Same public-URL shape as lib/supabase.ts's getPlayAssetPublicUrl, built
+// directly from the env var here instead of importing the Supabase client
+// itself — this file runs at static-HTML-generation time, and pulling in
+// the full client (AsyncStorage, GoTrue, etc.) here would be unnecessary
+// weight for what's just a deterministic string.
+const SUPABASE_URL = process.env.EXPO_PUBLIC_PATASKILLS_SUPABASE_URL ?? '';
+const drivingTheoryCoverImageUrl = SUPABASE_URL
+  ? `${SUPABASE_URL}/storage/v1/object/public/play-assets/${CurriculumCoverImagePaths['driving-theory']}`
+  : null;
 
 // Full-weight .ttf files plus their subsetted .woff2 counterparts (generated
 // by glyphhanger + fonttools, stripped to just the ASCII range this app
@@ -65,6 +76,9 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="preload" as="font" type="font/woff2" href={soraSemiBoldWoff2} crossOrigin="anonymous" />
         <link rel="preload" as="font" type="font/woff2" href={soraBoldWoff2} crossOrigin="anonymous" />
         <link rel="preload" as="font" type="font/woff2" href={soraExtraBoldWoff2} crossOrigin="anonymous" />
+        {drivingTheoryCoverImageUrl && (
+          <link rel="preload" as="image" type="image/webp" href={drivingTheoryCoverImageUrl} />
+        )}
         <style dangerouslySetInnerHTML={{ __html: fontFaceStyle }} />
         <style dangerouslySetInnerHTML={{ __html: webShellStyle }} />
       </head>

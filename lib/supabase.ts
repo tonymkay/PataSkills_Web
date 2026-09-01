@@ -27,4 +27,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Resolves a storage path in the shared `play-assets` bucket to its public
+// URL. Same call Supabase's client makes internally (no network round trip
+// — it's a deterministic string built from the project URL), so it's safe
+// to use for things that need to be known at build time too, like the web
+// <link rel="preload"> in app/+html.tsx.
+export function getPlayAssetPublicUrl(path: string): string {
+  return supabase.storage.from('play-assets').getPublicUrl(path).data.publicUrl;
+}
+
 export default supabase;
