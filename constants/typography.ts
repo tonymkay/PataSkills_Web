@@ -453,3 +453,19 @@ export const fontAssets = {
   [FontFamily.bold]: require("../assets/fonts/Sora-Bold.ttf"),
   [FontFamily.extraBold]: require("../assets/fonts/Sora-ExtraBold.ttf"),
 } as const;
+
+// Subsetted .woff2 counterparts (glyphhanger + fonttools, ASCII range only,
+// ~82% smaller) used by app/+html.tsx to build the web @font-face rules.
+// +html.tsx only ever runs server-side (it produces the static HTML shell),
+// so requiring these there alone is not enough: Metro only copies to disk
+// the assets that end up in the *client* bundle. This file is imported by
+// app/_layout.tsx (client-side, every platform including web), so putting
+// the requires here — same as fontAssets above — guarantees Metro treats
+// them as real assets and writes them into dist/ during web export.
+export const fontAssetsWebWoff2 = {
+  [FontFamily.regular]: require("../assets/fonts/Sora-Regular-subset.woff2"),
+  [FontFamily.medium]: require("../assets/fonts/Sora-Medium-subset.woff2"),
+  [FontFamily.semiBold]: require("../assets/fonts/Sora-SemiBold-subset.woff2"),
+  [FontFamily.bold]: require("../assets/fonts/Sora-Bold-subset.woff2"),
+  [FontFamily.extraBold]: require("../assets/fonts/Sora-ExtraBold-subset.woff2"),
+} as const;
