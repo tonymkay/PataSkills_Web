@@ -1,24 +1,11 @@
-import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  withDelay,
-  Easing,
-} from 'react-native-reanimated';
+import React from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
 import { DownloadProgress } from '@/lib/downloadSession';
 
-// User-facing copy only — deliberately says nothing about "downloading" or
-// "images". The underlying stages (curriculum/signs/pairs/hydrating) move
-// too fast for the user to read stage-by-stage copy, so this is one static
-// label shown for the whole loading period rather than per-stage text.
 const LOADING_LABEL = 'Loading questions…';
 
 interface DownloadingScreenProps {
@@ -27,40 +14,42 @@ interface DownloadingScreenProps {
   onRetry: () => void;
 }
 
-// Three dots bouncing in a staggered wave — communicates "something is
-// happening" without implying a measurable, watchable percentage.
 function BouncingDots({ color }: { color: string }) {
-  const dot0 = useSharedValue(0);
-  const dot1 = useSharedValue(0);
-  const dot2 = useSharedValue(0);
+  const anim0 = React.useRef(new Animated.Value(0)).current;
+  const anim1 = React.useRef(new Animated.Value(0)).current;
+  const anim2 = React.useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const bounce = (delay: number) =>
-      withDelay(
-        delay,
-        withRepeat(
-          withSequence(
-            withTiming(-8, { duration: 300, easing: Easing.out(Easing.quad) }),
-            withTiming(0, { duration: 300, easing: Easing.in(Easing.quad) })
-          ),
-          -1,
-          false
-        )
+  React.useEffect(() => {
+    const createBounce = (anim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: -8, duration: 300, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ])
       );
-    dot0.value = bounce(0);
-    dot1.value = bounce(120);
-    dot2.value = bounce(240);
-  }, [dot0, dot1, dot2]);
+    };
 
-  const style0 = useAnimatedStyle(() => ({ transform: [{ translateY: dot0.value }] }));
-  const style1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }));
-  const style2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
+    const b0 = createBounce(anim0, 0);
+    const b1 = createBounce(anim1, 140);
+    const b2 = createBounce(anim2, 280);
+
+    b0.start();
+    b1.start();
+    b2.start();
+
+    return () => {
+      b0.stop();
+      b1.stop();
+      b2.stop();
+    };
+  }, [anim0, anim1, anim2]);
 
   return (
     <View style={styles.dotsRow}>
-      <Animated.View style={[styles.dot, { backgroundColor: color }, style0]} />
-      <Animated.View style={[styles.dot, { backgroundColor: color }, style1]} />
-      <Animated.View style={[styles.dot, { backgroundColor: color }, style2]} />
+      <Animated.View style={[styles.dot, { backgroundColor: color, transform: [{ translateY: anim0 }] }]} />
+      <Animated.View style={[styles.dot, { backgroundColor: color, transform: [{ translateY: anim1 }] }]} />
+      <Animated.View style={[styles.dot, { backgroundColor: color, transform: [{ translateY: anim2 }] }]} />
     </View>
   );
 }
@@ -83,8 +72,8 @@ export function DownloadingScreen({ progress, error, onRetry }: DownloadingScree
       <View style={styles.content}>
         {error ? (
           <>
-            <Text style={[Typography.scoreMainTitle, styles.title, { color: colors.onSurface }]}>
-              Couldn't download session
+            <Text style={[Typography.headlineMd, styles.title, { color: colors.onSurface }]}>
+              Couldn't load session
             </Text>
             <Text style={[Typography.bodyLarge, styles.subtitle, { color: colors.onSurfaceVariant }]}>
               {error}
@@ -92,7 +81,7 @@ export function DownloadingScreen({ progress, error, onRetry }: DownloadingScree
           </>
         ) : (
           <>
-            <Text style={[Typography.scoreMainTitle, styles.title, { color: colors.onSurface }]}>
+            <Text style={[Typography.headlineSm, styles.title, { color: colors.onSurface }]}>
               {LOADING_LABEL}
             </Text>
             <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
@@ -141,22 +130,21 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   actions: {
-    gap: Spacing.gutter,
+    gap: Spacing.sm,
+    width: '100%',
   },
   primaryButton: {
-    minHeight: 56,
+    width: '100%',
+    minHeight: 52,
     borderRadius: Radius.full,
-    backgroundColor: '#F8F8FF',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
   },
   primaryText: {
-    color: '#1A1D24',
+    color: '#000',
     fontFamily: FontFamily.extraBold,
-    fontSize: 16,
-    lineHeight: 20,
-    textAlign: 'center',
-    letterSpacing: 0,
+    fontSize: 15,
+    letterSpacing: 0.5,
   },
 });

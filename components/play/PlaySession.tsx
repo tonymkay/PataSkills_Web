@@ -45,24 +45,21 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
   const currentSession = sessions[sessionIndex];
   const hasMoreSessions = sessionIndex + 1 < sessions.length;
 
+  const entryStartedRef = React.useRef(false);
+
   // Initial spend on entry
   React.useEffect(() => {
-    if (!ready || sessionStarted) return;
-
-    let cancelled = false;
+    if (!ready || entryStartedRef.current) return;
+    entryStartedRef.current = true;
 
     async function tryStart() {
       if (isOutOfKeys) {
-        if (!cancelled) {
-          setOutOfKeysReason('entry');
-          setFlowState('outOfKeys');
-        }
+        setOutOfKeysReason('entry');
+        setFlowState('outOfKeys');
         return;
       }
 
       const remaining = await spendKey();
-      if (cancelled) return;
-
       if (remaining === null) {
         setOutOfKeysReason('entry');
         setFlowState('outOfKeys');
@@ -73,11 +70,7 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
     }
 
     void tryStart();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, sessionStarted, isOutOfKeys, spendKey]);
+  }, [ready, isOutOfKeys, spendKey]);
 
   const handleSessionComplete = useCallback(
     (stats: SessionStats) => {
