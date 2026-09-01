@@ -434,6 +434,7 @@ export function CardDeck({
         onQuit={() => {
           setQuitOpen(false);
           onClose?.();
+          onExit?.();
         }}
       />
     </View>

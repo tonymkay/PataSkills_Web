@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Image, Platform } from 'react-native';
-import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Clock, Bell, Check } from 'lucide-react-native';
+import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Clock, Bell, Check, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
