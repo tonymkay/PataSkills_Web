@@ -3,21 +3,17 @@ import {
   getKeysState,
   spendKey as spendKeyLib,
   startResetTimer as startResetTimerLib,
-  markLowKeysWarningShown,
-  LOW_KEYS_THRESHOLD,
 } from '@/lib/keys';
 
 export function useKeys() {
   const [balance, setBalance] = useState<number | null>(null);
   const [resetAt, setResetAt] = useState<number | null>(null);
-  const [lowKeysWarningShown, setLowKeysWarningShown] = useState(false);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
     const state = await getKeysState();
     setBalance(state.balance);
     setResetAt(state.resetAt);
-    setLowKeysWarningShown(state.lowKeysWarningShown);
     return state;
   }, []);
 
@@ -50,18 +46,7 @@ export function useKeys() {
     const state = await startResetTimerLib();
     setBalance(state.balance);
     setResetAt(state.resetAt);
-    setLowKeysWarningShown(state.lowKeysWarningShown);
   }, []);
-
-  const dismissLowKeysWarning = useCallback(async () => {
-    await markLowKeysWarningShown();
-    setLowKeysWarningShown(true);
-  }, []);
-
-  const shouldShowLowKeysWarning =
-    balance !== null &&
-    balance === LOW_KEYS_THRESHOLD &&
-    !lowKeysWarningShown;
 
   return {
     balance,
@@ -69,8 +54,6 @@ export function useKeys() {
     ready,
     spendKey,
     startResetTimer,
-    dismissLowKeysWarning,
-    shouldShowLowKeysWarning,
     isOutOfKeys: balance !== null && balance <= 0,
   };
 }

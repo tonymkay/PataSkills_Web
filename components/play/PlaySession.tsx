@@ -4,13 +4,12 @@ import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
 import { useKeys } from '@/hooks/useKeys';
-import { getKeysState, LOW_KEYS_THRESHOLD } from '@/lib/keys';
 import { groupQuestionsBySession } from '@/utils/groupSessions';
 import { QuizQuestion } from '@/types/quiz';
 
 const XP_PER_CORRECT = 10;
 
-type FlowState = 'playing' | 'topicComplete' | 'sessionUnlocked' | 'keysReset' | 'lowKeys' | 'outOfKeys' | 'allComplete';
+type FlowState = 'playing' | 'topicComplete' | 'sessionUnlocked' | 'keysReset' | 'outOfKeys' | 'allComplete';
 
 /** Why we ended up on the "out of keys" screen — determines what happens
  *  once the reset timer refills the balance:
@@ -41,7 +40,6 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
     ready,
     spendKey,
     startResetTimer,
-    dismissLowKeysWarning,
     isOutOfKeys,
   } = useKeys();
 
@@ -116,12 +114,6 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
       return;
     }
 
-    const keyState = await getKeysState();
-    if (remaining === LOW_KEYS_THRESHOLD && !keyState.lowKeysWarningShown) {
-      setFlowState('lowKeys');
-      return;
-    }
-
     // A session was just successfully unlocked/paid for — always show the
     // unlock screen, even at 0 remaining. Skipping straight to 'playing'
     // when remaining was 0 meant that last-key session played silently
@@ -169,13 +161,6 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
   const handleTopicContinue = useCallback(() => {
     void advanceToNextSession();
   }, [advanceToNextSession]);
-
-  const handleLowKeysLater = useCallback(async () => {
-    await dismissLowKeysWarning();
-    setSessionIndex((i) => i + 1);
-    setSessionStarted(true);
-    setFlowState('playing');
-  }, [dismissLowKeysWarning]);
 
   // True exactly when the "out of keys" screen is the one being shown to
   // the user right now — covers both the explicit flowState and the
@@ -261,15 +246,6 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
         kind="sessionUnlocked"
         keysLeft={keysAfterAdvance}
         onPrimaryPress={handleStartUnlockedSession}
-      />
-    );
-  }
-
-  if (flowState === 'lowKeys') {
-    return (
-      <SessionStateScreen
-        kind="lowKeys"
-        onSecondaryPress={() => void handleLowKeysLater()}
       />
     );
   }

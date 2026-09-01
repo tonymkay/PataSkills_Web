@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEY = '@play/keys';
 
 export const INITIAL_KEYS = 4;
-export const LOW_KEYS_THRESHOLD = 2;
 
 /** How long a depleted balance takes to refill, counted from the moment the
  *  "out of keys" screen is actually shown (not from the moment the balance
@@ -14,7 +13,6 @@ export const KEYS_RESET_DURATION_MS = 4 * 60 * 1000;
 interface KeysState {
   balance: number;
   initialized: boolean;
-  lowKeysWarningShown: boolean;
   /** Epoch ms when balance refills. Set the moment balance hits 0; null
    *  whenever balance is > 0. */
   resetAt: number | null;
@@ -25,7 +23,7 @@ async function read(): Promise<KeysState> {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as KeysState;
   } catch {}
-  return { balance: INITIAL_KEYS, initialized: false, lowKeysWarningShown: false, resetAt: null };
+  return { balance: INITIAL_KEYS, initialized: false, resetAt: null };
 }
 
 async function write(state: KeysState): Promise<void> {
@@ -42,7 +40,6 @@ function applyReset(state: KeysState): KeysState {
     return {
       balance: INITIAL_KEYS,
       initialized: true,
-      lowKeysWarningShown: false,
       resetAt: null,
     };
   }
@@ -55,7 +52,6 @@ export async function getKeysState(): Promise<KeysState> {
     const fresh: KeysState = {
       balance: INITIAL_KEYS,
       initialized: true,
-      lowKeysWarningShown: false,
       resetAt: null,
     };
     await write(fresh);
@@ -94,14 +90,4 @@ export async function startResetTimer(): Promise<KeysState> {
     return next;
   }
   return state;
-}
-
-export async function markLowKeysWarningShown(): Promise<void> {
-  const state = await getKeysState();
-  await write({ ...state, lowKeysWarningShown: true });
-}
-
-export async function hasLowKeysWarningShown(): Promise<boolean> {
-  const state = await getKeysState();
-  return state.lowKeysWarningShown;
 }

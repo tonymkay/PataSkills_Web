@@ -13,7 +13,6 @@ export type SessionStateKind =
   | 'sessionUnlocked'
   | 'keysReset'
   | 'rewardUnlocked'
-  | 'lowKeys'
   | 'outOfKeys'
   | 'shareApp'
   | 'rateApp';
@@ -81,15 +80,6 @@ const stateCopy: Record<
     title: 'Reward unlocked!',
     subtitle: 'You earned 1 key, enough for one more session. Nice.',
     primary: 'COLLECT',
-  },
-  lowKeys: {
-    icon: Lock,
-    iconColor: StaticColors.runPurpleDim,
-    title: "You're running low on keys",
-    subtitle: 'Watch a quick ad to top up before you run out.',
-    primary: 'WATCH AN AD FOR AN EXTRA KEY',
-    secondary: 'MAYBE LATER',
-    primaryDisabled: true,
   },
   outOfKeys: {
     icon: Lock,
