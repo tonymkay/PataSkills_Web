@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Info, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { KEY_PACKS, type KeyPack } from '@/lib/premium';
@@ -48,24 +48,6 @@ export default function KeysPacksScreen() {
           </Text>
         </View>
 
-        {/* Info Link Bar: How Keys Work */}
-        <Pressable
-          onPress={() => router.push('/how-keys-work')}
-          style={({ pressed }) => [
-            styles.infoLinkBar,
-            { backgroundColor: colors.surfaceContainer, borderColor: colors.surfaceContainerHigh },
-            pressed && { opacity: 0.75 },
-          ]}
-        >
-          <View style={styles.infoLinkLeft}>
-            <Info size={18} color={StaticColors.achievementAmber} />
-            <Text style={[styles.infoLinkLabel, { color: colors.onSurface }]}>
-              How Keys work
-            </Text>
-          </View>
-          <ChevronRight size={18} color={colors.onSurfaceVariant} />
-        </Pressable>
-
         {/* Key Packs List */}
         <View style={styles.packsList}>
           {KEY_PACKS.map((pack: KeyPack) => (
@@ -104,6 +86,16 @@ export default function KeysPacksScreen() {
             </Pressable>
           ))}
         </View>
+
+        {/* Centered Underlined Bottom Link */}
+        <Pressable
+          onPress={() => router.push('/how-keys-work')}
+          style={({ pressed }) => [styles.bottomLink, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={[styles.bottomLinkText, { color: colors.onSurfaceVariant }]}>
+            How Keys work
+          </Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -157,29 +149,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: Spacing.xs,
   },
-  infoLinkBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: 12,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  infoLinkLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  infoLinkLabel: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 14,
-  },
   packsList: {
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.base,
   },
   packCard: {
     flexDirection: 'row',
@@ -218,5 +190,16 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 17,
     lineHeight: 22,
+  },
+  bottomLink: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.lg,
+    marginTop: Spacing.sm,
+  },
+  bottomLinkText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 });

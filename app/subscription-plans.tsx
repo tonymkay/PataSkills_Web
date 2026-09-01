@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Info, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { PLANS, planDisplay, type Plan } from '@/lib/premium';
@@ -38,24 +38,6 @@ export default function SubscriptionPlansScreen() {
             Unlock infinite road signs sessions with zero key cooldowns
           </Text>
         </View>
-
-        {/* Info Link Bar: Benefits of Premium */}
-        <Pressable
-          onPress={() => router.push('/premium-benefits')}
-          style={({ pressed }) => [
-            styles.infoLinkBar,
-            { backgroundColor: colors.surfaceContainer, borderColor: colors.surfaceContainerHigh },
-            pressed && { opacity: 0.75 },
-          ]}
-        >
-          <View style={styles.infoLinkLeft}>
-            <Info size={18} color={StaticColors.successLime} />
-            <Text style={[styles.infoLinkLabel, { color: colors.onSurface }]}>
-              Benefits of premium
-            </Text>
-          </View>
-          <ChevronRight size={18} color={colors.onSurfaceVariant} />
-        </Pressable>
 
         {/* Subscription Plans List */}
         <View style={styles.plansList}>
@@ -107,6 +89,16 @@ export default function SubscriptionPlansScreen() {
             );
           })}
         </View>
+
+        {/* Centered Underlined Bottom Link */}
+        <Pressable
+          onPress={() => router.push('/premium-benefits')}
+          style={({ pressed }) => [styles.bottomLink, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={[styles.bottomLinkText, { color: colors.onSurfaceVariant }]}>
+            Benefits of premium
+          </Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -137,8 +129,8 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: 'center',
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
   heroCrownImage: {
     width: 88,
@@ -159,29 +151,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     maxWidth: 300,
   },
-  infoLinkBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: 12,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
-  },
-  infoLinkLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  infoLinkLabel: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 14,
-  },
   plansList: {
     gap: Spacing.md,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.base,
   },
   planCard: {
     borderRadius: Radius.lg,
@@ -233,5 +205,16 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 18,
     lineHeight: 24,
+  },
+  bottomLink: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.lg,
+    marginTop: Spacing.sm,
+  },
+  bottomLinkText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 });

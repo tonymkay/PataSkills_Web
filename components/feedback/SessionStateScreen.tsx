@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Image } from 'react-native';
-import { KeyRound, Lock, Medal, Share2, Sparkles, Star } from 'lucide-react-native';
+import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -179,40 +179,65 @@ export function SessionStateScreen({
 
           {/* Options List */}
           <View style={styles.proceedOptions}>
-            {/* Option 1: Buy one time keys */}
+            {/* Option 1: Buy one time keys (HIGHLIGHTED) */}
             <Pressable
               onPress={handleBuyKeys}
               style={({ pressed }) => [
-                styles.proceedRow,
-                pressed && { opacity: 0.75 },
+                styles.proceedCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: StaticColors.achievementAmber,
+                  borderWidth: 1.6,
+                },
+                pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
               ]}
             >
-              <Image
-                source={require('@/assets/premium/key.webp')}
-                style={styles.proceedImage}
-                resizeMode="contain"
-              />
-              <Text style={[styles.proceedOptionText, { color: colors.onSurface }]}>
-                Buy one time{'\n'}keys
-              </Text>
+              <View style={styles.proceedCardLeft}>
+                <Image
+                  source={require('@/assets/premium/key.webp')}
+                  style={styles.proceedCardImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.proceedCardTextWrap}>
+                  <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                    Buy one time keys
+                  </Text>
+                  <Text style={[styles.proceedCardSubtitle, { color: StaticColors.achievementAmber }]}>
+                    Packs of 20, 40, 80 or 120 keys
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={22} color={StaticColors.achievementAmber} />
             </Pressable>
 
             {/* Option 2: Subscribe for unlimited */}
             <Pressable
               onPress={handleSubscribe}
               style={({ pressed }) => [
-                styles.proceedRow,
-                pressed && { opacity: 0.75 },
+                styles.proceedCard,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  borderColor: colors.surfaceContainerHigh,
+                },
+                pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
               ]}
             >
-              <Image
-                source={require('@/assets/premium/crown.webp')}
-                style={styles.proceedImage}
-                resizeMode="contain"
-              />
-              <Text style={[styles.proceedOptionText, { color: colors.onSurface }]}>
-                Subscribe for{'\n'}unlimited
-              </Text>
+              <View style={styles.proceedCardLeft}>
+                <Image
+                  source={require('@/assets/premium/crown.webp')}
+                  style={styles.proceedCardImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.proceedCardTextWrap}>
+                  <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
+                    Subscribe for unlimited
+                  </Text>
+                  <Text style={[styles.proceedCardSubtitle, { color: colors.onSurfaceVariant }]}>
+                    Play with 0 key limits
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={22} color={colors.onSurfaceVariant} />
             </Pressable>
           </View>
         </View>
@@ -399,31 +424,54 @@ const styles = StyleSheet.create({
   /* Proceed / Out of Keys Screen */
   proceedContent: {
     flex: 1,
-    paddingTop: Spacing.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   proceedTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: 32,
-    lineHeight: 38,
-    textAlign: 'left',
-    marginBottom: Spacing.xxl,
+    fontSize: 28,
+    lineHeight: 34,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+    maxWidth: 280,
   },
   proceedOptions: {
-    gap: Spacing.xl,
+    width: '100%',
+    gap: Spacing.md,
   },
-  proceedRow: {
+  proceedCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.gutter,
+    justifyContent: 'space-between',
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.gutter,
+    borderWidth: 1,
   },
-  proceedImage: {
-    width: 76,
-    height: 76,
+  proceedCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    flex: 1,
   },
-  proceedOptionText: {
+  proceedCardImage: {
+    width: 54,
+    height: 54,
+  },
+  proceedCardTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  proceedCardTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  proceedCardSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    lineHeight: 16,
   },
 
   trophyImage: {
