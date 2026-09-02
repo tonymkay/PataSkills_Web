@@ -259,6 +259,7 @@ export function PlaySession({ sessions, signCatalog, onExit }: PlaySessionProps)
         <CardDeck
           key={`session-${sessionIndex}`}
           signs={currentSession.signs}
+          signCatalog={signCatalog}
           sessionTitle={currentSession.title}
           keyBalance={isPremium ? 999999 : (balance ?? 0)}
           onSessionComplete={handleSessionComplete}

@@ -54,10 +54,11 @@ export function CardDeck(props: CardDeckProps) {
 
 /**
  * Lightweight reading-mode branch: no answers, no Check/feedback flow —
- * just the same topbar/progress chrome with a "Got it" advance per card.
+ * just the same topbar/progress chrome with a "Next" advance per card.
  */
 function ReadingCardDeck({
   signs,
+  signCatalog,
   sessionTitle,
   keyBalance,
   onSessionComplete,
@@ -135,12 +136,12 @@ function ReadingCardDeck({
 
       <View style={styles.cardViewport}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.readingScrollContent}>
-          <ReadingCard key={currentSign.signId} sign={currentSign} />
+          <ReadingCard key={currentSign.signId} sign={currentSign} allSigns={signCatalog ?? signs} />
         </ScrollView>
       </View>
 
       <View style={styles.controlsArea}>
-        <CheckButton enabled feedbackState="idle" label="GOT IT" onPress={handleNext} />
+        <CheckButton enabled feedbackState="idle" label="NEXT" onPress={handleNext} />
         <Text style={[Typography.bodySmall, styles.hintText, { color: colors.onSurfaceVariant }]}>
           {currentIndex + 1}/{totalCount} signs
         </Text>

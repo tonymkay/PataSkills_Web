@@ -41,7 +41,6 @@ const PAGE_WIDTH = Math.min(Dimensions.get('window').width, CONTENT_MAX_WIDTH) -
 interface TrackOption {
   track: Track;
   label: string;
-  description: string;
   icon: LucideIcon;
 }
 
@@ -49,37 +48,31 @@ const TRACK_OPTIONS: TrackOption[] = [
   {
     track: 'pairs',
     label: 'Challenge yourself with pairs',
-    description: 'Match signs against each other under pressure',
     icon: Shuffle,
   },
   {
     track: 'names',
     label: 'Learn sign names',
-    description: 'Quiz yourself on what each sign is called',
     icon: Tag,
   },
   {
     track: 'meanings',
     label: 'Learn what signs mean',
-    description: 'Understand exactly what each sign is telling you',
     icon: BookOpen,
   },
   {
     track: 'whereUsed',
     label: 'Learn where signs are used',
-    description: 'See where on the road each sign belongs',
     icon: MapPin,
   },
   {
     track: 'full',
     label: 'Full course',
-    description: 'Every topic, in order, start to finish',
     icon: GraduationCap,
   },
   {
     track: 'reading',
     label: 'Reading mode — just browse the signs',
-    description: 'Browse all the signs at your own pace',
     icon: Eye,
   },
 ];
@@ -130,8 +123,8 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   if (activeSkill) {
     return (
       <View style={styles.screen}>
-        <View style={styles.container}>
-        <View style={styles.modePickerTop}>
+        <View style={[styles.container, styles.modePickerContainer]}>
+          <View style={styles.modePickerTop}>
           <Pressable onPress={() => setActiveSkill(null)} hitSlop={10} style={styles.backBtn}>
             <ChevronLeft size={22} color={colors.onSurface} />
             <Text style={[styles.backBtnText, { color: colors.onSurface }]}>{activeSkill.subtitle}</Text>
@@ -157,7 +150,6 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
                 key={option.track}
                 icon={resume ? Play : option.icon}
                 title={resume ? 'Resume session' : option.label}
-                description={option.description}
                 highlighted={resume}
                 onPress={() => onStart(option.track)}
               />
@@ -239,8 +231,11 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xxl,
     justifyContent: 'space-between',
   },
-  modePickerTop: {
+  modePickerContainer: {
     paddingTop: Spacing.md,
+  },
+  modePickerTop: {
+    paddingTop: 0,
   },
   backBtn: {
     flexDirection: 'row',
@@ -252,7 +247,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   modePickerHeading: {
-    marginTop: Spacing.xl,
+    marginTop: Spacing.md,
   },
   modePickerSubheading: {
     fontFamily: FontFamily.regular,
@@ -262,7 +257,7 @@ const styles = StyleSheet.create({
   },
   modeList: {
     flex: 1,
-    marginTop: Spacing.xl,
+    marginTop: Spacing.md,
   },
   modeListContent: {
     gap: Spacing.sm,

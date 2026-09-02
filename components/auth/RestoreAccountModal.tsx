@@ -137,31 +137,27 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
                 Account
               </Text>
               <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-                This device is linked to an account.
+                You are logged in as {currentEmail ? truncateEmailMiddle(currentEmail) : ''}
               </Text>
-
-              <View style={[styles.emailBadge, { backgroundColor: 'rgba(43,217,196,0.12)', borderColor: colors.tealAccent || '#2BD9C4' }]}>
-                <ShieldCheck size={16} color={colors.tealAccent || '#2BD9C4'} />
-                <Text style={[styles.emailBadgeText, { color: colors.tealAccent || '#2BD9C4' }]}>
-                  {currentEmail ? truncateEmailMiddle(currentEmail) : ''}
-                </Text>
-              </View>
 
               <Pressable
                 onPress={handleLogout}
                 disabled={busy}
                 style={({ pressed }) => [
                   styles.logoutBtn,
-                  { borderColor: '#ef4444' },
+                  {
+                    borderColor: colors.outlineVariant,
+                    backgroundColor: colors.surfaceContainerHigh,
+                  },
                   (pressed || busy) && { opacity: 0.8 },
                 ]}
               >
                 {busy ? (
-                  <ActivityIndicator color="#ef4444" size="small" />
+                  <ActivityIndicator color={colors.onSurface} size="small" />
                 ) : (
                   <>
-                    <LogOut size={18} color="#ef4444" />
-                    <Text style={styles.logoutBtnText}>LOG OUT</Text>
+                    <LogOut size={18} color={colors.onSurface} />
+                    <Text style={[styles.logoutBtnText, { color: colors.onSurface }]}>LOG OUT</Text>
                   </>
                 )}
               </Pressable>
@@ -446,7 +442,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   logoutBtnText: {
-    color: '#ef4444',
     fontFamily: FontFamily.bold,
     fontSize: 15,
   },

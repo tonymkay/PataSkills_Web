@@ -1,4 +1,4 @@
-import { QuizQuestion } from '@/types/quiz';
+import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 import { SignPair } from '@/lib/signs';
 
 /**
@@ -60,4 +60,20 @@ export function hydrateQuestionsList(
   pairs: Record<string, SignPair>,
 ): QuizQuestion[] {
   return questions.map((q) => hydrateQuestion(q, assets, pairs));
+}
+
+/**
+ * Hydrates the signs catalog (used by Reading Mode / Learn More) with the
+ * same real sign image URLs the quiz questions already get — via pairId +
+ * signRef against play_sign_pairs, no separate image field needed.
+ */
+export function hydrateSignCatalog(
+  signs: SignCatalogEntry[],
+  pairs: Record<string, SignPair>,
+): SignCatalogEntry[] {
+  return signs.map((s) => {
+    const pair = pairs[s.pairId];
+    if (!pair) return s;
+    return { ...s, image: s.signRef === 'A' ? pair.urlA : pair.urlB };
+  });
 }

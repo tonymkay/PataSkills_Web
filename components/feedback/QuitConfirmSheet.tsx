@@ -97,7 +97,7 @@ export function QuitConfirmSheet({ visible, onKeepPlaying, onQuit }: QuitConfirm
             </Pressable>
 
             <Pressable onPress={onQuit} hitSlop={8} style={styles.quitBtn}>
-              <Text style={[styles.quitBtnText, { color: colors.dangerRed }]}>QUIT</Text>
+              <Text style={[styles.quitBtnText, { color: colors.onSurfaceVariant }]}>QUIT</Text>
             </Pressable>
           </LinearGradient>
         </Animated.View>

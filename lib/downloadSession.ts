@@ -1,6 +1,6 @@
 import { loadRemoteCurriculum, deriveTrack, Track } from './curriculum';
 import { loadSignAssets, loadSignPairs } from './signs';
-import { hydrateQuestionsList } from '@/utils/hydrateQuestions';
+import { hydrateQuestionsList, hydrateSignCatalog } from '@/utils/hydrateQuestions';
 import { PlaySession } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 
@@ -58,10 +58,11 @@ export async function downloadSession(
 
     onProgress?.({ stage: 'hydrating', fraction: fractionUpTo('hydrating') });
     const hydrated = hydrateQuestionsList(remote.questions, assets, pairs);
-    const sessions = deriveTrack(hydrated, remote.signs, track);
+    const signCatalog = hydrateSignCatalog(remote.signs, pairs);
+    const sessions = deriveTrack(hydrated, signCatalog, track);
 
     onProgress?.({ stage: 'hydrating', fraction: 1 });
-    return { sessions, signCatalog: remote.signs };
+    return { sessions, signCatalog };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Something went wrong downloading the session.';
     return { error: message };

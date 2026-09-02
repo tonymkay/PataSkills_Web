@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-02 (Learning Tracks & Reading Mode feature) · **Scope**: Every file inside `PataProducts/play/` · **Method**: Pure code analysis — existing inline comments were deliberately ignored, except where noted for this update.
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-02 (Reading Mode polish: landing mode-picker headroom, `ReadingCard` secondary-text removal, signs-catalog image hydration fix) · **Scope**: Every file inside `PataProducts/play/` · **Method**: Pure code analysis — existing inline comments were deliberately ignored, except where noted for this update.
 
 ---
 
@@ -380,16 +380,17 @@ Renders a single sign's full catalog entry as a read-only card — no question, 
 
 **Props:** `{ sign: SignCatalogEntry }`
 
-**Layout:**
+**Layout (simplified — the `explanation` card was removed):**
 1. **Gradient header** (teal, `#5EEAD4` → `#2DD4BF`) containing:
-   - The sign image (`expo-image`), or an `Ionicons` fallback icon keyed by `sign.signType` (`TYPE_ICON` map: regulatory → shield-checkmark, warning → warning, prohibitory → ban, informational → information-circle, mandatory → arrow-forward-circle).
+   - The sign image (`expo-image`) when `sign.image` resolves to a real URL, or an `Ionicons` fallback icon keyed by `sign.signType` (`TYPE_ICON` map: regulatory → shield-checkmark, warning → warning, prohibitory → ban, informational → information-circle, mandatory → arrow-forward-circle) when it doesn't.
    - The sign's `name` in large bold text.
    - A small uppercase `signType` badge.
 2. **Body:**
    - "WHAT IT MEANS" heading + `sign.meaning`
    - "WHERE YOU'LL SEE IT" heading + `sign.whereUsed`
-   - An `explanation` card (bordered box) if `sign.explanation` is present
    - A `memoryTip` row with a lightbulb icon, if present
+
+**Note:** The card originally also rendered a bordered `explanation` box below the two primary fields, sourced from `sign.explanation`. That field is generated (`build-signs-catalog.mjs`) as `meaning + ". You'll typically see it " + whereUsed` — i.e. a near-verbatim restatement of the two fields already shown above it. It was removed as pure secondary/redundant text; `sign.explanation` itself is untouched in the data and still used elsewhere (e.g. `LearnMoreSheet`'s "Why Is This Correct?" card), only `ReadingCard`'s own rendering of it was dropped.
 
 This is the visual/content counterpart to the richer `LearnMoreSheet` content — both pull from the same `SignCatalogEntry` shape, just in different contexts (Reading Mode browses catalog entries directly; `LearnMoreSheet` looks one up for the currently-answered quiz question).
 
@@ -559,30 +560,28 @@ All titles, subtitles, and CTA labels can be overridden via props.
 
 ### 6.3 Landing
 
-#### `LandingScreen.tsx` — now a track picker
+#### `LandingScreen.tsx` — skill pager + mode picker (revised)
 
-The first screen users see, when they have no saved progress. Vertically organized:
+Two-screen flow driven by local `activeSkill` state, not a single static page:
 
-1. **Top section** — Large headline "Practice over 1000 highway code questions" + progress bar (single segment, gradient-filled, shown only once `completedTopics > 0`) + "Driving theory" subtitle in teal.
+1. **Skill pager (default view)** — A horizontal, swipeable `ScrollView` of `SkillCard`s (one per `LANDING_SKILLS` entry, currently just Driving Theory), with `CarouselDots` below it, plus an "Existing user, login" link at the bottom (opens `RestoreAccountModal`). Tapping a `SkillCard` sets `activeSkill` and switches to the mode picker.
 
-2. **Middle section** — `LandingIllustration` component + page dots (currently just one dot since there's only one slide in the `SLIDES` array).
-
-3. **Bottom section** — **Changed.** If the user has existing progress (`completedTopics > 0`), shows a single "RESUME SESSION" button (always resumes on the `'pairs'` track). Otherwise shows the **track picker** — a vertical list built from `TRACK_OPTIONS`:
+2. **Mode picker (`activeSkill` set)** — Back row (chevron + skill subtitle) → "Choose a mode" heading → "How do you want to practice {skill}?" subheading → a scrollable list of `ModeCard`s, one per `TRACK_OPTIONS` entry:
 
 ```typescript
 const TRACK_OPTIONS: TrackOption[] = [
-  { track: 'pairs',     label: 'Challenge yourself with pairs' },  // first item, styled as the primary CTA
-  { track: 'names',     label: 'Learn sign names' },
-  { track: 'meanings',  label: 'Learn what signs mean' },
-  { track: 'whereUsed', label: 'Learn where signs are used' },
-  { track: 'full',      label: 'Full course' },
-  { track: 'reading',   label: 'Reading mode — just browse the signs' },
+  { track: 'pairs',     label: 'Challenge yourself with pairs', icon: Shuffle },
+  { track: 'names',     label: 'Learn sign names', icon: Tag },
+  { track: 'meanings',  label: 'Learn what signs mean', icon: BookOpen },
+  { track: 'whereUsed', label: 'Learn where signs are used', icon: MapPin },
+  { track: 'full',      label: 'Full course', icon: GraduationCap },
+  { track: 'reading',   label: 'Reading mode — just browse the signs', icon: Eye },
 ];
 ```
 
-  The first option (`pairs`) renders with the bold primary-button style (`startBtn`); the rest render as secondary outlined pills (`trackBtn`). Tapping any option calls `onStart(option.track)`, which the parent (`app/index.tsx`) wires to `runDownload(track)`.
+  If the user has existing progress (`completedTopics > 0`), the first `ModeCard` is relabeled "Resume session" with a `Play` icon and highlighted (teal border/tint) instead of showing "Challenge yourself with pairs" plain. Each `ModeCard` is icon + title only — no secondary description text, by design (kept intentionally scannable). Tapping one calls `onStart(option.track)`, which the parent (`app/index.tsx`) wires to `runDownload(track)`.
 
-  **Note:** `'reading'` was initially wired end-to-end through `app/index.tsx` → `downloadSession` → `deriveTrack` → `CardDeck`/`PlaySession`, but was missing from `TRACK_OPTIONS` — meaning Reading Mode was unreachable from the UI despite being fully functional under the hood. This has been fixed; it's now the 6th picker option.
+  **Headroom fix:** the mode-picker screen previously inherited the pager's `paddingTop: Spacing.xxl` (64) from the shared `container` style, stacked with `Spacing.xl` (40) above the heading and another `Spacing.xl` above the mode list — roughly 104px+ of empty space before any content. Added a `modePickerContainer` style override (`paddingTop: Spacing.md`, 24) applied only on the mode-picker screen, and trimmed the heading/list top margins from `Spacing.xl` to `Spacing.md`.
 
 `LandingScreen` itself doesn't know anything about `deriveTrack` or session structure — it's purely a `Track` value selector.
 
@@ -942,9 +941,11 @@ Runs the complete download pipeline triggered by starting a track from the landi
 | `curriculum` | 35% | `loadRemoteCurriculum()` |
 | `signs` | 35% | `loadSignAssets()` |
 | `pairs` | 20% | `loadSignPairs(assets)` |
-| `hydrating` | 10% | `hydrateQuestionsList(questions, assets, pairs)` + `deriveTrack(hydrated, remote.signs, track)` |
+| `hydrating` | 10% | `hydrateQuestionsList(questions, assets, pairs)` + `hydrateSignCatalog(remote.signs, pairs)` + `deriveTrack(hydrated, signCatalog, track)` |
 
 Curriculum and sign assets load **in parallel** (`Promise.all`). Sign pairs depend on assets. Hydration depends on all three, and the new track-derivation step happens immediately after hydration, still under the `hydrating` progress stage.
+
+**Fixed:** the signs catalog used to be passed straight through unhydrated (`remote.signs`, always carrying `image: null`), which is why Reading Mode showed no real sign images. It's now run through `hydrateSignCatalog(remote.signs, pairs)` — the same `pairs` map already loaded for questions — before being handed to `deriveTrack` and returned as `signCatalog`. See `hydrateQuestions.ts` (§12) for the resolution logic itself.
 
 **Progress reporting:** Calls `onProgress` with `{ stage, fraction }` at each stage boundary. `fraction` is 0–1 cumulative.
 
@@ -1111,8 +1112,6 @@ All three grouping functions default to **7 items per session**, matching the fe
 
 ### `hydrateQuestions.ts`
 
-Unaffected by the tracks/reading-mode work — still operates purely on `QuizQuestion[]`, before `deriveTrack` runs.
-
 **`hydrateQuestion(question, assets, pairs)`:**
 
 Takes a raw curriculum question and replaces sign key references with actual image URLs.
@@ -1127,6 +1126,23 @@ Resolution logic (in priority order):
 2. **Keyword fallback** — For `singleImageChoice`/`imageTextChoice` questions that still have no image after pair resolution: scans the question text and answer strings for sign key matches (e.g., if the key "pedestrian" appears in the question, assigns that sign's URL)
 
 **`hydrateQuestionsList()`** — Maps `hydrateQuestion` over an array of questions.
+
+**`hydrateSignCatalog(signs, pairs)`** (new): Fixes a bug where Reading Mode showed a generic icon instead of the real sign image for every sign. The signs catalog (`SignCatalogEntry[]`, built by `build-signs-catalog.mjs`) always has `image: null` — it was never given any image resolution step of its own, unlike questions. Since every catalog entry already carries the same `pairId` + `signRef` that questions use, this reuses that exact resolution path instead of inventing a separate one:
+
+```typescript
+export function hydrateSignCatalog(
+  signs: SignCatalogEntry[],
+  pairs: Record<string, SignPair>,
+): SignCatalogEntry[] {
+  return signs.map((s) => {
+    const pair = pairs[s.pairId];
+    if (!pair) return s;
+    return { ...s, image: s.signRef === 'A' ? pair.urlA : pair.urlB };
+  });
+}
+```
+
+No fuzzy matching, no separate `image` field ever needs to be authored into the catalog data — same "single source of truth via `play_sign_pairs`" approach `hydrateQuestion`'s pair-based resolution already uses. Called from `lib/downloadSession.ts` right after `hydrateQuestionsList`, using the same already-loaded `pairs` map (see §9).
 
 ---
 
@@ -1385,13 +1401,14 @@ User picks a track on LandingScreen (or arrives via ?track= link)
 │         └────────┬───────────┘                                   │
 │                  │                                                │
 │                  ▼                                                │
-│         ┌────────────────────┐                                   │
-│         │hydrateQuestionsList│  (unchanged — still per-question)  │
-│         └────────┬───────────┘                                   │
-│                  │                                                │
-│                  ▼                                                │
+│         ┌────────────────────┐  ┌──────────────────────┐        │
+│         │hydrateQuestionsList│  │ hydrateSignCatalog()  │  NEW   │
+│         │ (per-question)     │  │ (per-sign, same pairs)│        │
+│         └────────┬───────────┘  └──────────┬────────────┘        │
+│                  │                          │                     │
+│                  ▼                          ▼                     │
 │         ┌────────────────────────────────────────┐               │
-│         │ deriveTrack(hydrated, remote.signs,     │  NEW          │
+│         │ deriveTrack(hydrated, signCatalog,      │  NEW          │
 │         │   track)                                │               │
 │         │                                          │               │
 │         │  'full'    → groupQuestionsBySession()   │               │
