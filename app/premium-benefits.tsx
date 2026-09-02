@@ -110,7 +110,7 @@ export default function PremiumBenefitsScreen() {
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Text style={styles.ctaButtonText}>View Subscription Plans</Text>
+          <Text style={styles.ctaButtonText}>VIEW SUBSCRIPTION PLANS</Text>
         </Pressable>
       </ScrollView>
     </View>

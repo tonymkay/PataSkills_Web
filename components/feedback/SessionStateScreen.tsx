@@ -13,7 +13,6 @@ import { Toggle } from '@/components/ui/Toggle';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { truncateEmailMiddle } from '@/lib/email';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
-import { FreeModeInfoModal } from '@/components/feedback/FreeModeInfoModal';
 import { WatchAdPromptSheet } from '@/components/feedback/WatchAdPromptSheet';
 
 export type SessionStateKind =
@@ -143,7 +142,6 @@ export function SessionStateScreen({
   const [selectedProceedOption, setSelectedProceedOption] = useState<'keys' | 'unlimited' | 'trial' | null>('keys');
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
-  const [freeModeInfoVisible, setFreeModeInfoVisible] = useState(false);
   const [watchAdSheetVisible, setWatchAdSheetVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
 
@@ -230,7 +228,7 @@ export function SessionStateScreen({
     } else if (selectedProceedOption === 'unlimited') {
       handleSubscribe();
     } else if (selectedProceedOption === 'trial') {
-      setFreeModeInfoVisible(true);
+      router.push('/how-free-mode-works');
     }
   };
 
@@ -243,9 +241,13 @@ export function SessionStateScreen({
   }, [isOutOfKeys, resetAt]);
 
   const secondsLeft = resetAt ? Math.max(0, Math.ceil((resetAt - now) / 1000)) : 0;
-  const minutes = Math.floor(secondsLeft / 60);
+  const hours = Math.floor(secondsLeft / 3600);
+  const minutes = Math.floor((secondsLeft % 3600) / 60);
   const seconds = secondsLeft % 60;
-  const timerText = `Resets in ${minutes}:${String(seconds).padStart(2, '0')} mins`;
+  const timerText =
+    hours > 0
+      ? `Resets in ${hours}h ${String(minutes).padStart(2, '0')}m`
+      : `Resets in ${minutes}:${String(seconds).padStart(2, '0')} mins`;
 
   if (isOutOfKeys) {
     return (
@@ -451,16 +453,8 @@ export function SessionStateScreen({
             setLinkedEmail(result.email);
             handleRestoreSuccess();
           }}
-        />
-
-        {/* Free Mode Explanatory Modal */}
-        <FreeModeInfoModal
-          visible={freeModeInfoVisible}
-          onClose={() => setFreeModeInfoVisible(false)}
-          onProceed={() => {
-            setFreeModeInfoVisible(false);
-            onSecondaryPress?.();
-          }}
+          currentEmail={linkedEmail}
+          onLoggedOut={() => setLinkedEmail(null)}
         />
 
         {/* Rewarded Ad Exit Prompt Bottom Sheet */}

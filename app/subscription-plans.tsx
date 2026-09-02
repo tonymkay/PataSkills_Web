@@ -32,7 +32,7 @@ export default function SubscriptionPlansScreen() {
             resizeMode="contain"
           />
           <Text style={[styles.heroTitle, { color: colors.onSurface }]}>
-            Play Without Limits
+            Practice Without Limits
           </Text>
           <Text style={[styles.heroSubtitle, { color: colors.onSurfaceVariant }]}>
             Unlock infinite road signs sessions with zero key cooldowns

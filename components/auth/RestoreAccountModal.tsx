@@ -10,26 +10,36 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { X, Mail, CheckCircle2, ShieldCheck } from 'lucide-react-native';
+import { X, Mail, CheckCircle2, ShieldCheck, LogOut, UserRound } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeContext';
 import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
 import { GoogleWebButton } from '@/components/auth/GoogleWebButton';
-import { restoreAccountByEmail, restoreAccountWithGoogle, RestoreResult } from '@/lib/restore';
+import { restoreAccountByEmail, restoreAccountWithGoogle, logoutAccount, RestoreResult } from '@/lib/restore';
+import { truncateEmailMiddle } from '@/lib/email';
 
 interface RestoreAccountModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: (result: RestoreResult) => void;
+  /** Email already linked on this device, if any. When set, the modal
+   *  opens on an account/logout view instead of the sign-in form. */
+  currentEmail?: string | null;
+  /** Called once logoutAccount() has finished, so the caller can clear its
+   *  own linkedEmail state. */
+  onLoggedOut?: () => void;
 }
 
-export function RestoreAccountModal({ visible, onClose, onSuccess }: RestoreAccountModalProps) {
+export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail, onLoggedOut }: RestoreAccountModalProps) {
   const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restoreSuccess, setRestoreSuccess] = useState<RestoreResult | null>(null);
+  // Switches the already-logged-in view over to the sign-in form, e.g. to
+  // link a different account. Reset to false whenever the modal reopens.
+  const [switchingAccount, setSwitchingAccount] = useState(false);
 
   const handleEmailRestore = async () => {
     if (!email.trim()) {
@@ -78,7 +88,21 @@ export function RestoreAccountModal({ visible, onClose, onSuccess }: RestoreAcco
     onClose();
     setError(null);
     setRestoreSuccess(null);
+    setSwitchingAccount(false);
   };
+
+  const handleLogout = async () => {
+    setBusy(true);
+    await logoutAccount();
+    setBusy(false);
+    onLoggedOut?.();
+    handleClose();
+  };
+
+  // Show the account/logout view whenever this device has a linked email
+  // and the person hasn't asked to switch accounts or just finished a
+  // fresh restore (which has its own success screen).
+  const showAccountView = Boolean(currentEmail) && !switchingAccount && !restoreSuccess;
 
   return (
     <Modal
@@ -102,7 +126,57 @@ export function RestoreAccountModal({ visible, onClose, onSuccess }: RestoreAcco
             <X size={20} color={colors.onSurfaceVariant} />
           </Pressable>
 
-          {restoreSuccess ? (
+          {showAccountView ? (
+            /* Already-linked account screen — log out or switch accounts */
+            <View style={styles.contentWrap}>
+              <View style={[styles.accountIconBox, { backgroundColor: 'rgba(43, 217, 196, 0.14)' }]}>
+                <UserRound size={28} color={colors.tealAccent || '#2BD9C4'} strokeWidth={2.2} />
+              </View>
+
+              <Text style={[styles.title, { color: colors.onSurface }]}>
+                Account
+              </Text>
+              <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
+                This device is linked to an account.
+              </Text>
+
+              <View style={[styles.emailBadge, { backgroundColor: 'rgba(43,217,196,0.12)', borderColor: colors.tealAccent || '#2BD9C4' }]}>
+                <ShieldCheck size={16} color={colors.tealAccent || '#2BD9C4'} />
+                <Text style={[styles.emailBadgeText, { color: colors.tealAccent || '#2BD9C4' }]}>
+                  {currentEmail ? truncateEmailMiddle(currentEmail) : ''}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={handleLogout}
+                disabled={busy}
+                style={({ pressed }) => [
+                  styles.logoutBtn,
+                  { borderColor: '#ef4444' },
+                  (pressed || busy) && { opacity: 0.8 },
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#ef4444" size="small" />
+                ) : (
+                  <>
+                    <LogOut size={18} color="#ef4444" />
+                    <Text style={styles.logoutBtnText}>LOG OUT</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={() => setSwitchingAccount(true)}
+                hitSlop={10}
+                style={styles.switchAccountLinkWrap}
+              >
+                <Text style={[styles.switchAccountLinkText, { color: colors.onSurfaceVariant }]}>
+                  Use a different account
+                </Text>
+              </Pressable>
+            </View>
+          ) : restoreSuccess ? (
             /* Success confirmation screen */
             <View style={styles.successWrap}>
               <CheckCircle2 size={56} color={StaticColors.successLime} strokeWidth={2.2} />
@@ -232,7 +306,7 @@ export function RestoreAccountModal({ visible, onClose, onSuccess }: RestoreAcco
                 {busy ? (
                   <ActivityIndicator color="#000" size="small" />
                 ) : (
-                  <Text style={styles.emailRestoreBtnText}>Restore Account</Text>
+                  <Text style={styles.emailRestoreBtnText}>RESTORE ACCOUNT</Text>
                 )}
               </Pressable>
             </View>
@@ -351,6 +425,39 @@ const styles = StyleSheet.create({
   successWrap: {
     alignItems: 'center',
     paddingVertical: Spacing.sm,
+  },
+  accountIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    width: '100%',
+    height: 48,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    marginTop: Spacing.sm,
+  },
+  logoutBtnText: {
+    color: '#ef4444',
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+  },
+  switchAccountLinkWrap: {
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  switchAccountLinkText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    textDecorationLine: 'underline',
   },
   emailBadge: {
     flexDirection: 'row',

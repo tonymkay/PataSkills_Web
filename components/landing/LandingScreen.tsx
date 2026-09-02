@@ -1,23 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+} from 'react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme, Spacing, Radius, Typography, FontFamily } from '@/theme/tokens';
-import { LandingIllustration } from './LandingIllustration';
+import { useTheme, Spacing, Radius, FontFamily } from '@/theme/tokens';
+import { SkillCard } from './SkillCard';
+import { CarouselDots } from './CarouselDots';
+import { LANDING_SKILLS, type LandingSkill } from '@/constants/skills';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 
-export interface LandingSlide {
-  title: string;
-  subtitle: string;
-}
-
-const SLIDES: LandingSlide[] = [
-  { title: 'Practice over 1000\nhighway code\nquestions', subtitle: 'Driving theory' },
-];
+const CARD_MARGIN = Spacing.marginMobile;
+const PAGE_WIDTH = Dimensions.get('window').width - CARD_MARGIN * 2;
 
 interface TrackOption {
   track: Track;
@@ -39,12 +44,12 @@ interface LandingScreenProps {
 
 export function LandingScreen({ onStart }: LandingScreenProps) {
   const { colors } = useTheme();
-  const [index] = useState(0);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [activeSkill, setActiveSkill] = useState<LandingSkill | null>(null);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [completedTopics, setCompletedTopics] = useState(0);
   const [totalTopics, setTotalTopics] = useState(46);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
-  const slide = SLIDES[index];
 
   const refreshProgress = () => {
     getLocalProgress().then((p) => {
@@ -68,99 +73,80 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
     onStart('pairs');
   };
 
-  const progressFraction = totalTopics > 0 ? completedTopics / totalTopics : 0;
-  const progressPercent = Math.min(100, Math.round(progressFraction * 100));
+  const handlePagerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
+    setPageIndex(Math.max(0, Math.min(LANDING_SKILLS.length - 1, next)));
+  };
+
+  // Mode picker (was the old bottom CTA list) — shown once a skill card is
+  // tapped. Same track/mode buttons as before, just gated behind the card.
+  if (activeSkill) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.modePickerTop}>
+          <Pressable onPress={() => setActiveSkill(null)} hitSlop={10} style={styles.backBtn}>
+            <ChevronLeft size={22} color={colors.onSurface} />
+            <Text style={[styles.backBtnText, { color: colors.onSurface }]}>{activeSkill.subtitle}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.bottom}>
+          <View style={styles.trackList}>
+            {TRACK_OPTIONS.map((option, i) => {
+              const label = i === 0 && completedTopics > 0 ? 'Resume session' : option.label;
+              return (
+                <Pressable
+                  key={option.track}
+                  onPress={() => onStart(option.track)}
+                  style={({ pressed }) => [
+                    i === 0 ? styles.startBtn : styles.trackBtn,
+                    pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                  ]}
+                >
+                  <Text style={i === 0 ? styles.startBtnText : styles.trackBtnText}>
+                    {i === 0 ? label.toUpperCase() : label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* 1. Header & Real Progress (Hidden when 0 completed) */}
-      <View style={styles.top}>
-        <Text style={[Typography.headlineXl, styles.title, { color: colors.onSurface }]}>
-          {slide.title}
-        </Text>
-
-        {completedTopics > 0 ? (
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressSegment, { backgroundColor: '#2B303C' }]}>
-              <View
-                style={{
-                  height: '100%',
-                  width: `${Math.max(4, progressPercent)}%`,
-                  borderRadius: Radius.full,
-                  overflow: 'hidden',
-                }}
-              >
-                <LinearGradient
-                  colors={['#2BD964', '#2BD9C4']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              </View>
+      {/* Skill pager — one bordered SkillCard per skill, swipeable */}
+      <View style={styles.middle}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handlePagerScrollEnd}
+          style={{ width: PAGE_WIDTH }}
+        >
+          {LANDING_SKILLS.map((skill) => (
+            <View key={skill.id} style={{ width: PAGE_WIDTH }}>
+              <SkillCard
+                skill={skill}
+                completedTopics={completedTopics}
+                totalTopics={totalTopics}
+                onPress={() => setActiveSkill(skill)}
+              />
             </View>
+          ))}
+        </ScrollView>
+
+        {LANDING_SKILLS.length > 1 ? (
+          <View style={styles.dotsWrap}>
+            <CarouselDots total={LANDING_SKILLS.length} index={pageIndex} />
           </View>
         ) : null}
-
-        <Text
-          style={[
-            Typography.bodyLg,
-            styles.subtitle,
-            {
-              color: colors.tealAccent || '#2BD9C4',
-              marginTop: completedTopics > 0 ? Spacing.sm : Spacing.md,
-            },
-          ]}
-        >
-          {completedTopics > 0
-            ? `${completedTopics}/${totalTopics} topics done`
-            : slide.subtitle}
-        </Text>
       </View>
 
-      {/* 2. Hero 3D Illustration & Carousel Dots */}
-      <View style={styles.middle}>
-        <LandingIllustration />
-
-        {/* Triple Pill Carousel Indicators */}
-        <View style={styles.dotsRow}>
-          <View style={[styles.dotPill, styles.dotInactive]} />
-          <View style={[styles.dotPill, styles.dotActive]} />
-          <View style={[styles.dotPill, styles.dotInactive]} />
-        </View>
-      </View>
-
-      {/* 3. Bottom CTAs */}
+      {/* Existing user, login link — outside the card */}
       <View style={styles.bottom}>
-        {completedTopics > 0 ? (
-          <Pressable
-            onPress={() => onStart('pairs')}
-            style={({ pressed }) => [
-              styles.startBtn,
-              pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-            ]}
-          >
-            <Text style={styles.startBtnText}>RESUME SESSION</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.trackList}>
-            {TRACK_OPTIONS.map((option, i) => (
-              <Pressable
-                key={option.track}
-                onPress={() => onStart(option.track)}
-                style={({ pressed }) => [
-                  i === 0 ? styles.startBtn : styles.trackBtn,
-                  pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-                ]}
-              >
-                <Text style={i === 0 ? styles.startBtnText : styles.trackBtnText}>
-                  {i === 0 ? option.label.toUpperCase() : option.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {/* Existing user, login link */}
         <Pressable
           onPress={() => setRestoreModalVisible(true)}
           hitSlop={10}
@@ -177,6 +163,8 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
         visible={restoreModalVisible}
         onClose={() => setRestoreModalVisible(false)}
         onSuccess={handleRestoreSuccess}
+        currentEmail={linkedEmail}
+        onLoggedOut={() => setLinkedEmail(null)}
       />
     </View>
   );
@@ -188,52 +176,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.marginMobile,
     justifyContent: 'space-between',
   },
-  top: {
-    alignItems: 'center',
+  modePickerTop: {
     paddingTop: Spacing.xxl,
   },
-  title: {
-    textAlign: 'center',
-    lineHeight: 38,
-  },
-  progressTrack: {
+  backBtn: {
     flexDirection: 'row',
-    width: '56%',
-    marginTop: Spacing.md,
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
-  progressSegment: {
-    flex: 1,
-    height: 5.5,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
-  subtitle: {
+  backBtnText: {
     fontFamily: FontFamily.semiBold,
-    fontSize: 15,
+    fontSize: 16,
   },
   middle: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dotsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+  dotsWrap: {
     marginTop: Spacing.xl,
-  },
-  dotPill: {
-    height: 7,
-    borderRadius: 4,
-  },
-  dotInactive: {
-    width: 14,
-    backgroundColor: '#E5E7EB',
-  },
-  dotActive: {
-    width: 44,
-    backgroundColor: '#84E1CD',
   },
   bottom: {
     paddingBottom: Spacing.lg,

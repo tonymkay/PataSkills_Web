@@ -1,43 +1,53 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Unlock, ShoppingBag, Snowflake, Crown } from 'lucide-react-native';
+import { ArrowLeft, RefreshCw, Clock, Tv, Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 
 interface InfoItem {
   icon: React.ReactNode;
+  iconBg: string;
   title: string;
   body: string;
 }
 
-export default function HowKeysWorkScreen() {
+export default function HowFreeModeWorksScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const teal = colors.tealAccent || '#2BD9C4';
 
   const items: InfoItem[] = [
     {
-      icon: <Unlock size={22} color={StaticColors.achievementAmber} strokeWidth={2} />,
-      title: 'Keys unlock sessions',
-      body: 'Every road signs session you start costs 1 key. Keys refill after cooldown when your balance runs out.',
+      icon: <RefreshCw size={22} color={StaticColors.successLime} strokeWidth={2} />,
+      iconBg: 'rgba(43, 217, 100, 0.12)',
+      title: '3 Sessions Every Reset',
+      body: 'You receive 3 free practice topics. When used up, a cooldown timer begins automatically.',
     },
     {
-      icon: <ShoppingBag size={22} color={StaticColors.achievementAmber} strokeWidth={2} />,
-      title: 'Buy a key pack',
-      body: 'Need more keys? Pick a pack of 20, 40, 80, or 120 keys — credited instantly to your account.',
+      icon: <Clock size={22} color={teal} strokeWidth={2} />,
+      iconBg: 'rgba(43, 217, 196, 0.12)',
+      title: 'Automatic Refill Timer',
+      body: 'Your 3 keys refill as soon as the timer reaches zero. No manual restart needed.',
     },
     {
-      icon: <Snowflake size={22} color={StaticColors.achievementAmber} strokeWidth={2} />,
-      title: 'Keys never expire',
-      body: 'Purchased keys stay in your balance permanently until you use them.',
+      icon: <Tv size={22} color={StaticColors.achievementAmber} strokeWidth={2} />,
+      iconBg: 'rgba(245, 158, 11, 0.12)',
+      title: 'Extra Sessions via Ads',
+      body: "Don't want to wait? You can watch a short sponsor video anytime for an instant +1 bonus session.",
     },
     {
-      icon: <Crown size={22} color={StaticColors.achievementAmber} strokeWidth={2} />,
-      title: 'Unlimited skips keys entirely',
-      body: 'Subscribe to the Unlimited Pass to practice without any key limits or waiting cooldowns.',
+      icon: <Bell size={22} color="#60A5FA" strokeWidth={2} />,
+      iconBg: 'rgba(59, 130, 246, 0.12)',
+      title: 'Instant Reset Alerts',
+      body: 'Enable notification reminders to get notified the exact minute your 3 sessions refill.',
     },
   ];
+
+  const handleContinue = () => {
+    router.replace('/');
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
@@ -46,17 +56,15 @@ export default function HowKeysWorkScreen() {
         <Pressable onPress={() => router.back()} hitSlop={Spacing.sm} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>How Keys work</Text>
+        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>How Free Mode works</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Key Hero Art */}
+        {/* Hero */}
         <View style={styles.heroSection}>
-          <Image
-            source={require('@/assets/premium/key.webp')}
-            style={styles.heroKeyImage}
-            resizeMode="contain"
-          />
+          <View style={[styles.heroIconBox, { backgroundColor: 'rgba(43, 217, 196, 0.14)' }]}>
+            <Clock size={40} color={teal} strokeWidth={2.2} />
+          </View>
         </View>
 
         {/* Info Rows List */}
@@ -64,7 +72,7 @@ export default function HowKeysWorkScreen() {
           {items.map((item, idx) => (
             <View key={item.title}>
               <View style={styles.infoRow}>
-                <View style={[styles.iconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                <View style={[styles.iconBox, { backgroundColor: item.iconBg }]}>
                   {item.icon}
                 </View>
                 <View style={styles.textBox}>
@@ -81,14 +89,13 @@ export default function HowKeysWorkScreen() {
 
         {/* Bottom CTA */}
         <Pressable
-          onPress={() => router.push('/subscription-plans')}
+          onPress={handleContinue}
           style={({ pressed }) => [
             styles.ctaButton,
-            { backgroundColor: StaticColors.achievementAmber },
-            pressed && { opacity: 0.8 },
+            pressed && { opacity: 0.85 },
           ]}
         >
-          <Text style={styles.ctaButtonText}>GET UNLIMITED PASS</Text>
+          <Text style={styles.ctaButtonText}>GOT IT, CONTINUE</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -123,9 +130,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.md,
   },
-  heroKeyImage: {
+  heroIconBox: {
     width: 96,
     height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardContainer: {
     borderRadius: Radius.xl,
@@ -168,6 +178,7 @@ const styles = StyleSheet.create({
   ctaButton: {
     minHeight: 52,
     borderRadius: Radius.full,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,

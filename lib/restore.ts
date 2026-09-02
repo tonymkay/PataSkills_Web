@@ -186,3 +186,21 @@ export async function restoreAccountWithGoogle(idToken: string): Promise<Restore
     };
   }
 }
+
+/**
+ * Unlinks the current device from its account. Signs out of Supabase auth
+ * (harmless no-op for an email-only restore, since that path never creates
+ * a Supabase session) and clears the locally stored email so the device
+ * goes back to being anonymous. Deliberately leaves the local keys/progress
+ * caches as-is — they're already synced to the account record in the
+ * cloud, and clearing them here would just make things reset to defaults
+ * until this device's numbers get re-synced by whatever restores next.
+ */
+export async function logoutAccount(): Promise<void> {
+  try {
+    await supabase.auth.signOut();
+  } catch {}
+  try {
+    await AsyncStorage.removeItem('@play/user_email');
+  } catch {}
+}
