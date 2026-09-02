@@ -48,12 +48,30 @@ export function GoogleWebButton({
 
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
   const [loadError, setLoadError] = useState<string | null>(null);
+  // GIS's renderButton only accepts a fixed pixel width, not '100%' — a
+  // hardcoded 320 overflowed the modal card on narrow phones (card content
+  // width there is ~280px after padding), spilling the pill past the
+  // card's rounded edges. Measure the wrapper's actual width instead and
+  // re-render whenever it changes (orientation change, resize, etc.),
+  // capped at 320 so it doesn't look oversized on wider screens.
+  const [buttonWidth, setButtonWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const el = ref.current;
+    const update = () => setButtonWidth(Math.floor(el.getBoundingClientRect().width));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!clientId) {
       onErrorRef.current?.('Google sign-in is not configured');
       return;
     }
+    if (!buttonWidth) return;
 
     let cancelled = false;
     (async () => {
@@ -76,13 +94,14 @@ export function GoogleWebButton({
       });
 
       if (ref.current) {
+        ref.current.innerHTML = '';
         window.google.accounts.id.renderButton(ref.current, {
           type: 'standard',
           theme: 'filled_black',
           size: 'large',
           text: 'continue_with',
           shape: 'pill',
-          width: 320,
+          width: Math.min(buttonWidth, 320),
         });
       }
     })();
@@ -90,7 +109,7 @@ export function GoogleWebButton({
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, buttonWidth]);
 
   if (!clientId || loadError) {
     return null;

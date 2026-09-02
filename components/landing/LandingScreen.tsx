@@ -174,7 +174,12 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.containerContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
       {/* Skill pager — one bordered SkillCard per skill, swipeable */}
       <View style={styles.middle}>
         <ScrollView
@@ -224,7 +229,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
         currentEmail={linkedEmail}
         onLoggedOut={() => setLinkedEmail(null)}
       />
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -238,6 +243,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: CONTENT_MAX_WIDTH,
+  },
+  containerContent: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.xxl,
     justifyContent: 'space-between',
