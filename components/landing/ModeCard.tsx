@@ -1,10 +1,14 @@
 import React from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Image } from 'react-native';
 import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { useTheme, Spacing, Radius, Typography } from '@/theme/tokens';
 
 interface ModeCardProps {
   icon: LucideIcon;
+  /** When set, this skill thumbnail (borrowed from the landing SkillCard
+   * illustration) is shown instead of `icon` — used for the non-resume
+   * rows so every mode reads as belonging to the same skill. */
+  imageUri?: string;
   title: string;
   highlighted?: boolean;
   onPress: () => void;
@@ -17,7 +21,7 @@ interface ModeCardProps {
  * pill-button list. `highlighted` marks the resume/primary option with the
  * brand-teal accent.
  */
-export function ModeCard({ icon: Icon, title, highlighted, onPress }: ModeCardProps) {
+export function ModeCard({ icon: Icon, imageUri, title, highlighted, onPress }: ModeCardProps) {
   const { colors } = useTheme();
   const teal = colors.tealAccent || '#2BD9C4';
 
@@ -34,7 +38,11 @@ export function ModeCard({ icon: Icon, title, highlighted, onPress }: ModeCardPr
       ]}
     >
       <View style={[styles.iconWrap, { backgroundColor: highlighted ? teal : colors.surfaceContainerHigh }]}>
-        <Icon size={20} color={highlighted ? '#10141A' : colors.onSurface} />
+        {imageUri && !highlighted ? (
+          <Image source={{ uri: imageUri }} style={styles.iconImage} resizeMode="contain" />
+        ) : (
+          <Icon size={20} color={highlighted ? '#10141A' : colors.onSurface} />
+        )}
       </View>
 
       <Text style={[Typography.titleMedium, styles.title, { color: colors.onSurface }]}>
@@ -63,6 +71,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  iconImage: {
+    width: 28,
+    height: 28,
   },
   title: {
     flex: 1,

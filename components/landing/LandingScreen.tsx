@@ -5,7 +5,7 @@ import {
   Text,
   Pressable,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -31,12 +31,13 @@ import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
+import { getPlayAssetPublicUrl } from '@/lib/supabase';
+import { CurriculumCoverImagePaths } from '@/constants/curriculumAssets';
 
 const CARD_MARGIN = Spacing.marginMobile;
 // Bottom-sheet-style width cap (matches FeedbackSheet/RestoreAccountModal/etc.)
 // so the landing screen doesn't stretch edge-to-edge on wide/desktop viewports.
 const CONTENT_MAX_WIDTH = 480;
-const PAGE_WIDTH = Math.min(Dimensions.get('window').width, CONTENT_MAX_WIDTH) - CARD_MARGIN * 2;
 
 interface TrackOption {
   track: Track;
@@ -83,6 +84,8 @@ interface LandingScreenProps {
 
 export function LandingScreen({ onStart }: LandingScreenProps) {
   const { colors } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const pageWidth = Math.min(windowWidth, CONTENT_MAX_WIDTH) - CARD_MARGIN * 2;
   const [pageIndex, setPageIndex] = useState(0);
   const [activeSkill, setActiveSkill] = useState<LandingSkill | null>(null);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
@@ -113,7 +116,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   };
 
   const handlePagerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
+    const next = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
     setPageIndex(Math.max(0, Math.min(LANDING_SKILLS.length - 1, next)));
   };
 
@@ -121,6 +124,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   // row, heading, then one ModeCard per track/mode (replaces the old flat
   // pill-button list, which left the top of the screen empty).
   if (activeSkill) {
+    const skillImageUri = getPlayAssetPublicUrl(CurriculumCoverImagePaths[activeSkill.id]);
     return (
       <View style={styles.screen}>
         <View style={[styles.container, styles.modePickerContainer]}>
@@ -146,13 +150,20 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
           {TRACK_OPTIONS.map((option, i) => {
             const resume = i === 0 && completedTopics > 0;
             return (
-              <ModeCard
-                key={option.track}
-                icon={resume ? Play : option.icon}
-                title={resume ? 'Resume session' : option.label}
-                highlighted={resume}
-                onPress={() => onStart(option.track)}
-              />
+              <View key={option.track}>
+                {i > 0 && (
+                  <View style={styles.connectorWrap}>
+                    <View style={[styles.connector, { backgroundColor: colors.outlineVariant }]} />
+                  </View>
+                )}
+                <ModeCard
+                  icon={resume ? Play : option.icon}
+                  imageUri={resume ? undefined : skillImageUri}
+                  title={resume ? 'Resume session' : option.label}
+                  highlighted={resume}
+                  onPress={() => onStart(option.track)}
+                />
+              </View>
             );
           })}
         </ScrollView>
@@ -171,10 +182,10 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={handlePagerScrollEnd}
-          style={{ width: PAGE_WIDTH }}
+          style={{ width: pageWidth }}
         >
           {LANDING_SKILLS.map((skill) => (
-            <View key={skill.id} style={{ width: PAGE_WIDTH }}>
+            <View key={skill.id} style={{ width: pageWidth }}>
               <SkillCard
                 skill={skill}
                 completedTopics={completedTopics}
@@ -260,8 +271,14 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   modeListContent: {
-    gap: Spacing.sm,
     paddingBottom: Spacing.lg,
+  },
+  connectorWrap: {
+    alignItems: 'center',
+  },
+  connector: {
+    width: 3,
+    height: Spacing.md,
   },
   middle: {
     flex: 1,

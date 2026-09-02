@@ -18,13 +18,81 @@ interface KeyRewardSuccessModalProps {
   onUnlockNextSession: () => void;
 }
 
+/**
+ * Bare content (no native <Modal> wrapper). Use this when embedding the
+ * reward screen inside another component's own Modal — e.g. WatchAdPromptSheet
+ * swaps this in as an internal "step" so only one native Modal window is ever
+ * mounted at a time. Mounting two <Modal>s and toggling them in the same tick
+ * causes Android to visually squash the transition and can dismiss the second
+ * modal before the user interacts with it.
+ */
+export function KeyRewardContent({
+  onUnlockNextSession,
+}: {
+  onUnlockNextSession: () => void;
+}) {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background || '#14171C',
+          paddingTop: Math.max(insets.top + Spacing.xxl, Spacing.xxl * 2),
+          paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.xl),
+        },
+      ]}
+    >
+      <View style={styles.content}>
+        {/* Title */}
+        <Text style={[styles.title, { color: colors.onSurface || '#FFFFFF' }]}>
+          Your key reward is{'\n'}ready!
+        </Text>
+
+        {/* Large Hero 1 + 3D Key */}
+        <View style={styles.rewardHeroRow}>
+          <Text style={[styles.rewardNumber, { color: StaticColors.achievementAmber || '#F59E0B' }]}>
+            1
+          </Text>
+          <Image
+            source={require('@/assets/premium/key.webp')}
+            style={styles.keyImage}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Subtitle */}
+        <Text style={[styles.subtitle, { color: colors.onSurfaceVariant || '#8B949E' }]}>
+          Use this to unlock{'\n'}one more session
+        </Text>
+      </View>
+
+      {/* Bottom CTA */}
+      <View style={styles.footer}>
+        <Pressable
+          onPress={onUnlockNextSession}
+          style={({ pressed }) => [
+            styles.unlockButton,
+            pressed && { opacity: 0.88, transform: [{ scale: 0.99 }] },
+          ]}
+        >
+          <Text style={styles.unlockButtonText}>Unlock Next Session</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Standalone version with its own Modal wrapper — kept for any other caller
+ * that wants a self-contained modal (not used by WatchAdPromptSheet anymore).
+ */
 export function KeyRewardSuccessModal({
   visible,
   onUnlockNextSession,
 }: KeyRewardSuccessModalProps) {
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-
   return (
     <Modal
       visible={visible}
@@ -32,53 +100,7 @@ export function KeyRewardSuccessModal({
       animationType="fade"
       onRequestClose={onUnlockNextSession}
     >
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.background || '#14171C',
-            paddingTop: Math.max(insets.top + Spacing.xxl, Spacing.xxl * 2),
-            paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.xl),
-          },
-        ]}
-      >
-        <View style={styles.content}>
-          {/* Title */}
-          <Text style={[styles.title, { color: colors.onSurface || '#FFFFFF' }]}>
-            Your key reward is{'\n'}ready!
-          </Text>
-
-          {/* Large Hero 1 + 3D Key */}
-          <View style={styles.rewardHeroRow}>
-            <Text style={[styles.rewardNumber, { color: StaticColors.achievementAmber || '#F59E0B' }]}>
-              1
-            </Text>
-            <Image
-              source={require('@/assets/premium/key.webp')}
-              style={styles.keyImage}
-              resizeMode="contain"
-            />
-          </View>
-
-          {/* Subtitle */}
-          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant || '#8B949E' }]}>
-            Use this to unlock{'\n'}one more session
-          </Text>
-        </View>
-
-        {/* Bottom CTA */}
-        <View style={styles.footer}>
-          <Pressable
-            onPress={onUnlockNextSession}
-            style={({ pressed }) => [
-              styles.unlockButton,
-              pressed && { opacity: 0.88, transform: [{ scale: 0.99 }] },
-            ]}
-          >
-            <Text style={styles.unlockButtonText}>Unlock Next Session</Text>
-          </Pressable>
-        </View>
-      </View>
+      <KeyRewardContent onUnlockNextSession={onUnlockNextSession} />
     </Modal>
   );
 }

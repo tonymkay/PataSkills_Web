@@ -13,7 +13,7 @@ import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
 import { showRewardedForSession } from '@/lib/ads';
-import { KeyRewardSuccessModal } from './KeyRewardSuccessModal';
+import { KeyRewardContent } from './KeyRewardSuccessModal';
 
 interface WatchAdPromptSheetProps {
   visible: boolean;
@@ -30,7 +30,17 @@ export function WatchAdPromptSheet({
 }: WatchAdPromptSheetProps) {
   const { colors } = useTheme();
   const [loadingAd, setLoadingAd] = useState(false);
-  const [rewardModalVisible, setRewardModalVisible] = useState(false);
+  // 'prompt' = "watch an ad?" sheet, 'reward' = key reward screen.
+  // Both render inside the SAME <Modal> below — mounting two separate native
+  // Modals and toggling them in the same tick is what caused the reward
+  // screen to look squashed/stretched and to get dismissed automatically on
+  // Android (the OS was closing both modal windows at once).
+  const [step, setStep] = useState<'prompt' | 'reward'>('prompt');
+
+  // Reset back to the prompt step whenever the sheet is reopened.
+  React.useEffect(() => {
+    if (visible) setStep('prompt');
+  }, [visible]);
 
   const handleWatchAd = async () => {
     setLoadingAd(true);
@@ -38,26 +48,26 @@ export function WatchAdPromptSheet({
     setLoadingAd(false);
 
     if (outcome === 'earned') {
-      onClose();
-      setRewardModalVisible(true);
+      setStep('reward');
     } else {
       onDismissToHome();
     }
   };
 
   const handleUnlockNextSession = () => {
-    setRewardModalVisible(false);
     onAdRewarded();
   };
 
   return (
-    <>
     <Modal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      transparent={step === 'prompt'}
+      animationType={step === 'prompt' ? 'slide' : 'fade'}
+      onRequestClose={step === 'prompt' ? onClose : undefined}
     >
+      {step === 'reward' ? (
+        <KeyRewardContent onUnlockNextSession={handleUnlockNextSession} />
+      ) : (
       <View style={styles.backdrop}>
         <View style={styles.sheetWrapper}>
         <View
@@ -124,12 +134,8 @@ export function WatchAdPromptSheet({
         </View>
         </View>
       </View>
+      )}
     </Modal>
-    <KeyRewardSuccessModal
-      visible={rewardModalVisible}
-      onUnlockNextSession={handleUnlockNextSession}
-    />
-    </>
   );
 }
 
