@@ -25,6 +25,7 @@ async function applyRestoredState(
   balance: number,
   isPremium: boolean,
   resetAtIso: string | null,
+  resetCount: number,
 ): Promise<void> {
   await AsyncStorage.setItem('@play/user_email', email);
 
@@ -33,6 +34,7 @@ async function applyRestoredState(
     isPremium,
     initialized: true,
     resetAt: resetAtIso ? new Date(resetAtIso).getTime() : null,
+    resetCount,
   };
 
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(restoredState));
@@ -63,14 +65,14 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
     //    this email; use it as-is, however many times this email logs in.
     const { data: account, error: acctError } = await supabase
       .from('play_accounts')
-      .select('balance, is_premium, reset_at')
+      .select('balance, is_premium, reset_at, reset_count')
       .eq('email', email)
       .maybeSingle();
 
     if (!acctError && account) {
       const isPremium = !!account.is_premium;
       const balance = isPremium ? 999999 : account.balance;
-      await applyRestoredState(email, account.balance, isPremium, account.reset_at);
+      await applyRestoredState(email, account.balance, isPremium, account.reset_at, account.reset_count ?? 0);
       await syncProgressWithCloud(email);
 
       return {
@@ -102,7 +104,7 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
 
     const resolvedKeys = Math.max(INITIAL_KEYS, totalKeys);
 
-    await applyRestoredState(email, resolvedKeys, isPremium, null);
+    await applyRestoredState(email, resolvedKeys, isPremium, null, 0);
 
     // Persist the seed immediately so this branch is never taken again for
     // this email — every future login goes through path 1 above.

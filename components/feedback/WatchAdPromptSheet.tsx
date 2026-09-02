@@ -69,8 +69,8 @@ export function WatchAdPromptSheet({
             },
           ]}
         >
-          {/* Close button */}
-          <Pressable onPress={onDismissToHome} hitSlop={10} style={styles.closeBtn}>
+          {/* Close button — dismisses the sheet only, cancels the exit intent */}
+          <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
             <X size={20} color={colors.onSurfaceVariant} />
           </Pressable>
 
@@ -145,8 +145,8 @@ const styles = StyleSheet.create({
     maxWidth: 480,
   },
   sheet: {
-    borderTopLeftRadius: Radius.xxl,
-    borderTopRightRadius: Radius.xxl,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     borderWidth: 1.5,
     borderBottomWidth: 0,
     paddingHorizontal: Spacing.xl,

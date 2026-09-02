@@ -91,9 +91,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
             Typography.bodyLg,
             styles.subtitle,
             {
-              color: completedTopics > 0
-                ? (colors.tealAccent || '#2BD9C4')
-                : (colors.onSurfaceVariant || '#9CA3AF'),
+              color: colors.tealAccent || '#2BD9C4',
               marginTop: completedTopics > 0 ? Spacing.sm : Spacing.md,
             },
           ]}
@@ -126,7 +124,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
           ]}
         >
           <Text style={styles.startBtnText}>
-            {completedTopics > 0 ? 'Resume Session' : 'Start Practice'}
+            {completedTopics > 0 ? 'RESUME SESSION' : 'START PRACTICE'}
           </Text>
         </Pressable>
 
@@ -217,11 +215,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#56D8B8',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#56D8B8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 4,
   },
   startBtnText: {
     color: '#10141A',

@@ -8,9 +8,19 @@ export const INITIAL_KEYS = 3;
 
 /** How long a depleted balance takes to refill, counted from the moment the
  *  "out of keys" screen is actually shown (not from the moment the balance
- *  hits 0 — those can differ by a session or two). 4 minutes while testing;
- *  will move to a real daily window later. */
-export const KEYS_RESET_DURATION_MS = 4 * 60 * 1000;
+ *  hits 0 — those can differ by a session or two). Escalates each time it's
+ *  actually used: 5 min the first time, 2 hrs the second, 8 hrs the third
+ *  and every time after that. */
+const RESET_DURATIONS_MS = [
+  5 * 60 * 1000,
+  2 * 60 * 60 * 1000,
+  8 * 60 * 60 * 1000,
+];
+
+function resetDurationFor(resetCount: number): number {
+  const tier = Math.min(resetCount, RESET_DURATIONS_MS.length - 1);
+  return RESET_DURATIONS_MS[tier];
+}
 
 export interface KeysState {
   balance: number;
@@ -19,6 +29,10 @@ export interface KeysState {
   /** Epoch ms when balance refills. Set the moment balance hits 0; null
    *  whenever balance is > 0. */
   resetAt: number | null;
+  /** How many times the free-trial reset has actually completed (balance
+   *  went from 0 back to INITIAL_KEYS via the timer). Drives the escalating
+   *  duration in resetDurationFor — defaults to 0 for new/legacy state. */
+  resetCount?: number;
 }
 
 async function read(): Promise<KeysState> {
@@ -47,6 +61,7 @@ async function write(state: KeysState): Promise<void> {
           balance: state.balance,
           is_premium: !!state.isPremium,
           reset_at: state.resetAt ? new Date(state.resetAt).toISOString() : null,
+          reset_count: state.resetCount ?? 0,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'email' },
@@ -65,6 +80,7 @@ function applyReset(state: KeysState): KeysState {
       balance: INITIAL_KEYS,
       initialized: true,
       resetAt: null,
+      resetCount: (state.resetCount ?? 0) + 1,
     };
   }
   return state;
@@ -125,7 +141,10 @@ export async function setPremium(isPremium: boolean): Promise<void> {
 export async function startResetTimer(): Promise<KeysState> {
   const state = await getKeysState();
   if (!state.isPremium && state.balance <= 0 && state.resetAt === null) {
-    const next: KeysState = { ...state, resetAt: Date.now() + KEYS_RESET_DURATION_MS };
+    const next: KeysState = {
+      ...state,
+      resetAt: Date.now() + resetDurationFor(state.resetCount ?? 0),
+    };
     await write(next);
     return next;
   }
