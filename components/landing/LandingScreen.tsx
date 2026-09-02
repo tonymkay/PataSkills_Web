@@ -33,7 +33,10 @@ import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 
 const CARD_MARGIN = Spacing.marginMobile;
-const PAGE_WIDTH = Dimensions.get('window').width - CARD_MARGIN * 2;
+// Bottom-sheet-style width cap (matches FeedbackSheet/RestoreAccountModal/etc.)
+// so the landing screen doesn't stretch edge-to-edge on wide/desktop viewports.
+const CONTENT_MAX_WIDTH = 480;
+const PAGE_WIDTH = Math.min(Dimensions.get('window').width, CONTENT_MAX_WIDTH) - CARD_MARGIN * 2;
 
 interface TrackOption {
   track: Track;
@@ -126,7 +129,8 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   // pill-button list, which left the top of the screen empty).
   if (activeSkill) {
     return (
-      <View style={styles.container}>
+      <View style={styles.screen}>
+        <View style={styles.container}>
         <View style={styles.modePickerTop}>
           <Pressable onPress={() => setActiveSkill(null)} hitSlop={10} style={styles.backBtn}>
             <ChevronLeft size={22} color={colors.onSurface} />
@@ -160,12 +164,14 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
             );
           })}
         </ScrollView>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
+      <View style={styles.container}>
       {/* Skill pager — one bordered SkillCard per skill, swipeable */}
       <View style={styles.middle}>
         <ScrollView
@@ -215,13 +221,20 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
         currentEmail={linkedEmail}
         onLoggedOut={() => setLinkedEmail(null)}
       />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    alignItems: 'center',
+  },
   container: {
     flex: 1,
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.xxl,
     justifyContent: 'space-between',
