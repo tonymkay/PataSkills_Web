@@ -4,15 +4,19 @@ import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
+import { ContinuePromptSheet } from '@/components/feedback/ContinuePromptSheet';
+import { ModeSwitcherSheet, ModeSwitcherHeading } from '@/components/landing/ModeSwitcherSheet';
 import { BouncingDots } from '@/components/feedback/DownloadingScreen';
 import { useKeys } from '@/hooks/useKeys';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted } from '@/lib/progress';
+import { Track } from '@/lib/curriculum';
+import { shouldShowContinuePrompt, hideContinuePromptForTrack } from '@/lib/continuePrefs';
 
 const XP_PER_CORRECT = 10;
 
-type FlowState = 'playing' | 'topicComplete' | 'outOfKeys' | 'allComplete';
+type FlowState = 'playing' | 'topicComplete' | 'outOfKeys';
 
 type OutOfKeysReason = 'entry' | 'advance' | null;
 
@@ -24,10 +28,16 @@ interface SessionStats {
 interface PlaySessionProps {
   sessions: PlaySessionData[];
   signCatalog?: SignCatalogEntry[];
+  /** The track these sessions were derived from — drives the continuation
+   *  flow (which mode is "current", and the per-track don't-show-again pref). */
+  track: Track;
+  /** Starts a fresh download for a different track — wired to the same
+   *  handler the initial LandingScreen mode picker uses. */
+  onSwitchTrack: (track: Track) => void;
   onExit?: () => void;
 }
 
-export function PlaySession({ sessions, signCatalog, onExit }: PlaySessionProps) {
+export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExit }: PlaySessionProps) {
   const { colors } = useTheme();
   const isFocused = useIsFocused();
   const {
@@ -47,6 +57,10 @@ export function PlaySession({ sessions, signCatalog, onExit }: PlaySessionProps)
   const [totalXp, setTotalXp] = useState(0);
 
   const [outOfKeysReason, setOutOfKeysReason] = useState<OutOfKeysReason>(null);
+
+  const [showContinuePrompt, setShowContinuePrompt] = useState(false);
+  const [switcherVisible, setSwitcherVisible] = useState(false);
+  const [switcherHeading, setSwitcherHeading] = useState<ModeSwitcherHeading>('switch');
 
   // Resume from last completed topic index
   React.useEffect(() => {
@@ -103,10 +117,12 @@ export function PlaySession({ sessions, signCatalog, onExit }: PlaySessionProps)
     [sessionIndex, sessions.length],
   );
 
-  // Directly advances to next session if keys available, or shows outOfKeys
+  // Directly advances to next session if keys available, or shows outOfKeys.
+  // Callers are expected to have already handled the !hasMoreSessions case
+  // (routed to the mode-switcher sheet instead) — this is a defensive no-op
+  // if it's ever reached with nothing left.
   const advanceToNextSession = useCallback(async () => {
     if (!hasMoreSessions) {
-      setFlowState('allComplete');
       return;
     }
 
@@ -146,9 +162,59 @@ export function PlaySession({ sessions, signCatalog, onExit }: PlaySessionProps)
     setFlowState('playing');
   }, [outOfKeysReason, spendKey]);
 
-  const handleTopicContinue = useCallback(() => {
-    void advanceToNextSession();
-  }, [advanceToNextSession]);
+  // Fires when the learner presses NEXT SESSION on the topicComplete screen.
+  // Decides which continuation UI (if any) to show, per the spec:
+  //  - no topics left in this track → mode switcher, "track complete" heading,
+  //    confirmation sheet skipped entirely.
+  //  - next session locked (out of keys) → fall straight through to the
+  //    existing outOfKeys screen, no continuation UI shown at all.
+  //  - otherwise → confirmation sheet, unless silenced for this track.
+  const handleNextPress = useCallback(async () => {
+    if (!hasMoreSessions) {
+      setSwitcherHeading('trackComplete');
+      setSwitcherVisible(true);
+      return;
+    }
+
+    if (isOutOfKeys) {
+      void advanceToNextSession();
+      return;
+    }
+
+    const show = await shouldShowContinuePrompt(track);
+    if (show) {
+      setShowContinuePrompt(true);
+    } else {
+      void advanceToNextSession();
+    }
+  }, [hasMoreSessions, isOutOfKeys, track, advanceToNextSession]);
+
+  const handleYesContinue = useCallback(
+    (dontShowAgain: boolean) => {
+      setShowContinuePrompt(false);
+      if (dontShowAgain) void hideContinuePromptForTrack(track);
+      void advanceToNextSession();
+    },
+    [track, advanceToNextSession],
+  );
+
+  const handleNoSwitch = useCallback(
+    (dontShowAgain: boolean) => {
+      setShowContinuePrompt(false);
+      if (dontShowAgain) void hideContinuePromptForTrack(track);
+      setSwitcherHeading('switch');
+      setSwitcherVisible(true);
+    },
+    [track],
+  );
+
+  const handleSelectTrack = useCallback(
+    (newTrack: Track) => {
+      setSwitcherVisible(false);
+      onSwitchTrack(newTrack);
+    },
+    [onSwitchTrack],
+  );
 
   // Redo = replay the same session from scratch (no key spend — already paid)
   const handleRedoSession = useCallback(() => {
@@ -206,32 +272,31 @@ export function PlaySession({ sessions, signCatalog, onExit }: PlaySessionProps)
     );
   }
 
-  if (flowState === 'allComplete') {
-    return (
-      <SessionStateScreen
-        kind="topicComplete"
-        title="All caught up!"
-        subtitle="You've finished every sign pair in this set."
-        totalXp={totalXp}
-        progressText={`${sessions.length}/${sessions.length}`}
-        scoreText={`${sessions.length}/${sessions.length}`}
-        onPrimaryPress={() => {}}
-        onSecondaryPress={handleRedoSession}
-      />
-    );
-  }
-
   if (flowState === 'topicComplete') {
     return (
-      <SessionStateScreen
-        kind="topicComplete"
-        subtitle={currentSession?.title}
-        totalXp={lastStats.correctCount * XP_PER_CORRECT}
-        progressText={`${sessionIndex + 1}/${sessions.length}`}
-        scoreText={`${sessionIndex + 1}/${sessions.length}`}
-        onPrimaryPress={handleTopicContinue}
-        onSecondaryPress={handleRedoSession}
-      />
+      <>
+        <SessionStateScreen
+          kind="topicComplete"
+          subtitle={currentSession?.title}
+          totalXp={lastStats.correctCount * XP_PER_CORRECT}
+          progressText={`${sessionIndex + 1}/${sessions.length}`}
+          scoreText={`${sessionIndex + 1}/${sessions.length}`}
+          onPrimaryPress={handleNextPress}
+          onSecondaryPress={handleRedoSession}
+        />
+        <ContinuePromptSheet
+          visible={showContinuePrompt}
+          onYesContinue={handleYesContinue}
+          onNoSwitch={handleNoSwitch}
+        />
+        <ModeSwitcherSheet
+          visible={switcherVisible}
+          heading={switcherHeading}
+          currentTrack={track}
+          onSelectTrack={handleSelectTrack}
+          onClose={() => setSwitcherVisible(false)}
+        />
+      </>
     );
   }
 

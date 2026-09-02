@@ -28,11 +28,13 @@ export default function PlayEntry() {
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<PlaySessionData[]>([]);
   const [signCatalog, setSignCatalog] = useState<SignCatalogEntry[]>([]);
+  const [currentTrack, setCurrentTrack] = useState<Track>('pairs');
 
   const runDownload = useCallback(async (track: Track = 'pairs') => {
     setStage('downloading');
     setError(null);
     setProgress(null);
+    setCurrentTrack(track);
     const result = await downloadSession(track, (p) => setProgress(p));
     if ('error' in result) {
       setError(result.error);
@@ -73,7 +75,13 @@ export default function PlayEntry() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#14171C' }]}>
       {stage === 'session' ? (
-        <PlaySession sessions={sessions} signCatalog={signCatalog} onExit={handleExit} />
+        <PlaySession
+          sessions={sessions}
+          signCatalog={signCatalog}
+          track={currentTrack}
+          onSwitchTrack={handleStart}
+          onExit={handleExit}
+        />
       ) : stage === 'downloading' ? (
         <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
       ) : (

@@ -20,6 +20,8 @@ import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 import { shuffleAnswers } from '@/utils/shuffleAnswers';
 import { TwoImageCard } from '@/components/cards/TwoImageCard';
 import { ReadingCard } from '@/components/cards/ReadingCard';
+import { ScrollHintChevron } from '@/components/cards/ScrollHintChevron';
+import { useScrollHint } from '@/hooks/useScrollHint';
 import { CheckButton, FeedbackState } from '@/components/feedback/CheckButton';
 import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
 import { FeedbackSheet, FeedbackSheetState } from '@/components/feedback/FeedbackSheet';
@@ -73,6 +75,26 @@ function ReadingCardDeck({
   const currentSign = signs[currentIndex] || null;
   const isFinished = currentIndex >= signs.length;
 
+  // Active-segment minimum fill, matching QuizCardDeck's segment bar: the
+  // segment for the sign currently on screen always shows at least 10%
+  // filled, not just fully-completed segments. Resets per sign.
+  const activeFillAnim = useSharedValue(10);
+  useEffect(() => {
+    activeFillAnim.value = 10;
+  }, [currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  const activeFillStyle = useAnimatedStyle(() => ({
+    width: `${activeFillAnim.value}%`,
+  }));
+
+  // One hook instance is reused across cards (ReadingCardDeck only ever
+  // shows one at a time), so its internal height tracking is reset every
+  // time the current sign changes — otherwise the hint could briefly use
+  // stale measurements from the previous card.
+  const scrollHint = useScrollHint();
+  useEffect(() => {
+    scrollHint.resetForNewCard();
+  }, [currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       setQuitOpen(true);
@@ -97,6 +119,7 @@ function ReadingCardDeck({
 
   const segmentCount = Math.min(totalCount, 8);
   const filledSegments = Math.round((currentIndex / totalCount) * segmentCount);
+  const activeSegmentIndex = filledSegments;
 
   return (
     <View style={styles.deckContainer}>
@@ -108,6 +131,7 @@ function ReadingCardDeck({
         <View style={styles.segmentsRow}>
           {Array.from({ length: segmentCount }).map((_, index) => {
             const isDone = index < filledSegments;
+            const isActive = index === activeSegmentIndex;
             return (
               <View
                 key={index}
@@ -120,6 +144,16 @@ function ReadingCardDeck({
                     end={{ x: 1, y: 0 }}
                     style={styles.segmentFill}
                   />
+                )}
+                {isActive && !isDone && (
+                  <Animated.View style={[styles.segmentFillAnimated, activeFillStyle]}>
+                    <LinearGradient
+                      colors={BrandGradients.discovery.colors}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={StyleSheet.absoluteFillObject}
+                    />
+                  </Animated.View>
                 )}
               </View>
             );
@@ -135,9 +169,20 @@ function ReadingCardDeck({
       </View>
 
       <View style={styles.cardViewport}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.readingScrollContent}>
+        <ScrollView
+          ref={scrollHint.scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.readingScrollContent}
+          bounces={false}
+          {...scrollHint.scrollViewProps}
+        >
           <ReadingCard key={currentSign.signId} sign={currentSign} allSigns={signCatalog ?? signs} />
         </ScrollView>
+        <ScrollHintChevron
+          visible={scrollHint.showHint}
+          onPress={scrollHint.scrollToBottom}
+          style={scrollHint.hintAnimatedStyle}
+        />
       </View>
 
       <View style={styles.controlsArea}>
@@ -499,17 +544,11 @@ function QuizCardDeck({
                         evaluatedResult={isCurrent ? evaluatedResult : null}
                       />
                     </ScrollView>
-                    {isCurrent && showScrollHint ? (
-                      <Pressable
-                        onPress={() => handleScrollHintPress(idx)}
-                        hitSlop={10}
-                        style={styles.scrollHintButton}
-                      >
-                        <Animated.View style={[styles.scrollHintBubble, hintStyle]}>
-                          <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
-                        </Animated.View>
-                      </Pressable>
-                    ) : null}
+                    <ScrollHintChevron
+                      visible={isCurrent && showScrollHint}
+                      onPress={() => handleScrollHintPress(idx)}
+                      style={hintStyle}
+                    />
                   </>
                 ) : null}
               </View>
@@ -652,19 +691,6 @@ const styles = StyleSheet.create({
   },
   cardSlotScrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-  },
-  scrollHintButton: {
-    position: 'absolute',
-    bottom: 6,
-    alignSelf: 'center',
-  },
-  scrollHintBubble: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
     justifyContent: 'center',
   },
   controlsArea: {
