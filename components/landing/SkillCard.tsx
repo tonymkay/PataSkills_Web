@@ -16,7 +16,8 @@ interface SkillCardProps {
  * One skill's homepage card — bordered container (borrowed from
  * PataSkillsV2's components/home/SkillHeroPager.tsx card shape) holding the
  * title, progress, and illustration that used to sit directly on the
- * landing screen. Tapping it opens the track/mode picker for this skill.
+ * landing screen. The "Get started" button opens the track/mode picker for
+ * this skill — the card itself isn't tappable, so there's one clear target.
  */
 export function SkillCard({ skill, completedTopics, totalTopics, onPress }: SkillCardProps) {
   const { colors } = useTheme();
@@ -24,15 +25,13 @@ export function SkillCard({ skill, completedTopics, totalTopics, onPress }: Skil
   const progressPercent = Math.min(100, Math.round(progressFraction * 100));
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
+    <View
+      style={[
         styles.card,
         {
           borderColor: colors.outlineVariant,
           backgroundColor: colors.surfaceContainerLow,
         },
-        pressed && { opacity: 0.92 },
       ]}
     >
       <Text style={[Typography.headlineXl, styles.title, { color: colors.onSurface }]}>
@@ -77,7 +76,18 @@ export function SkillCard({ skill, completedTopics, totalTopics, onPress }: Skil
       <View style={styles.illustrationWrap}>
         <LandingIllustration />
       </View>
-    </Pressable>
+
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.ctaBtn,
+          { backgroundColor: colors.tealAccent || '#2BD9C4' },
+          pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+        ]}
+      >
+        <Text style={styles.ctaBtnText}>{completedTopics > 0 ? 'RESUME SESSION' : 'GET STARTED'}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -114,5 +124,19 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  ctaBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.lg,
+  },
+  ctaBtnText: {
+    color: '#FFFFFF',
+    fontFamily: FontFamily.extraBold,
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
 });
