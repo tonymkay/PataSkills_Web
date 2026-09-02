@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Scope**: Every file inside `PataProducts/play/` · **Method**: Pure code analysis — existing inline comments were deliberately ignored.
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-02 (Learning Tracks & Reading Mode feature) · **Scope**: Every file inside `PataProducts/play/` · **Method**: Pure code analysis — existing inline comments were deliberately ignored, except where noted for this update.
 
 ---
 
@@ -21,8 +21,9 @@
 13. [Scripts (`scripts/`)](#13-scripts-scripts)
 14. [Supabase (`supabase/`)](#14-supabase-supabase)
 15. [Assets (`assets/`)](#15-assets-assets)
-16. [Miscellaneous Files](#16-miscellaneous-files)
-17. [Data Flow & Architecture](#17-data-flow--architecture)
+16. [Docs (`docs/`)](#16-docs-docs)
+17. [Miscellaneous Files](#17-miscellaneous-files)
+18. [Data Flow & Architecture](#18-data-flow--architecture)
 
 ---
 
@@ -30,10 +31,12 @@
 
 **PataSkills Play** is a mobile-first quiz application built with **Expo** (React Native) that targets iOS, Android, and the web. Its current curriculum is **Driving Theory** — users practice highway-code questions involving road sign identification. The app fetches its curriculum and sign images from a **Supabase** backend at runtime, presents questions in a swipeable card deck, and gates continued play behind a consumable **"keys"** system persisted in AsyncStorage.
 
+As of this update, the app also supports **Learning Tracks** and **Reading Mode** (see [§16 Docs](#16-docs-docs) for the full feature spec). Instead of one fixed curriculum experience, the same question bank is filtered and regrouped client-side into one of several tracks — **Pairs** (default), **Names**, **Meanings**, **Where Used**, **Full course**, or **Reading** (a non-quiz, browse-only mode). The track can be chosen from a picker on the landing screen or set directly via a `?track=` URL param for ad/campaign links.
+
 ### Core User Flow
 
 ```
-Landing Screen → Download Session → Play Session (Card Deck) → Topic Complete → Next Session / Out of Keys
+Landing Screen (track picker) → Download Session (track-aware) → Play Session (Card Deck or Reading Deck) → Topic Complete → Next Session / Out of Keys
 ```
 
 ---
@@ -47,6 +50,7 @@ play/
 ├── .gitignore                        # Standard Expo ignores
 ├── AGENTS.md                         # AI agent instructions (Expo version pin)
 ├── CLAUDE.md                         # AI agent marker
+├── CODEBASE.md                       # This file
 ├── LICENSE                           # MIT License (Expo origin)
 ├── README.md                         # Minimal readme
 ├── app.json                          # Expo app manifest
@@ -58,32 +62,33 @@ play/
 │
 ├── app/                              # Expo Router pages
 │   ├── _layout.tsx                   # Root layout (providers, fonts, splash)
-│   ├── index.tsx                     # Home page (stage machine: landing/download/session)
+│   ├── index.tsx                     # Home page (stage machine: landing/download/session; reads ?track=)
 │   ├── +html.tsx                     # Web-only HTML shell (fonts, viewport, CSS)
 │   └── admin/
 │       └── signs.tsx                 # Admin tool: browse & swap sign images
 │
 ├── components/
 │   ├── cards/
-│   │   ├── CardDeck.tsx              # Horizontal card strip with progress bar
+│   │   ├── CardDeck.tsx              # Router: QuizCardDeck (quiz flow) or ReadingCardDeck (browse flow)
+│   │   ├── ReadingCard.tsx           # Reading Mode card — sign image, name, meaning, explanation
 │   │   └── TwoImageCard.tsx          # Individual quiz card (3 layout types)
 │   ├── feedback/
-│   │   ├── CheckButton.tsx           # "CHECK" button with feedback animation
+│   │   ├── CheckButton.tsx           # "CHECK" / "GOT IT" button with feedback animation
 │   │   ├── DownloadingScreen.tsx     # Loading screen with bouncing dots
 │   │   ├── FeedbackSheet.tsx         # Correct/Not-quite bottom sheet
 │   │   ├── FlagIcon.tsx              # Flag-a-question toggle button
-│   │   ├── LearnMoreSheet.tsx        # Explanation bottom sheet
+│   │   ├── LearnMoreSheet.tsx        # Explanation bottom sheet — now backed by the signs catalog
 │   │   ├── QuitConfirmSheet.tsx      # "Are you sure?" quit confirmation
 │   │   └── SessionStateScreen.tsx    # Multi-purpose interstitial screen
 │   ├── landing/
-│   │   ├── LandingScreen.tsx         # Start screen with illustration
+│   │   ├── LandingScreen.tsx         # Track picker (Pairs/Names/Meanings/WhereUsed/Full/Reading)
 │   │   └── LandingIllustration.tsx   # Remote cover image component
 │   └── play/
-│       └── PlaySession.tsx           # Session orchestrator (keys, flow states)
+│       └── PlaySession.tsx           # Session orchestrator (keys, flow states, quiz-vs-reading branch)
 │
 ├── constants/
 │   ├── index.ts                      # Barrel export for all constants
-│   ├── colors.ts                     # Light/Dark/Static color palettes
+│   ├── colors.ts                     # Light/Dark/Static color palettes (StaticColors.tealAccent added)
 │   ├── gradients.ts                  # Gradient definitions (brand, category, sheets)
 │   ├── typography.ts                 # Font families, text styles, font assets
 │   ├── spacing.ts                    # Spacing scale & border radius tokens
@@ -96,8 +101,8 @@ play/
 │
 ├── lib/
 │   ├── supabase.ts                   # Supabase client singleton
-│   ├── curriculum.ts                 # Fetch curriculum JSON from Supabase
-│   ├── downloadSession.ts            # Orchestrate full session download
+│   ├── curriculum.ts                 # Fetch curriculum JSON + signs catalog; deriveTrack()
+│   ├── downloadSession.ts            # Orchestrate full session download (track-aware)
 │   ├── keys.ts                       # Keys balance: read/write/spend/reset
 │   └── signs.ts                      # Fetch sign assets & sign pairs from DB
 │
@@ -105,10 +110,10 @@ play/
 │   └── useKeys.ts                    # React hook wrapping lib/keys.ts
 │
 ├── types/
-│   └── quiz.ts                       # TypeScript interfaces for quiz questions
+│   └── quiz.ts                       # QuizQuestion (+ role field), SignCatalogEntry
 │
 ├── utils/
-│   ├── groupSessions.ts              # Group questions into sessions by pairId
+│   ├── groupSessions.ts              # groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions
 │   ├── hydrateQuestions.ts           # Replace sign keys with image URLs
 │   └── shuffleAnswers.ts            # Fisher-Yates answer randomization
 │
@@ -117,6 +122,7 @@ play/
 │   ├── derive-signs.mjs              # Derive sign names from curriculum JSON
 │   ├── fix-image-cache-headers.mjs   # Re-upload signs with 1-year cache headers
 │   ├── link-signs-to-questions.mjs   # Fuzzy-match signs → rewrite curriculum JSON
+│   ├── build-signs-catalog.mjs       # Generate the 92-entry signs catalog from question data
 │   └── output/                       # Script output artifacts (JSON, SQL)
 │
 ├── supabase/
@@ -128,8 +134,13 @@ play/
 │   ├── homepage/                     # Landing page images (driving.png, homepage.webp)
 │   └── premium/                      # Key & unlock illustrations (key.webp, unlock.webp)
 │
+├── docs/
+│   └── learning-tracks-and-reading-mode.md   # Feature spec for Learning Tracks + Reading Mode
+│
+├── data/
+│   └── questions.sample.json         # { questions: QuizQuestion[] (322, tagged with role), signs: SignCatalogEntry[] (92) }
+│
 ├── Inspos/                           # Design inspiration screenshots
-├── data/                             # Empty directory (placeholder)
 └── _deleted_local_assets/            # Archived deleted assets
 ```
 
@@ -164,6 +175,8 @@ play/
 | `ios` | `expo start --ios` | Dev on iOS |
 | `web` | `expo start --web` | Dev on web |
 | `build` | `expo export -p web` | Static web export |
+
+There is no `lint` script and no ESLint config in this project (no `eslint.config.*` / `.eslintrc*`, no `eslint` devDependency). Type safety is enforced via `npx tsc --noEmit` only.
 
 ---
 
@@ -227,22 +240,29 @@ The main screen. Implements a simple **three-stage state machine**:
 
 | Stage | Component Rendered | Description |
 |-------|--------------------|-------------|
-| `landing` | `LandingScreen` | Start screen with "START PRACTICE" button |
+| `landing` | `LandingScreen` | Track picker (or "Resume Session" if progress exists) |
 | `downloading` | `DownloadingScreen` | Shows loading animation while fetching data |
-| `session` | `PlaySession` | Active quiz session |
+| `session` | `PlaySession` | Active quiz or reading session |
 
 **State:**
 - `stage` — Current stage (`'landing' | 'downloading' | 'session'`)
 - `progress` — Download progress info (stage + fraction)
 - `error` — Error message from failed download, or null
-- `questions` — Hydrated `QuizQuestion[]` array for the session
+- `sessions` — `PlaySession[]` (quiz or reading sessions) for the active track
+- `signCatalog` — `SignCatalogEntry[]` — the full signs catalog, threaded down to `PlaySession` so `LearnMoreSheet` can look up rich per-sign content regardless of which track is active
+
+**Track resolution:**
+- Reads a `track` URL param via `useLocalSearchParams<{ resume?: string; track?: string }>()`.
+- `parseTrack()` validates the param against `VALID_TRACKS = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading']`; anything else is treated as absent.
+- Defaults to `'pairs'` whenever no valid track param is present — this applies to *all* traffic, not just new ad links.
 
 **Flow:**
-1. User taps "Start Practice" → stage becomes `downloading`
-2. `downloadSession()` is called with a progress callback
-3. On success → questions are stored, stage becomes `session`
-4. On error → error message is shown with a RETRY button
-5. On exit from session → everything resets to `landing`
+1. User picks a track on `LandingScreen` (or an ad link auto-starts one) → `runDownload(track)` is called → stage becomes `downloading`.
+2. `downloadSession(track, onProgress)` is called with a progress callback.
+3. On success → `sessions` and `signCatalog` are stored, stage becomes `session`.
+4. On error → error message is shown with a RETRY button (retries with the resolved track).
+5. An effect on mount auto-starts the download if `params.resume === 'true'` (returning from checkout) or a valid `track` param is present in the URL — skipping the landing picker entirely for ad links.
+6. On exit from session → everything resets to `landing` (`sessions`, `signCatalog`, `error`, `progress` all cleared).
 
 ---
 
@@ -292,46 +312,86 @@ A development/admin tool at the `/admin/signs` route. Displays all sign images f
 
 ### 6.1 Cards
 
-#### `CardDeck.tsx` — The Quiz Engine
+#### `CardDeck.tsx` — Router + Two Deck Implementations
 
-The core interactive component. Renders a **horizontal strip of quiz cards** that slide left as the user progresses. This is the main gameplay UI.
+`CardDeck` is now a thin router component: it picks one of two internal implementations based on the props it receives.
 
-**Props:**
+```typescript
+export function CardDeck(props: CardDeckProps) {
+  if (props.signs && props.signs.length > 0) {
+    return <ReadingCardDeck {...props} signs={props.signs} />;
+  }
+  return <QuizCardDeck {...props} questions={props.questions ?? []} />;
+}
+```
+
+**Props (`CardDeckProps`):**
 | Prop | Type | Purpose |
 |------|------|---------|
-| `questions` | `QuizQuestion[]` | The full question set for this session |
+| `questions` | `QuizQuestion[]?` | Quiz-mode question set for this session |
+| `signs` | `SignCatalogEntry[]?` | Reading-mode sign set for this session — presence of this (non-empty) routes to `ReadingCardDeck` |
+| `signCatalog` | `SignCatalogEntry[]?` | Full signs catalog, passed through to `LearnMoreSheet` in quiz mode for its pairId/signRef lookup |
+| `sessionTitle` | `string?` | Session title (unused directly by CardDeck, passed for context) |
 | `keyBalance` | `number?` | Current key count to display |
-| `onSessionComplete` | `(stats) => void` | Fires when all original questions are answered correctly |
-| `onFinish` | `(stats) => void` | Same timing as onSessionComplete |
-| `onClose` | `() => void` | Exit the session |
+| `onSessionComplete` | `(stats) => void` | Fires when all cards in the session are done |
+| `onFinish` | `(stats) => void` | Same timing as onSessionComplete (quiz mode only) |
+| `onClose` / `onExit` | `() => void` | Exit the session |
+
+##### `QuizCardDeck` — The Quiz Engine (unchanged behavior)
+
+The original quiz gameplay component, now an internal function. Renders a **horizontal strip of quiz cards** that slide left as the user progresses.
 
 **Layout (top to bottom):**
 
 1. **Top Bar** — Close (X) button, segmented progress bar (up to 8 segments with animated gradient fill), key balance badge.
-
 2. **Card Viewport** — A clipping container holding the horizontal card strip. Width is measured from the actual rendered layout (not hardcoded). Only cards within a ±2 window of the current index are rendered for performance.
-
 3. **Bottom Controls** — The CHECK button and a hint label.
+4. **Overlay Sheets** — LearnMoreSheet (now receiving `signCatalog`), FeedbackSheet, QuitConfirmSheet are rendered as siblings.
 
-4. **Overlay Sheets** — LearnMoreSheet, FeedbackSheet, QuitConfirmSheet are rendered as siblings.
-
-**Key Mechanics:**
-
+**Key Mechanics (all unchanged):**
 - **Continuous strip translation** — `stripX` is a Reanimated shared value that never resets. Each advance animates it further left by one card width + gap (16px). Duration is 320ms with cubic easing.
+- **Answer shuffling** — Each question's answers are shuffled (Fisher-Yates) when initially placed into the deck and again when requeued after a wrong answer.
+- **Wrong answer requeue** — Incorrectly answered questions are appended to the end of the deck with freshly shuffled answers.
+- **Progress segments** — The bar has `min(totalCount, 8)` segments, active segment animates 10% → 80% (correct) → 100% (card slides out).
+- **Scroll hint** — Bouncing chevron shown when card content exceeds the viewport height.
+- **Haptic feedback** — Fires on correct (Success) and incorrect (Warning) answers.
+- **Android back button** — Intercepted via `BackHandler` to show the quit confirmation sheet.
+- **XP** — 10 XP per correct answer (`XP_PER_CORRECT`).
 
-- **Answer shuffling** — Each question's answers are shuffled (Fisher-Yates) when initially placed into the deck and again when requeued after a wrong answer. This prevents position memorization.
+##### `ReadingCardDeck` — Reading Mode Engine (new)
 
-- **Wrong answer requeue** — Incorrectly answered questions are appended to the end of the deck with freshly shuffled answers. Only correct answers advance progress.
+A deliberately lightweight sibling to `QuizCardDeck`. Reuses the same top-bar chrome (close button, segmented progress, key badge) but has **no answer/check/feedback-sheet machinery at all** — it's a linear browse.
 
-- **Progress segments** — The bar has `min(totalCount, 8)` segments. Completed segments show a full gradient fill. The active segment animates: starts at 10% → jumps to 80% on correct answer → eases to 100% as the card slides out.
+**Layout:**
+1. **Top Bar** — Same visual shape as the quiz deck: close button, segmented progress (`filledSegments = round(currentIndex / totalCount * segmentCount)`), key badge.
+2. **Card Viewport** — A single `ScrollView` centering one `ReadingCard` at a time (no horizontal strip animation — this is a much simpler, non-animated advance).
+3. **Bottom Controls** — A single `CheckButton` relabeled `"GOT IT"` and a `"{n}/{total} signs"` counter.
 
-- **Scroll hint** — A bouncing chevron appears at the bottom of a card when its content exceeds the viewport height. Pressing it scrolls to the bottom. It auto-hides when the user scrolls past 12px.
+**Mechanics:**
+- `handleNext()` advances `currentIndex` by 1. When it reaches the end, calls `onSessionComplete`/`onFinish` with `{ totalAnswered: totalCount, correctCount: totalCount }` (every sign is trivially "correct" since there's no quiz — this keeps the stats shape compatible with `PlaySession`'s existing XP/progress bookkeeping).
+- Android back button opens the same `QuitConfirmSheet` as quiz mode.
+- No `LearnMoreSheet`, no `FeedbackSheet`, no shuffling, no requeue — Reading Mode has none of those concepts.
 
-- **Haptic feedback** — `Haptics.notificationAsync()` fires on correct (Success) and incorrect (Warning) answers.
+---
 
-- **Android back button** — Intercepted via `BackHandler` to show the quit confirmation sheet instead of immediately exiting.
+#### `ReadingCard.tsx` — Reading Mode Card (new)
 
-- **XP** — 10 XP per correct answer (constant `XP_PER_CORRECT`).
+Renders a single sign's full catalog entry as a read-only card — no question, no answer, no interaction beyond scrolling.
+
+**Props:** `{ sign: SignCatalogEntry }`
+
+**Layout:**
+1. **Gradient header** (teal, `#5EEAD4` → `#2DD4BF`) containing:
+   - The sign image (`expo-image`), or an `Ionicons` fallback icon keyed by `sign.signType` (`TYPE_ICON` map: regulatory → shield-checkmark, warning → warning, prohibitory → ban, informational → information-circle, mandatory → arrow-forward-circle).
+   - The sign's `name` in large bold text.
+   - A small uppercase `signType` badge.
+2. **Body:**
+   - "WHAT IT MEANS" heading + `sign.meaning`
+   - "WHERE YOU'LL SEE IT" heading + `sign.whereUsed`
+   - An `explanation` card (bordered box) if `sign.explanation` is present
+   - A `memoryTip` row with a lightbulb icon, if present
+
+This is the visual/content counterpart to the richer `LearnMoreSheet` content — both pull from the same `SignCatalogEntry` shape, just in different contexts (Reading Mode browses catalog entries directly; `LearnMoreSheet` looks one up for the currently-answered quiz question).
 
 ---
 
@@ -378,13 +438,13 @@ Renders a single quiz question card. Despite the name, it handles **three distin
 
 #### `CheckButton.tsx`
 
-A full-width rounded button labeled "CHECK" (customizable via `label` prop).
+A full-width rounded button. Its label is customizable via the `label` prop (defaults to `"CHECK"`) — Reading Mode's `ReadingCardDeck` reuses this same component with `label="GOT IT"`.
 
 **States:**
-- **Disabled** — Dark, muted, non-interactive. Shows when no answer is selected.
+- **Disabled** — Dark, muted, non-interactive. Shows when no answer is selected (quiz mode only — Reading Mode always passes `enabled`).
 - **Enabled** — White background, black text. Triggers haptic feedback on press.
 
-**Floating feedback badge** — An animated pill that appears above the button showing "Correct" (green) or "Not Quite" (red). Fades in with a spring animation on state change, fades out on reset.
+**Floating feedback badge** — An animated pill that appears above the button showing "Correct" (green) or "Not Quite" (red). Fades in with a spring animation on state change, fades out on reset. (Reading Mode never sets a non-idle `feedbackState`, so this never appears there.)
 
 **Type `FeedbackState`** = `'idle' | 'correct' | 'incorrect'`
 
@@ -404,7 +464,7 @@ Uses safe area insets for top/bottom padding.
 
 #### `FeedbackSheet.tsx`
 
-A bottom sheet modal that appears after the user checks their answer.
+A bottom sheet modal that appears after the user checks their answer (quiz tracks only — Reading Mode never opens this).
 
 **Type `FeedbackSheetState`** = `'correct' | 'notquite' | null`
 
@@ -427,11 +487,20 @@ A circular toggle button for flagging/unflagging a question. Uses `Ionicons` fla
 
 ---
 
-#### `LearnMoreSheet.tsx`
+#### `LearnMoreSheet.tsx` — now backed by the signs catalog
 
-A bottom sheet modal showing the explanation for the current question.
+A bottom sheet modal showing the explanation for the current quiz question. **This is the component most changed by the Learning Tracks / Reading Mode work.**
 
-**Layout:**
+**New prop:** `signCatalog?: SignCatalogEntry[]` — the full catalog, passed down from `CardDeck` → `QuizCardDeck`.
+
+**`resolveSignEntry(question, catalog)`** (new, module-level function): Looks up the catalog entry matching the question's correct answer via `pairId` + `signRef`.
+- Filters the catalog to entries with a matching `pairId`.
+- If the question carries an explicit `signRef`, matches on that.
+- Otherwise infers the ref from `correctAnswer` (`0 → 'A'`, `1 → 'B'`) — covers `twoImageChoice`/`imageChoice` questions, which don't carry an explicit `signRef`.
+
+**Explanation priority (changed):** `catalogEntry?.explanation` → `question.explanation` → the original generic templated sentence, in that order. Previously it was just `question.explanation` → generic template; the catalog lookup is now the primary source, matching the feature spec's "drop the fallback template once catalog coverage is complete" (the template line is kept as a defensive last resort, not removed outright, since not every question is guaranteed a resolvable catalog entry).
+
+**Layout (unchanged):**
 - Dimming backdrop (pressable to close)
 - Gradient background (theme-adaptive via `getSheetGradient`)
 - Grabber handle
@@ -439,10 +508,8 @@ A bottom sheet modal showing the explanation for the current question.
 - Scrollable content (capped at 65% screen height):
   - Question text preview
   - "Correct Answer" card (green border, checkmark icon, answer text)
-  - "Why Is This Correct?" explanation card
+  - "Why Is This Correct?" explanation card — now sourced from the catalog when available
   - "GOT IT" button with brand gradient
-
-**Answer display logic:** For two-image questions, shows "Sign A" or "Sign B". For text questions, shows the actual answer string. Falls back to "Option N" if neither works.
 
 **Animation:** Full slide-up animation with backdrop fade. Uses Reanimated `withTiming` for both the sheet translateY and backdrop opacity. The modal's `visible` state and the actual React render state are decoupled — the modal stays rendered during the exit animation and unmounts only after the slide-down completes (via `runOnJS`).
 
@@ -450,7 +517,7 @@ A bottom sheet modal showing the explanation for the current question.
 
 #### `QuitConfirmSheet.tsx`
 
-"Are you sure?" bottom sheet shown when the user taps X or presses the Android back button mid-session.
+"Are you sure?" bottom sheet shown when the user taps X or presses the Android back button mid-session. Shared by both `QuizCardDeck` and `ReadingCardDeck`.
 
 **Content:**
 - "Are you sure?" heading
@@ -464,44 +531,60 @@ Same animation pattern as FeedbackSheet (slide up + backdrop fade). Uses `getShe
 
 #### `SessionStateScreen.tsx`
 
-A versatile full-screen interstitial used for multiple game-state transitions. Configured by a `kind` prop that selects from a predefined copy table.
+A versatile full-screen interstitial used for multiple game-state transitions. Configured by a `kind` prop that selects from a predefined copy table. Unaffected by the tracks/reading-mode work — used identically regardless of which track produced the session.
 
 **`SessionStateKind` values:**
 
 | Kind | Icon | Title | Primary CTA | Secondary CTA |
 |------|------|-------|-------------|---------------|
-| `topicComplete` | Sparkles (purple) | "Topic complete!" | CONTINUE | — |
-| `chapterComplete` | Medal (purple) | "Chapter complete!" | CONTINUE | — |
-| `sessionUnlocked` | unlock.webp image | "You have unlocked Next Session!" | START SESSION | — |
-| `keysReset` | key.webp + count | "You have new Keys!" | UNLOCK NEXT SESSION | — |
-| `rewardUnlocked` | KeyRound (lime) | "Reward unlocked!" | COLLECT | — |
-| `outOfKeys` | Lock (purple dim) | "You're out of keys for today" | BUY KEYS (disabled) | WAIT UNTIL TOMORROW |
-| `shareApp` | Share2 (green) | "Share App with friends" | SHARE WITH FRIENDS (disabled) | MAYBE LATER |
-| `rateApp` | Star (amber) | "Enjoying PataSkills?" | RATE THE APP | MAYBE LATER |
+| `topicComplete` | Medal (lime) | "Great Progress!" | NEXT SESSION | REDO SESSION |
+| `chapterComplete` | Medal (lime) | "Chapter Completed!" | CONTINUE | — |
+| `sessionUnlocked` | Lock (teal) | "Session Unlocked!" | START SESSION | — |
+| `keysReset` | Lock (amber) | "You have new Keys!" | UNLOCK NEXT SESSION | — |
+| `rewardUnlocked` | KeyRound (amber) | "Reward Unlocked!" | CLAIM REWARD | — |
+| `outOfKeys` | Lock (amber) | "Choose how to proceed" | CONTINUE | WAIT UNTIL TOMORROW |
+| `shareApp` | Share2 (amber) | "Share the app to keep learning" | SHARE APP | WAIT UNTIL TOMORROW |
+| `rateApp` | Star (amber) | "Rate the app to keep learning" | RATE APP | WAIT UNTIL TOMORROW |
 
 **Conditional sections:**
-- **Stats row** — Shown for `topicComplete` / `chapterComplete`. Two cards: Total XP (green) and Score (e.g. "7/10").
-- **Keys display** — `sessionUnlocked` renders the `unlock.webp` image. `keysReset` renders a large key count number next to the `key.webp` image.
+- **Stats row** — Shown for `topicComplete` / `chapterComplete`. Two cards: Total XP (green) and Score/topics-done.
+- **Out-of-keys screen** — A distinct, more complex layout with three proceed options (buy keys / subscribe / free trial timer), a reminders toggle, and a restore-account link.
 - **Countdown timer** — `outOfKeys` shows a live "Resets in M:SS mins" countdown derived from the `resetAt` timestamp. Ticks every second via `setInterval`.
-- **Reward box** — `shareApp` renders a large "1" + key icon.
 
 All titles, subtitles, and CTA labels can be overridden via props.
+
+**Note:** `iconColor` and various inline colors reference `colors.tealAccent` (theme-scoped) and `StaticColors.tealAccent` (theme-independent) interchangeably in different spots of this file — both now resolve correctly since `tealAccent` was added to `StaticColors` (see §7).
 
 ---
 
 ### 6.3 Landing
 
-#### `LandingScreen.tsx`
+#### `LandingScreen.tsx` — now a track picker
 
-The first screen users see. Vertically organized:
+The first screen users see, when they have no saved progress. Vertically organized:
 
-1. **Top section** — Large headline "Practice over 1000 highway code questions" + progress bar (single segment, gradient-filled) + "Driving theory" subtitle in teal.
+1. **Top section** — Large headline "Practice over 1000 highway code questions" + progress bar (single segment, gradient-filled, shown only once `completedTopics > 0`) + "Driving theory" subtitle in teal.
 
-2. **Middle section** — `LandingIllustration` component + page dots (currently just one dot since there's only one slide in the `SLIDES` array — the structure supports multiple slides for future expansion).
+2. **Middle section** — `LandingIllustration` component + page dots (currently just one dot since there's only one slide in the `SLIDES` array).
 
-3. **Bottom section** — Full-width "START PRACTICE" button (white background, dark text, extra bold).
+3. **Bottom section** — **Changed.** If the user has existing progress (`completedTopics > 0`), shows a single "RESUME SESSION" button (always resumes on the `'pairs'` track). Otherwise shows the **track picker** — a vertical list built from `TRACK_OPTIONS`:
 
-The `SLIDES` array is structured for potential multi-slide onboarding but currently contains only one entry.
+```typescript
+const TRACK_OPTIONS: TrackOption[] = [
+  { track: 'pairs',     label: 'Challenge yourself with pairs' },  // first item, styled as the primary CTA
+  { track: 'names',     label: 'Learn sign names' },
+  { track: 'meanings',  label: 'Learn what signs mean' },
+  { track: 'whereUsed', label: 'Learn where signs are used' },
+  { track: 'full',      label: 'Full course' },
+  { track: 'reading',   label: 'Reading mode — just browse the signs' },
+];
+```
+
+  The first option (`pairs`) renders with the bold primary-button style (`startBtn`); the rest render as secondary outlined pills (`trackBtn`). Tapping any option calls `onStart(option.track)`, which the parent (`app/index.tsx`) wires to `runDownload(track)`.
+
+  **Note:** `'reading'` was initially wired end-to-end through `app/index.tsx` → `downloadSession` → `deriveTrack` → `CardDeck`/`PlaySession`, but was missing from `TRACK_OPTIONS` — meaning Reading Mode was unreachable from the UI despite being fully functional under the hood. This has been fixed; it's now the 6th picker option.
+
+`LandingScreen` itself doesn't know anything about `deriveTrack` or session structure — it's purely a `Track` value selector.
 
 ---
 
@@ -513,11 +596,18 @@ Renders the driving-theory cover image from Supabase Storage. Builds the URL at 
 
 ### 6.4 Play
 
-#### `PlaySession.tsx` — Session Flow Orchestrator
+#### `PlaySession.tsx` — Session Flow Orchestrator (now kind-aware)
 
-The brain of the gameplay loop. Manages the **multi-session, key-gated flow** between question sets.
+The brain of the gameplay loop. Manages the **multi-session, key-gated flow** between question sets — unchanged in its core key-economy state machine, but now branches its render on session `kind`.
 
-**Flow State Machine:**
+**Props (changed):**
+| Prop | Type | Purpose |
+|------|------|---------|
+| `sessions` | `PlaySessionData[]` | Either `QuizPlaySession[]` or `ReadingPlaySession[]` (a discriminated union — see §12) |
+| `signCatalog` | `SignCatalogEntry[]?` | New — passed through to `CardDeck` (quiz mode only) so `LearnMoreSheet` can resolve rich explanations |
+| `onExit` | `() => void?` | Exit callback |
+
+**Flow State Machine (unchanged):**
 
 ```
                 ┌─────────────┐
@@ -552,21 +642,24 @@ The brain of the gameplay loop. Manages the **multi-session, key-gated flow** be
                         └──────────────┘
 ```
 
-**Key mechanics:**
+**Render branch (new):** When actually rendering the active session (the terminal `playing` state), `PlaySession` now checks `currentSession.kind`:
 
-- **Session grouping** — Questions are grouped by `pairId` into `PlaySession[]` via `groupQuestionsBySession()`. Each session is a set of questions about one sign pair.
+```tsx
+{currentSession.kind === 'reading' ? (
+  <CardDeck signs={currentSession.signs} sessionTitle={...} keyBalance={...} onSessionComplete={...} onExit={...} />
+) : (
+  <CardDeck questions={currentSession.questions} signCatalog={signCatalog} sessionTitle={...} keyBalance={...} onSessionComplete={...} onExit={...} />
+)}
+```
 
-- **Key spending** — One key is consumed when entering each session. The first session auto-spends on mount. Subsequent sessions spend on advance.
+Everything else — key spending, out-of-keys handling, session advancement, resume-from-progress, XP accumulation — is **identical regardless of track**, because `chunkIntoSessions`/`chunkSignsIntoSessions`/`groupQuestionsBySession` all normalize into the same `sessions.length`-driven flow. Reading Mode sessions report `{ correctCount: totalCount, totalAnswered: totalCount }` on completion (see `ReadingCardDeck` above) so the XP/progress math (`XP_PER_CORRECT * correctCount`) still produces a sensible number, even though there's no actual right/wrong concept in Reading Mode.
 
-- **Out-of-keys handling** — Two sub-reasons tracked:
-  - `'entry'` — User was blocked before starting the current session. On refill, spend a key and start the same session.
-  - `'advance'` — User finished a session but was blocked advancing to the next. On refill, advance the session index.
-
-- **Reset timer** — Starts only when the out-of-keys screen is actually displayed (not when balance hits 0). When the timer fires (balance refills via `useKeys` polling), the flow auto-transitions to `keysReset`.
-
-- **All complete** — When there are no more sessions, shows `topicComplete` with "All caught up!" and cumulative XP.
-
-- **Startup guard** — A `useRef` flag (`hasAttemptedStartRef`) ensures the initial key-spend effect fires exactly once, preventing multiple spends if `isOutOfKeys` toggles.
+**Other mechanics (unchanged):**
+- **Key spending** — One key consumed per session entry (first session auto-spends on mount; subsequent sessions spend on advance).
+- **Out-of-keys handling** — `'entry'` vs `'advance'` sub-reasons, as before.
+- **Reset timer** — Starts only when the out-of-keys screen actually renders.
+- **All complete** — Shows `topicComplete`/"All caught up!" with cumulative XP once `sessions` is exhausted.
+- **Resume** — On mount, jumps `sessionIndex` to `min(completedTopics, sessions.length - 1)` from local progress.
 
 ---
 
@@ -597,10 +690,12 @@ Full Material Design 3-style color palette for light mode. Includes:
 Full dark-mode counterpart. Base color is `#1A1D24`. All tokens mirror `LightColors` keys for type safety.
 
 #### Shared accents (both themes)
-`actionBlue` (#0CC8F2), `successLime` (#93F205), `dangerRed` (#F2274C), `warningOrange` (#F27127), `tealAccent` (#07B7A9), white, black.
+`actionBlue` (#0CC8F2), `successLime` (#93F205), `dangerRed` (#F2274C), `warningOrange` (#F27127), `tealAccent` (#07B7A9), white, black. These merge into both `LightColors` and `DarkColors` via `sharedAccents`, so `colors.tealAccent` (theme-scoped, from `useTheme()`) has always worked.
 
-#### `StaticColors` (theme-independent)
-A large collection of fixed colors used across both themes:
+#### `StaticColors` (theme-independent) — **fixed: `tealAccent` added**
+A large collection of fixed colors used across both themes. Several components (`Toggle.tsx`, `SessionStateScreen.tsx`) referenced `StaticColors.tealAccent` directly, but `tealAccent` had only ever been defined inside `sharedAccents` (and thus only existed on the theme-scoped `LightColors`/`DarkColors`, not on the separate `StaticColors` object) — this was a real `tsc` type error (`TS2339: Property 'tealAccent' does not exist`). Fixed by adding `tealAccent: "#07B7A9"` directly to `StaticColors`, matching the existing brand value — no visual change, just makes the existing usage type-correct.
+
+Also includes:
 - **Glass card system** — `dark` and `light` sub-objects with `bgActive`, `bgPassive`, `borderActive`, `borderPassive`, `text` for a two-layer frosted-glass card effect.
 - Achievement colors (amber, lime)
 - Timer colors (green → orange → red)
@@ -623,7 +718,7 @@ Defines all gradient configurations used throughout the app.
 **`BrandGradients`** — Named brand gradients:
 - `primaryStreakH` / `primaryStreakD` — Cyan-to-green (horizontal / diagonal)
 - `primaryQFH` — Gold-to-orange
-- `discovery` — Green (#2BD964) to teal (#07B7A9), diagonal. The primary brand gradient.
+- `discovery` — Green (#2BD964) to teal (#07B7A9), diagonal. The primary brand gradient. Used by both `QuizCardDeck`'s segment fill and `ReadingCardDeck`'s segment fill.
 
 **Theme-adaptive gradient functions:**
 - `getSheetGradient(isDark)` — Returns subtle blue wash for bottom sheets
@@ -789,48 +884,77 @@ Creates and exports a Supabase client instance using the environment variables f
 
 ---
 
-### `curriculum.ts` — Curriculum Loader
+### `curriculum.ts` — Curriculum Loader + Track Derivation (substantially expanded)
 
-**`loadRemoteCurriculum(slug)`:**
+**`Track`** (new exported type) = `'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading'`.
+
+**`FilterTrack`** (internal) = `Exclude<Track, 'full' | 'reading'>` — the four tracks that are a straight `role` filter.
+
+**`TRACK_ROLE`** (internal `Record<FilterTrack, string>`) maps each filter track to the question `role` value it selects: `pairs → 'pair'`, `names → 'name'`, `meanings → 'meaning'`, `whereUsed → 'whereUsed'`.
+
+**`TRACK_LABEL`** (internal `Record<FilterTrack, string>`) supplies the human-readable session-title prefix for each: `'Pairs'`, `'Names'`, `'Meanings'`, `'Where Used'`.
+
+**`deriveTrack(questions, signs, track = 'pairs')`** (new, exported):
+```typescript
+export function deriveTrack(
+  questions: QuizQuestion[],
+  signs: SignCatalogEntry[],
+  track: Track = 'pairs',
+): PlaySession[] {
+  if (track === 'full') return groupQuestionsBySession(questions);
+  if (track === 'reading') return chunkSignsIntoSessions(signs, 'Reading');
+  const role = TRACK_ROLE[track];
+  const filtered = questions.filter((q) => q.role === role);
+  return chunkIntoSessions(filtered, TRACK_LABEL[track]);
+}
+```
+This is the single client-side derivation point the whole feature is built around: one curriculum JSON, filtered/regrouped per track, with no separate content export per track.
+
+**`loadRemoteCurriculum(slug)`** (changed — now also returns the signs catalog):
 1. Queries `play_curricula` table for the active row matching the given slug (defaults to `'driving-theory'`)
 2. Resolves the `json_path` to a public storage URL
 3. Fetches the JSON file
-4. Validates it's a non-empty array
-5. Resolves the cover image URL if `cover_image_path` exists
-6. Returns `{ title, coverImageUrl, questions }`
+4. **Accepts either shape**: the legacy flat `QuizQuestion[]` array, or the new `{ questions: QuizQuestion[]; signs?: SignCatalogEntry[] }` object — both are handled (`questions = Array.isArray(body) ? body : body.questions`; `signs = Array.isArray(body) ? [] : (body.signs ?? [])`), so older curriculum JSON without a catalog still loads (with an empty signs array — Reading Mode would simply have no signs on that curriculum).
+5. Validates `questions` is a non-empty array (throws `'curriculum JSON was empty or malformed'` otherwise)
+6. Resolves the cover image URL if `cover_image_path` exists
+7. Returns `{ title, coverImageUrl, questions, signs }`
 
 No caching, no local fallback. Throws on any failure — error handling is the caller's responsibility.
 
 **Interface `CurriculumRow`** — DB shape: `slug`, `title`, `cover_image_path`, `json_path`.
 
-**Interface `RemoteCurriculum`** — Return shape: `title`, `coverImageUrl`, `questions: QuizQuestion[]`.
+**Interface `RemoteCurriculum`** (changed) — Return shape: `title`, `coverImageUrl`, `questions: QuizQuestion[]`, `signs: SignCatalogEntry[]`.
 
 ---
 
-### `downloadSession.ts` — Download Orchestrator
+### `downloadSession.ts` — Download Orchestrator (now track-aware)
 
-Runs the complete download pipeline triggered by "Start Practice":
+Runs the complete download pipeline triggered by starting a track from the landing picker (or an ad link).
 
-**Stages and weights:**
+**Signature (changed):** `downloadSession(track: Track = 'pairs', onProgress?) => Promise<DownloadResult>`
+
+**`DownloadResult`** (changed) = `{ sessions: PlaySession[]; signCatalog: SignCatalogEntry[] } | { error: string }`. Previously this was `{ questions: QuizQuestion[] }` — the derivation into sessions now happens inside `downloadSession` itself (via `deriveTrack`), rather than being left to the caller.
+
+**Stages and weights (unchanged):**
 
 | Stage | Weight | Action |
 |-------|--------|--------|
 | `curriculum` | 35% | `loadRemoteCurriculum()` |
 | `signs` | 35% | `loadSignAssets()` |
 | `pairs` | 20% | `loadSignPairs(assets)` |
-| `hydrating` | 10% | `hydrateQuestionsList(questions, assets, pairs)` |
+| `hydrating` | 10% | `hydrateQuestionsList(questions, assets, pairs)` + `deriveTrack(hydrated, remote.signs, track)` |
 
-Curriculum and sign assets load **in parallel** (`Promise.all`). Sign pairs depend on assets. Hydration depends on all three.
+Curriculum and sign assets load **in parallel** (`Promise.all`). Sign pairs depend on assets. Hydration depends on all three, and the new track-derivation step happens immediately after hydration, still under the `hydrating` progress stage.
 
 **Progress reporting:** Calls `onProgress` with `{ stage, fraction }` at each stage boundary. `fraction` is 0–1 cumulative.
 
-**Return type `DownloadResult`** = `{ questions: QuizQuestion[] }` on success or `{ error: string }` on failure. Never throws — all errors are caught and returned as human-readable strings.
+Never throws — all errors are caught and returned as human-readable strings in `{ error }`.
 
 ---
 
 ### `keys.ts` — Keys Economy
 
-Implements the consumable "keys" system that gates session access. State is persisted in AsyncStorage under `@play/keys`.
+Implements the consumable "keys" system that gates session access. State is persisted in AsyncStorage under `@play/keys`. **Unaffected by the tracks/reading-mode work** — a key is spent per session regardless of which track produced it.
 
 **Constants:**
 - `INITIAL_KEYS` = 4
@@ -856,6 +980,8 @@ Implements the consumable "keys" system that gates session access. State is pers
 
 ### `signs.ts` — Sign Data
 
+Unaffected by the tracks/reading-mode work. Note this is distinct from the new `SignCatalogEntry` concept in `types/quiz.ts` — this module deals with `play_signs`/`play_sign_pairs` DB tables (image asset resolution for hydrating quiz questions), while the signs *catalog* is authored content living inside the curriculum JSON.
+
 **`loadSignAssets()`:**
 1. Fetches all rows from `play_signs` table (columns: `key`, `image_path`)
 2. For each row, resolves `image_path` to a public URL via `supabase.storage.from('play-assets').getPublicUrl()`
@@ -876,7 +1002,7 @@ Implements the consumable "keys" system that gates session access. State is pers
 
 ### `useKeys.ts`
 
-A React hook wrapping `lib/keys.ts` for use in components.
+A React hook wrapping `lib/keys.ts` for use in components. Unaffected by the tracks/reading-mode work.
 
 **Returns:**
 | Field | Type | Description |
@@ -888,13 +1014,13 @@ A React hook wrapping `lib/keys.ts` for use in components.
 | `startResetTimer` | `() => Promise<void>` | Start the refill countdown |
 | `isOutOfKeys` | `boolean` | True when balance is 0 or less |
 
-**Auto-refresh:** When balance is 0 and a reset timer is active, the hook polls `getKeysState()` every 1 second via `setInterval`. This makes the refill happen automatically when `resetAt` passes, without requiring user action.
+**Auto-refresh:** When balance is 0 and a reset timer is active, the hook polls `getKeysState()` every 1 second via `setInterval`.
 
 ---
 
 ## 11. Types (`types/`)
 
-### `quiz.ts`
+### `quiz.ts` — `role` added to `BaseQuestion`; new `SignCatalogEntry`
 
 **`QuestionFormat`** — Union type:
 - `'imageChoice'` — Two images, pick one
@@ -906,7 +1032,7 @@ A React hook wrapping `lib/keys.ts` for use in components.
 
 **`QuizImageSource`** = `ImageSourcePropType | string | null | undefined`
 
-**`BaseQuestion`:**
+**`BaseQuestion`** (changed — `role` added):
 ```typescript
 {
   id: string
@@ -914,13 +1040,16 @@ A React hook wrapping `lib/keys.ts` for use in components.
   section?: string         // Human-readable section label
   difficulty?: 'easy' | 'medium' | 'hard' | string
   sequence?: number
+  role?: 'pair' | 'name' | 'meaning' | 'whereUsed'   // NEW — drives Track filtering in deriveTrack()
   format: QuestionFormat
   question: string         // The question text
   correctAnswer: number    // 0-indexed position of correct answer
-  explanation?: string     // Optional explanation text
+  explanation?: string     // Optional explanation text — now superseded by SignCatalogEntry.explanation when resolvable
   isFlagged?: boolean
 }
 ```
+
+`role` reflects each question's fixed position in the 7-question-per-pair sequence (`pair` / `name` / `meaning` / `whereUsed`, with name/meaning/whereUsed appearing twice per pair — once for sign A, once for sign B). All 322 questions in `data/questions.sample.json` currently have `role` populated (confirmed via direct inspection — zero missing).
 
 **Specialized interfaces** extend `BaseQuestion`:
 - `ImageChoiceQuestion` — adds `images: QuizImageSource[]` and `labels?: string[]`
@@ -931,20 +1060,58 @@ A React hook wrapping `lib/keys.ts` for use in components.
 
 **`OptionChoice`** — `{ id: number, label: string, text?: string, imageUrl?: QuizImageSource }`
 
+**`SignCatalogEntry`** (new interface) — the per-physical-sign content record, independent of any one question:
+```typescript
+interface SignCatalogEntry {
+  signId: string;                                    // pairId + signRef, e.g. "A1-B"
+  pairId: string;
+  signRef: 'A' | 'B';
+  name: string;
+  signType: 'regulatory' | 'warning' | 'prohibitory' | 'informational' | 'mandatory' | string;
+  meaning: string;
+  whereUsed: string;
+  explanation: string;
+  memoryTip?: string;
+  relatedSignIds?: string[];
+  image?: QuizImageSource;
+}
+```
+92 entries currently exist in `data/questions.sample.json` (46 pairs × 2 signs — confirmed via direct inspection). Consumed by `ReadingCard.tsx` (whole-catalog browsing) and `LearnMoreSheet.tsx` (single-entry lookup via `resolveSignEntry`).
+
 ---
 
 ## 12. Utilities (`utils/`)
 
-### `groupSessions.ts`
+### `groupSessions.ts` — session-shape union + two new grouping functions
 
-**`groupQuestionsBySession(questions)`:**
-- Groups a flat question array into `PlaySession[]` by `pairId` (falls back to `id` if no `pairId`)
+**`QuizPlaySession`** (new, renamed from the old bare session shape) — `{ kind: 'quiz'; pairId: string; title: string; questions: QuizQuestion[] }`.
+
+**`ReadingPlaySession`** (new) — `{ kind: 'reading'; pairId: string; title: string; signs: SignCatalogEntry[] }`.
+
+**`PlaySession`** (changed) = `QuizPlaySession | ReadingPlaySession` — now a discriminated union on `kind`. This is what lets `PlaySession.tsx` (the component) branch cleanly on `currentSession.kind` without type-casting.
+
+**`groupQuestionsBySession(questions)`** (unchanged behavior, updated return type):
+- Groups a flat question array into `QuizPlaySession[]` by `pairId` (falls back to `id` if no `pairId`)
 - Preserves insertion order (first-seen pairId determines session order)
-- Each `PlaySession` has: `pairId`, `title` (from `section` field of first question), `questions`
+- Each session has: `kind: 'quiz'`, `pairId`, `title` (from `section` field of first question), `questions`
+- Used for the `'full'` track only.
+
+**`chunkIntoSessions(questions, label)`** (new):
+- Takes an already role-filtered, ordered question list (e.g. only `role === 'pair'` questions) and slices it into groups of 7, since filtering by role breaks the natural 7-per-`pairId` grouping.
+- Each chunk becomes `{ kind: 'quiz', pairId: '${label}-set-${n}', title: '${label} — Set ${n}', questions: chunk }`.
+- Used for the `pairs` / `names` / `meanings` / `whereUsed` tracks.
+
+**`chunkSignsIntoSessions(signs, label)`** (new):
+- Same slicing logic as `chunkIntoSessions`, but over `SignCatalogEntry[]` instead of questions, and produces `ReadingPlaySession[]` (`kind: 'reading'`, `signs: chunk` instead of `questions: chunk`).
+- Used for the `reading` track (called as `chunkSignsIntoSessions(signs, 'Reading')` from `deriveTrack`).
+
+All three grouping functions default to **7 items per session**, matching the feature spec's success criterion that every track produces sessions of 7.
 
 ---
 
 ### `hydrateQuestions.ts`
+
+Unaffected by the tracks/reading-mode work — still operates purely on `QuizQuestion[]`, before `deriveTrack` runs.
 
 **`hydrateQuestion(question, assets, pairs)`:**
 
@@ -964,6 +1131,8 @@ Resolution logic (in priority order):
 ---
 
 ### `shuffleAnswers.ts`
+
+Unaffected by the tracks/reading-mode work — used only by `QuizCardDeck`, never by `ReadingCardDeck` (there's nothing to shuffle when there's no answer).
 
 **`shuffleAnswers(question)`:**
 
@@ -1028,6 +1197,18 @@ Supabase Storage sets cache headers at upload time (default 1 hour), and the das
 
 Uses a 0.5 confidence threshold — anything below is flagged for manual review.
 
+### `build-signs-catalog.mjs` (new)
+
+**Purpose:** Generates the 92-entry `SignCatalogEntry[]` catalog (§11) from the existing per-pair `name`/`meaning`/`whereUsed` questions already in the curriculum JSON, and restructures `data/questions.sample.json` from a flat question array into `{ questions, signs }`.
+
+**Process (reconstructed from the resulting data/output — the original implementation session is not preserved in this repo beyond the script file itself):**
+1. Reads the existing flat question array.
+2. For each of the 92 physical signs (46 pairs × signRef A/B), pulls together the corresponding `name` / `meaning` / `whereUsed` question text and correct answers.
+3. Heuristically classifies `signType` (regulatory / warning / prohibitory / informational / mandatory) from question wording.
+4. Synthesizes `explanation` and `memoryTip` text per sign.
+5. Cross-links `relatedSignIds` (each sign's own pair partner).
+6. Writes the resulting `signs` array alongside the original `questions` array (now also tagged with `role`) into `data/questions.sample.json`.
+
 ### `output/`
 
 Contains generated artifacts:
@@ -1070,6 +1251,8 @@ Row-level security is enabled with a public read policy.
 
 Uses `ON CONFLICT DO UPDATE` for idempotent re-runs.
 
+**Note:** This table's 23 seeded pairs is the DB-level `play_sign_pairs` table used for **image resolution** (`lib/signs.ts`), a separate concern from the curriculum JSON's 46 `pairId` groups / 92-entry signs catalog (`types/quiz.ts` `SignCatalogEntry`, authored content). Both are keyed similarly (`pair_id` / `pairId`) but serve different layers of the stack — don't conflate the two when tracing data flow.
+
 ---
 
 ## 15. Assets (`assets/`)
@@ -1107,7 +1290,24 @@ WOFF2 files are generated by glyphhanger + fonttools, stripped to ASCII range on
 
 ---
 
-## 16. Miscellaneous Files
+## 16. Docs (`docs/`)
+
+### `learning-tracks-and-reading-mode.md`
+
+The feature spec this update implements. Documents, in plain English and technical detail:
+- **The problem** — every learner got the same fixed-order experience; pair-comparison questions convert better but were buried as 1-of-7 questions per session.
+- **Learning Tracks** — Pairs (default) / Names / Meanings / Where Used / Full course, each linkable directly via `?track=`.
+- **Reading Mode** — a non-quiz browse mode built on the same catalog content as a richer Learn More sheet.
+- **The data-shape insight** that makes client-side derivation possible: every `pairId` group has exactly 7 questions in a fixed role order (pair, name-B, meaning-B, whereUsed-B, name-A, meaning-A, whereUsed-A) — meaning tracks reduce to a `role` filter, no text-matching required.
+- The target JSON schema (`role` field + the `SignCatalogEntry` catalog).
+- An 8-step sequential implementation plan.
+- Success criteria and the affected-files table.
+
+**Status as of this update:** all 8 implementation steps are complete and type-checked clean (`npx tsc --noEmit` exits 0 from repo root, no lint tooling configured to run). Every success criterion in the spec's §6 is met, including the `reading` track being reachable from `LandingScreen`'s picker (initially missing, fixed as part of this pass).
+
+---
+
+## 17. Miscellaneous Files
 
 ### `pataskills-swipe-demo.html`
 
@@ -1134,7 +1334,7 @@ MIT License, originally from Expo's template.
 
 ---
 
-## 17. Data Flow & Architecture
+## 18. Data Flow & Architecture
 
 ### Database Schema (Supabase)
 
@@ -1152,51 +1352,62 @@ MIT License, originally from Expo's template.
 Storage Bucket: play-assets/
 ├── curricula/
 │   ├── driving.webp        (cover image)
-│   └── questions.json      (curriculum JSON)
+│   └── questions.json      (curriculum JSON — { questions: [...322, tagged with role], signs: [...92 SignCatalogEntry] })
 └── signs/
     ├── give_way.webp
     ├── stop.webp
     └── ... (60+ sign images)
 ```
 
-### Session Download Pipeline
+### Session Download Pipeline (now track-aware)
 
 ```
-User taps "Start Practice"
+User picks a track on LandingScreen (or arrives via ?track= link)
          │
          ▼
-┌─ downloadSession() ─────────────────────────────────┐
-│                                                      │
-│  ┌──────────────────┐  ┌────────────────────┐       │
-│  │loadRemoteCurriculum│ │ loadSignAssets()   │       │
-│  │                  │  │ (play_signs → URLs) │       │
-│  │ play_curricula → │  └────────┬───────────┘       │
-│  │ fetch JSON       │           │                    │
-│  └────────┬─────────┘           │                    │
-│           │                     │                    │
-│           └──────┬──────────────┘                    │
-│                  │ (parallel)                        │
-│                  ▼                                   │
-│         ┌────────────────────┐                       │
-│         │ loadSignPairs()    │                       │
-│         │ (play_sign_pairs   │                       │
-│         │  + assets map)     │                       │
-│         └────────┬───────────┘                       │
-│                  │                                   │
-│                  ▼                                   │
-│         ┌────────────────────┐                       │
-│         │hydrateQuestionsList│                       │
-│         │ (replace sign keys │                       │
-│         │  with image URLs)  │                       │
-│         └────────┬───────────┘                       │
-│                  │                                   │
-└──────────────────┼───────────────────────────────────┘
+┌─ downloadSession(track) ────────────────────────────────────────┐
+│                                                                  │
+│  ┌──────────────────┐  ┌────────────────────┐                   │
+│  │loadRemoteCurriculum│ │ loadSignAssets()   │                   │
+│  │                  │  │ (play_signs → URLs) │                   │
+│  │ play_curricula → │  └────────┬───────────┘                   │
+│  │ fetch { questions,│           │                                │
+│  │   signs } JSON    │           │                                │
+│  └────────┬─────────┘           │                                │
+│           │                     │                                │
+│           └──────┬──────────────┘                                │
+│                  │ (parallel)                                    │
+│                  ▼                                               │
+│         ┌────────────────────┐                                   │
+│         │ loadSignPairs()    │                                   │
+│         │ (play_sign_pairs   │                                   │
+│         │  + assets map)     │                                   │
+│         └────────┬───────────┘                                   │
+│                  │                                                │
+│                  ▼                                                │
+│         ┌────────────────────┐                                   │
+│         │hydrateQuestionsList│  (unchanged — still per-question)  │
+│         └────────┬───────────┘                                   │
+│                  │                                                │
+│                  ▼                                                │
+│         ┌────────────────────────────────────────┐               │
+│         │ deriveTrack(hydrated, remote.signs,     │  NEW          │
+│         │   track)                                │               │
+│         │                                          │               │
+│         │  'full'    → groupQuestionsBySession()   │               │
+│         │  'reading' → chunkSignsIntoSessions()     │               │
+│         │  else      → filter by role, then         │               │
+│         │              chunkIntoSessions()           │               │
+│         └────────┬───────────────────────────────┘               │
+│                  │                                                │
+└──────────────────┼────────────────────────────────────────────────┘
                    │
                    ▼
-          QuizQuestion[] ready for CardDeck
+     { sessions: PlaySession[], signCatalog: SignCatalogEntry[] }
+     ready for PlaySession → CardDeck (QuizCardDeck or ReadingCardDeck)
 ```
 
-### Keys Economy Flow
+### Keys Economy Flow (unchanged — track-agnostic)
 
 ```
 App Start: AsyncStorage → KeysState { balance: 4, resetAt: null }
@@ -1205,7 +1416,7 @@ App Start: AsyncStorage → KeysState { balance: 4, resetAt: null }
          ┌──────────────┐
          │ Enter Session │ ← spendKey() → balance: 3
          └──────┬───────┘
-                │ (complete session)
+                │ (complete session — quiz or reading, same accounting)
                 ▼
          ┌──────────────┐
          │ Next Session  │ ← spendKey() → balance: 2, 1, 0
@@ -1226,29 +1437,45 @@ App Start: AsyncStorage → KeysState { balance: 4, resetAt: null }
          └──────────────────┘
 ```
 
-### Component Hierarchy
+### Component Hierarchy (updated)
 
 ```
 RootLayout
 └── ThemeProvider
     └── RootLayoutInner
         └── Stack
-            └── PlayEntry (index.tsx)
-                ├── LandingScreen
+            └── PlayEntry (index.tsx)                    — reads ?track=, ?resume=
+                ├── LandingScreen                          — track picker (6 options)
                 │   └── LandingIllustration
                 ├── DownloadingScreen
                 │   └── BouncingDots
-                └── PlaySession
-                    ├── CardDeck
-                    │   ├── TwoImageCard (×N)
-                    │   │   ├── RoadSignGraphic
-                    │   │   └── FlagIcon
-                    │   ├── CheckButton
-                    │   ├── LearnMoreSheet
-                    │   ├── FeedbackSheet
-                    │   └── QuitConfirmSheet
+                └── PlaySession                             — receives sessions + signCatalog
+                    ├── CardDeck  (router)
+                    │   ├── QuizCardDeck  (kind === 'quiz')
+                    │   │   ├── TwoImageCard (×N)
+                    │   │   │   ├── RoadSignGraphic
+                    │   │   │   └── FlagIcon
+                    │   │   ├── CheckButton (label="CHECK")
+                    │   │   ├── LearnMoreSheet  ← signCatalog
+                    │   │   ├── FeedbackSheet
+                    │   │   └── QuitConfirmSheet
+                    │   └── ReadingCardDeck  (kind === 'reading')
+                    │       ├── ReadingCard (×1 visible at a time)
+                    │       ├── CheckButton (label="GOT IT")
+                    │       └── QuitConfirmSheet
                     └── SessionStateScreen (various kinds)
 ```
+
+### Track Derivation Summary
+
+| Track | Filter | Grouping fn | Session `kind` | Session content |
+|---|---|---|---|---|
+| `pairs` (default) | `role === 'pair'` | `chunkIntoSessions` | `quiz` | 7 pair-comparison questions per session |
+| `names` | `role === 'name'` | `chunkIntoSessions` | `quiz` | 7 "what is this sign called" questions per session |
+| `meanings` | `role === 'meaning'` | `chunkIntoSessions` | `quiz` | 7 "what does this sign mean" questions per session |
+| `whereUsed` | `role === 'whereUsed'` | `chunkIntoSessions` | `quiz` | 7 "where is this sign used" questions per session |
+| `full` | none (all roles) | `groupQuestionsBySession` | `quiz` | 7 questions per session, grouped by `pairId` (today's original experience, byte-for-byte unchanged) |
+| `reading` | n/a (signs, not questions) | `chunkSignsIntoSessions` | `reading` | 7 signs catalog entries per session, browsed via `ReadingCard`, no quiz |
 
 ---
 

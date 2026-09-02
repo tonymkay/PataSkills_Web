@@ -1,7 +1,49 @@
 import { supabase } from './supabase';
-import { QuizQuestion } from '@/types/quiz';
+import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
+import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, PlaySession } from '@/utils/groupSessions';
 
 const DEFAULT_SLUG = 'driving-theory';
+
+export type Track = 'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading';
+
+type FilterTrack = Exclude<Track, 'full' | 'reading'>;
+
+const TRACK_ROLE: Record<FilterTrack, string> = {
+  pairs: 'pair',
+  names: 'name',
+  meanings: 'meaning',
+  whereUsed: 'whereUsed',
+};
+
+const TRACK_LABEL: Record<FilterTrack, string> = {
+  pairs: 'Pairs',
+  names: 'Names',
+  meanings: 'Meanings',
+  whereUsed: 'Where Used',
+};
+
+/**
+ * Filters the flat question list by role, then builds sessions for the
+ * given track. 'full' groups by pairId; 'reading' builds sessions directly
+ * from the signs catalog instead of from questions at all.
+ */
+export function deriveTrack(
+  questions: QuizQuestion[],
+  signs: SignCatalogEntry[],
+  track: Track = 'pairs',
+): PlaySession[] {
+  if (track === 'full') {
+    return groupQuestionsBySession(questions);
+  }
+
+  if (track === 'reading') {
+    return chunkSignsIntoSessions(signs, 'Reading');
+  }
+
+  const role = TRACK_ROLE[track];
+  const filtered = questions.filter((q) => q.role === role);
+  return chunkIntoSessions(filtered, TRACK_LABEL[track]);
+}
 
 interface CurriculumRow {
   slug: string;
@@ -14,12 +56,17 @@ export interface RemoteCurriculum {
   title: string;
   coverImageUrl: string | null;
   questions: QuizQuestion[];
+  signs: SignCatalogEntry[];
 }
 
 /**
  * Fetches the active curriculum row + its JSON file from Supabase Storage.
  * DB-only: no cache, no local fallback. Throws on any failure — the caller
  * is responsible for surfacing that as a failed download step.
+ *
+ * The JSON file is either the legacy flat `QuizQuestion[]` shape, or the
+ * newer `{ questions, signs }` shape carrying the signs catalog alongside
+ * the questions — both are accepted.
  */
 export async function loadRemoteCurriculum(
   slug: string = DEFAULT_SLUG,
@@ -39,7 +86,10 @@ export async function loadRemoteCurriculum(
 
   const res = await fetch(jsonPub.publicUrl);
   if (!res.ok) throw new Error(`curriculum fetch failed: ${res.status}`);
-  const questions = (await res.json()) as QuizQuestion[];
+  const body = (await res.json()) as QuizQuestion[] | { questions: QuizQuestion[]; signs?: SignCatalogEntry[] };
+
+  const questions = Array.isArray(body) ? body : body.questions;
+  const signs = Array.isArray(body) ? [] : (body.signs ?? []);
   if (!Array.isArray(questions) || questions.length === 0) {
     throw new Error('curriculum JSON was empty or malformed');
   }
@@ -48,5 +98,5 @@ export async function loadRemoteCurriculum(
     ? supabase.storage.from('play-assets').getPublicUrl(row.cover_image_path).data?.publicUrl ?? null
     : null;
 
-  return { title: row.title, coverImageUrl, questions };
+  return { title: row.title, coverImageUrl, questions, signs };
 }

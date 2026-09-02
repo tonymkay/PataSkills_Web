@@ -351,6 +351,9 @@ export const StaticColors = {
   achievementAmberBg: "rgba(245,158,11,0.15)" as const,
   successLime: ACCENT_LIME,
 
+  /** Brand teal (both themes) — pinned accent, matches sharedAccents.tealAccent. */
+  tealAccent: "#07B7A9" as const,
+
   // Streak-run accent art (skill check / review / lesson complete / out-of-keys).
   runPurple: "#A855F7" as const,
   runPurpleDim: "#C084FC" as const,

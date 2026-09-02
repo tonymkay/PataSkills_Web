@@ -1,7 +1,8 @@
-import { QuizQuestion } from '@/types/quiz';
-import { loadRemoteCurriculum } from './curriculum';
+import { loadRemoteCurriculum, deriveTrack, Track } from './curriculum';
 import { loadSignAssets, loadSignPairs } from './signs';
 import { hydrateQuestionsList } from '@/utils/hydrateQuestions';
+import { PlaySession } from '@/utils/groupSessions';
+import { SignCatalogEntry } from '@/types/quiz';
 
 export type DownloadStage = 'curriculum' | 'signs' | 'pairs' | 'hydrating';
 
@@ -12,7 +13,7 @@ export interface DownloadProgress {
 }
 
 export type DownloadResult =
-  | { questions: QuizQuestion[] }
+  | { sessions: PlaySession[]; signCatalog: SignCatalogEntry[] }
   | { error: string };
 
 const STAGE_WEIGHT: Record<DownloadStage, number> = {
@@ -40,6 +41,7 @@ function fractionUpTo(stage: DownloadStage): number {
  * a human-readable error, never throws.
  */
 export async function downloadSession(
+  track: Track = 'pairs',
   onProgress?: (progress: DownloadProgress) => void,
 ): Promise<DownloadResult> {
   try {
@@ -56,9 +58,10 @@ export async function downloadSession(
 
     onProgress?.({ stage: 'hydrating', fraction: fractionUpTo('hydrating') });
     const hydrated = hydrateQuestionsList(remote.questions, assets, pairs);
+    const sessions = deriveTrack(hydrated, remote.signs, track);
 
     onProgress?.({ stage: 'hydrating', fraction: 1 });
-    return { questions: hydrated };
+    return { sessions, signCatalog: remote.signs };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Something went wrong downloading the session.';
     return { error: message };

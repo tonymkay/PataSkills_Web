@@ -8,6 +8,7 @@ import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
 import { getLocalProgress } from '@/lib/progress';
+import { Track } from '@/lib/curriculum';
 
 export interface LandingSlide {
   title: string;
@@ -18,8 +19,22 @@ const SLIDES: LandingSlide[] = [
   { title: 'Practice over 1000\nhighway code\nquestions', subtitle: 'Driving theory' },
 ];
 
+interface TrackOption {
+  track: Track;
+  label: string;
+}
+
+const TRACK_OPTIONS: TrackOption[] = [
+  { track: 'pairs', label: 'Challenge yourself with pairs' },
+  { track: 'names', label: 'Learn sign names' },
+  { track: 'meanings', label: 'Learn what signs mean' },
+  { track: 'whereUsed', label: 'Learn where signs are used' },
+  { track: 'full', label: 'Full course' },
+  { track: 'reading', label: 'Reading mode — just browse the signs' },
+];
+
 interface LandingScreenProps {
-  onStart: () => void;
+  onStart: (track: Track) => void;
 }
 
 export function LandingScreen({ onStart }: LandingScreenProps) {
@@ -50,7 +65,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   const handleRestoreSuccess = (result: RestoreResult) => {
     refreshProgress();
     setLinkedEmail(result.email);
-    onStart();
+    onStart('pairs');
   };
 
   const progressFraction = totalTopics > 0 ? completedTopics / totalTopics : 0;
@@ -116,17 +131,34 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
 
       {/* 3. Bottom CTAs */}
       <View style={styles.bottom}>
-        <Pressable
-          onPress={onStart}
-          style={({ pressed }) => [
-            styles.startBtn,
-            pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-          ]}
-        >
-          <Text style={styles.startBtnText}>
-            {completedTopics > 0 ? 'RESUME SESSION' : 'START PRACTICE'}
-          </Text>
-        </Pressable>
+        {completedTopics > 0 ? (
+          <Pressable
+            onPress={() => onStart('pairs')}
+            style={({ pressed }) => [
+              styles.startBtn,
+              pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+            ]}
+          >
+            <Text style={styles.startBtnText}>RESUME SESSION</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.trackList}>
+            {TRACK_OPTIONS.map((option, i) => (
+              <Pressable
+                key={option.track}
+                onPress={() => onStart(option.track)}
+                style={({ pressed }) => [
+                  i === 0 ? styles.startBtn : styles.trackBtn,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                ]}
+              >
+                <Text style={i === 0 ? styles.startBtnText : styles.trackBtnText}>
+                  {i === 0 ? option.label.toUpperCase() : option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* Existing user, login link */}
         <Pressable
@@ -221,6 +253,24 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.extraBold,
     fontSize: 18,
     letterSpacing: 0.2,
+  },
+  trackList: {
+    width: '100%',
+    gap: Spacing.sm,
+  },
+  trackBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trackBtnText: {
+    color: '#E5E7EB',
+    fontFamily: FontFamily.semiBold,
+    fontSize: 15,
   },
   restoreLinkWrap: {
     marginTop: Spacing.md,

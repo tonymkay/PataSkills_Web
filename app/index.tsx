@@ -6,58 +6,74 @@ import { useTheme } from '@/theme/ThemeContext';
 import { PlaySession } from '@/components/play/PlaySession';
 import { LandingScreen } from '@/components/landing/LandingScreen';
 import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
-import { QuizQuestion } from '@/types/quiz';
 import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
+import { Track } from '@/lib/curriculum';
+import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
+import { SignCatalogEntry } from '@/types/quiz';
 
 type Stage = 'landing' | 'downloading' | 'session';
 
+const VALID_TRACKS: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading'];
+
+function parseTrack(value?: string): Track | null {
+  return VALID_TRACKS.includes(value as Track) ? (value as Track) : null;
+}
+
 export default function PlayEntry() {
   const { colors } = useTheme();
-  const params = useLocalSearchParams<{ resume?: string }>();
+  const params = useLocalSearchParams<{ resume?: string; track?: string }>();
+  const urlTrack = parseTrack(params.track);
   const [stage, setStage] = useState<Stage>('landing');
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [sessions, setSessions] = useState<PlaySessionData[]>([]);
+  const [signCatalog, setSignCatalog] = useState<SignCatalogEntry[]>([]);
 
-  const runDownload = useCallback(async () => {
+  const runDownload = useCallback(async (track: Track = 'pairs') => {
     setStage('downloading');
     setError(null);
     setProgress(null);
-    const result = await downloadSession((p) => setProgress(p));
+    const result = await downloadSession(track, (p) => setProgress(p));
     if ('error' in result) {
       setError(result.error);
       return;
     }
-    setQuestions(result.questions);
+    setSessions(result.sessions);
+    setSignCatalog(result.signCatalog);
     setStage('session');
   }, []);
 
-  const handleStart = useCallback(() => {
-    void runDownload();
-  }, [runDownload]);
+  const handleStart = useCallback(
+    (track: Track) => {
+      void runDownload(track);
+    },
+    [runDownload],
+  );
 
   const handleRetry = useCallback(() => {
-    void runDownload();
-  }, [runDownload]);
+    void runDownload(urlTrack ?? 'pairs');
+  }, [runDownload, urlTrack]);
 
   const handleExit = useCallback(() => {
     setStage('landing');
-    setQuestions([]);
+    setSessions([]);
+    setSignCatalog([]);
     setError(null);
     setProgress(null);
   }, []);
 
-  // Auto-resume session if returning from successful payment
+  // Auto-start: resume from payment, or an ad link carrying a track param
   useEffect(() => {
-    if (params.resume === 'true') {
-      void runDownload();
+    if (params.resume === 'true' || urlTrack) {
+      void runDownload(urlTrack ?? 'pairs');
     }
-  }, [params.resume, runDownload]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#14171C' }]}>
       {stage === 'session' ? (
-        <PlaySession questions={questions} onExit={handleExit} />
+        <PlaySession sessions={sessions} signCatalog={signCatalog} onExit={handleExit} />
       ) : stage === 'downloading' ? (
         <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
       ) : (

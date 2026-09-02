@@ -23,7 +23,7 @@ import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing, Radius } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
 import { BrandGradients, getSheetGradient } from '@/constants/gradients';
-import { QuizQuestion } from '@/types/quiz';
+import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -31,10 +31,33 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 interface LearnMoreSheetProps {
   visible: boolean;
   question: QuizQuestion | null;
+  signCatalog?: SignCatalogEntry[];
   onClose: () => void;
 }
 
-export function LearnMoreSheet({ visible, question, onClose }: LearnMoreSheetProps) {
+/**
+ * Looks up the catalog entry for a question's correct answer via
+ * pairId + signRef. Falls back to inferring signRef from correctAnswer
+ * (0 -> 'A', 1 -> 'B') for twoImageChoice/imageChoice questions that
+ * don't carry an explicit signRef.
+ */
+function resolveSignEntry(
+  question: QuizQuestion,
+  catalog: SignCatalogEntry[],
+): SignCatalogEntry | undefined {
+  if (!question.pairId) return undefined;
+  const candidates = catalog.filter((s) => s.pairId === question.pairId);
+  if (candidates.length === 0) return undefined;
+
+  if (question.signRef) {
+    return candidates.find((s) => s.signRef === question.signRef) ?? candidates[0];
+  }
+
+  const inferredRef = question.correctAnswer === 1 ? 'B' : 'A';
+  return candidates.find((s) => s.signRef === inferredRef) ?? candidates[0];
+}
+
+export function LearnMoreSheet({ visible, question, signCatalog, onClose }: LearnMoreSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -93,7 +116,12 @@ export function LearnMoreSheet({ visible, question, onClose }: LearnMoreSheetPro
     correctAnswerDisplay = `Option ${question.correctAnswer + 1}`;
   }
 
+  // Prefer the signs catalog entry (rich, hand-authored explanation) over
+  // the question's own explanation field, and only fall back to the
+  // generic templated sentence when neither is available.
+  const catalogEntry = signCatalog ? resolveSignEntry(question, signCatalog) : undefined;
   const explanationText =
+    catalogEntry?.explanation ||
     question.explanation ||
     `The correct answer is ${correctAnswerDisplay}. This regulation applies to maintain safe road traffic priority and awareness in this section.`;
 

@@ -16,6 +16,7 @@ export interface BaseQuestion {
   section?: string;
   difficulty?: 'easy' | 'medium' | 'hard' | string;
   sequence?: number;
+  role?: 'pair' | 'name' | 'meaning' | 'whereUsed';
   format: QuestionFormat;
   question: string;
   correctAnswer: number; // 0-indexed
@@ -54,4 +55,18 @@ export interface OptionChoice {
   label: string;
   text?: string;
   imageUrl?: QuizImageSource;
+}
+
+export interface SignCatalogEntry {
+  signId: string;
+  pairId: string;
+  signRef: 'A' | 'B';
+  name: string;
+  signType: 'regulatory' | 'warning' | 'prohibitory' | 'informational' | 'mandatory' | string;
+  meaning: string;
+  whereUsed: string;
+  explanation: string;
+  memoryTip?: string;
+  relatedSignIds?: string[];
+  image?: QuizImageSource;
 }

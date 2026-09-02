@@ -294,7 +294,7 @@ export function SessionStateScreen({
                   />
                   <View style={styles.proceedCardTextWrap}>
                     <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                      Buy one time keys
+                      Buy one-time keys
                     </Text>
                     <Text
                       style={[
@@ -536,17 +536,21 @@ export function SessionStateScreen({
               <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]}>TOTAL XP</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.surfaceContainerLow }]}>
-              <Text style={[styles.statValue, { color: colors.onSurface }]}>
+              <Text style={styles.statValue}>
                 {(() => {
                   const text = progressText || scoreText;
                   const slashIndex = text.indexOf('/');
-                  if (slashIndex === -1) return text;
+                  if (slashIndex === -1) {
+                    return <Text style={{ color: colors.onSurface }}>{text}</Text>;
+                  }
                   return (
                     <>
-                      <Text style={{ color: StaticColors.achievementAmber }}>
+                      <Text style={[styles.statValueMain, { color: StaticColors.achievementAmber }]}>
                         {text.slice(0, slashIndex)}
                       </Text>
-                      {text.slice(slashIndex)}
+                      <Text style={[styles.statValueSub, { color: colors.onSurfaceVariant }]}>
+                        {text.slice(slashIndex)}
+                      </Text>
                     </>
                   );
                 })()}
@@ -801,6 +805,17 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.extraBold,
     fontSize: 36,
     lineHeight: 40,
+  },
+  statValueMain: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 36,
+    lineHeight: 40,
+  },
+  statValueSub: {
+    fontFamily: FontFamily.bold,
+    fontSize: 20,
+    lineHeight: 24,
+    opacity: 0.6,
   },
   statLabel: {
     fontFamily: FontFamily.bold,

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/theme/ThemeContext';
@@ -6,8 +6,8 @@ import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
 import { BouncingDots } from '@/components/feedback/DownloadingScreen';
 import { useKeys } from '@/hooks/useKeys';
-import { groupQuestionsBySession } from '@/utils/groupSessions';
-import { QuizQuestion } from '@/types/quiz';
+import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
+import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted } from '@/lib/progress';
 
 const XP_PER_CORRECT = 10;
@@ -22,14 +22,14 @@ interface SessionStats {
 }
 
 interface PlaySessionProps {
-  questions: QuizQuestion[];
+  sessions: PlaySessionData[];
+  signCatalog?: SignCatalogEntry[];
   onExit?: () => void;
 }
 
-export function PlaySession({ questions, onExit }: PlaySessionProps) {
+export function PlaySession({ sessions, signCatalog, onExit }: PlaySessionProps) {
   const { colors } = useTheme();
   const isFocused = useIsFocused();
-  const sessions = useMemo(() => groupQuestionsBySession(questions), [questions]);
   const {
     balance,
     isPremium,
@@ -255,14 +255,26 @@ export function PlaySession({ questions, onExit }: PlaySessionProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CardDeck
-        key={`session-${sessionIndex}`}
-        questions={currentSession.questions}
-        sessionTitle={currentSession.title}
-        keyBalance={isPremium ? 999999 : (balance ?? 0)}
-        onSessionComplete={handleSessionComplete}
-        onExit={onExit}
-      />
+      {currentSession.kind === 'reading' ? (
+        <CardDeck
+          key={`session-${sessionIndex}`}
+          signs={currentSession.signs}
+          sessionTitle={currentSession.title}
+          keyBalance={isPremium ? 999999 : (balance ?? 0)}
+          onSessionComplete={handleSessionComplete}
+          onExit={onExit}
+        />
+      ) : (
+        <CardDeck
+          key={`session-${sessionIndex}`}
+          questions={currentSession.questions}
+          signCatalog={signCatalog}
+          sessionTitle={currentSession.title}
+          keyBalance={isPremium ? 999999 : (balance ?? 0)}
+          onSessionComplete={handleSessionComplete}
+          onExit={onExit}
+        />
+      )}
     </View>
   );
 }

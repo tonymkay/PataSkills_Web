@@ -16,9 +16,10 @@ import { useTheme } from '@/theme/ThemeContext';
 import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing } from '@/constants/spacing';
 import { BrandGradients } from '@/constants/gradients';
-import { QuizQuestion } from '@/types/quiz';
+import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 import { shuffleAnswers } from '@/utils/shuffleAnswers';
 import { TwoImageCard } from '@/components/cards/TwoImageCard';
+import { ReadingCard } from '@/components/cards/ReadingCard';
 import { CheckButton, FeedbackState } from '@/components/feedback/CheckButton';
 import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
 import { FeedbackSheet, FeedbackSheetState } from '@/components/feedback/FeedbackSheet';
@@ -31,7 +32,11 @@ const GAP = 16;
 const DURATION = 320;
 
 interface CardDeckProps {
-  questions: QuizQuestion[];
+  /** Reading-mode sessions pass signs instead of questions. */
+  questions?: QuizQuestion[];
+  signs?: SignCatalogEntry[];
+  /** Full signs catalog, for LearnMoreSheet's pairId/signRef lookup in quiz mode. */
+  signCatalog?: SignCatalogEntry[];
   sessionTitle?: string;
   keyBalance?: number;
   onSessionComplete?: (stats: { totalAnswered: number; correctCount: number }) => void;
@@ -40,15 +45,130 @@ interface CardDeckProps {
   onExit?: () => void;
 }
 
-export function CardDeck({
-  questions: initialQuestions,
+export function CardDeck(props: CardDeckProps) {
+  if (props.signs && props.signs.length > 0) {
+    return <ReadingCardDeck {...props} signs={props.signs} />;
+  }
+  return <QuizCardDeck {...props} questions={props.questions ?? []} />;
+}
+
+/**
+ * Lightweight reading-mode branch: no answers, no Check/feedback flow —
+ * just the same topbar/progress chrome with a "Got it" advance per card.
+ */
+function ReadingCardDeck({
+  signs,
   sessionTitle,
   keyBalance,
   onSessionComplete,
   onFinish,
   onClose,
   onExit,
-}: CardDeckProps) {
+}: CardDeckProps & { signs: SignCatalogEntry[] }) {
+  const { colors, mode } = useTheme();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [quitOpen, setQuitOpen] = useState(false);
+  const totalCount = signs.length;
+  const currentSign = signs[currentIndex] || null;
+  const isFinished = currentIndex >= signs.length;
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setQuitOpen(true);
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
+
+  const handleNext = useCallback(() => {
+    const nextIndex = currentIndex + 1;
+    if (nextIndex >= signs.length) {
+      const stats = { totalAnswered: totalCount, correctCount: totalCount };
+      onSessionComplete?.(stats);
+      onFinish?.(stats);
+    }
+    setCurrentIndex(nextIndex);
+  }, [currentIndex, signs.length, totalCount, onSessionComplete, onFinish]);
+
+  if (isFinished || !currentSign) {
+    return null;
+  }
+
+  const segmentCount = Math.min(totalCount, 8);
+  const filledSegments = Math.round((currentIndex / totalCount) * segmentCount);
+
+  return (
+    <View style={styles.deckContainer}>
+      <View style={styles.topbar}>
+        <Pressable onPress={() => setQuitOpen(true)} hitSlop={12} style={styles.iconButton}>
+          <Ionicons name="close" size={24} color={colors.onSurface} />
+        </Pressable>
+
+        <View style={styles.segmentsRow}>
+          {Array.from({ length: segmentCount }).map((_, index) => {
+            const isDone = index < filledSegments;
+            return (
+              <View
+                key={index}
+                style={[styles.segmentPill, { backgroundColor: mode === 'dark' ? '#2A2E38' : '#E2E8F0' }]}
+              >
+                {isDone && (
+                  <LinearGradient
+                    colors={BrandGradients.discovery.colors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.segmentFill}
+                  />
+                )}
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.keyBadge}>
+          <Text style={[styles.keyCount, { color: colors.onSurface }]}>
+            {keyBalance !== undefined ? (keyBalance >= 99999 ? '∞' : keyBalance) : '3'}
+          </Text>
+          <Image source={require('@/assets/premium/key.webp')} style={styles.keyIcon} resizeMode="contain" />
+        </View>
+      </View>
+
+      <View style={styles.cardViewport}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.readingScrollContent}>
+          <ReadingCard key={currentSign.signId} sign={currentSign} />
+        </ScrollView>
+      </View>
+
+      <View style={styles.controlsArea}>
+        <CheckButton enabled feedbackState="idle" label="GOT IT" onPress={handleNext} />
+        <Text style={[Typography.bodySmall, styles.hintText, { color: colors.onSurfaceVariant }]}>
+          {currentIndex + 1}/{totalCount} signs
+        </Text>
+      </View>
+
+      <QuitConfirmSheet
+        visible={quitOpen}
+        onKeepPlaying={() => setQuitOpen(false)}
+        onQuit={() => {
+          setQuitOpen(false);
+          onClose?.();
+          onExit?.();
+        }}
+      />
+    </View>
+  );
+}
+
+function QuizCardDeck({
+  questions: initialQuestions,
+  signCatalog,
+  sessionTitle,
+  keyBalance,
+  onSessionComplete,
+  onFinish,
+  onClose,
+  onExit,
+}: CardDeckProps & { questions: QuizQuestion[] }) {
   const { colors, mode } = useTheme();
 
   // Card width is measured from the actual rendered viewport, not derived
@@ -414,6 +534,7 @@ export function CardDeck({
       <LearnMoreSheet
         visible={isLearnMoreOpen}
         question={currentCard}
+        signCatalog={signCatalog}
         onClose={() => setIsLearnMoreOpen(false)}
       />
 
@@ -510,6 +631,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
     marginVertical: Spacing.xs,
+  },
+  readingScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
   },
   cardStrip: {
     flexDirection: 'row',
