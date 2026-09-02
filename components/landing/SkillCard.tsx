@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronRight } from 'lucide-react-native';
 import { useTheme, Spacing, Radius, Typography, FontFamily } from '@/theme/tokens';
 import { LandingIllustration } from './LandingIllustration';
 import type { LandingSkill } from '@/constants/skills';
@@ -78,13 +77,6 @@ export function SkillCard({ skill, completedTopics, totalTopics, onPress }: Skil
       <View style={styles.illustrationWrap}>
         <LandingIllustration />
       </View>
-
-      <View style={styles.tapHintRow}>
-        <Text style={[styles.tapHintText, { color: colors.onSurfaceVariant || '#9CA3AF' }]}>
-          Choose a mode
-        </Text>
-        <ChevronRight size={16} color={colors.onSurfaceVariant || '#9CA3AF'} />
-      </View>
     </Pressable>
   );
 }
@@ -122,15 +114,5 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  tapHintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginTop: Spacing.md,
-  },
-  tapHintText: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 13,
   },
 });

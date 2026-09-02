@@ -9,10 +9,21 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import { ChevronLeft } from 'lucide-react-native';
+import {
+  ChevronLeft,
+  Play,
+  Shuffle,
+  Tag,
+  BookOpen,
+  MapPin,
+  GraduationCap,
+  Eye,
+  type LucideIcon,
+} from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme, Spacing, Radius, FontFamily } from '@/theme/tokens';
+import { useTheme, Spacing, Typography, FontFamily } from '@/theme/tokens';
 import { SkillCard } from './SkillCard';
+import { ModeCard } from './ModeCard';
 import { CarouselDots } from './CarouselDots';
 import { LANDING_SKILLS, type LandingSkill } from '@/constants/skills';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
@@ -27,15 +38,47 @@ const PAGE_WIDTH = Dimensions.get('window').width - CARD_MARGIN * 2;
 interface TrackOption {
   track: Track;
   label: string;
+  description: string;
+  icon: LucideIcon;
 }
 
 const TRACK_OPTIONS: TrackOption[] = [
-  { track: 'pairs', label: 'Challenge yourself with pairs' },
-  { track: 'names', label: 'Learn sign names' },
-  { track: 'meanings', label: 'Learn what signs mean' },
-  { track: 'whereUsed', label: 'Learn where signs are used' },
-  { track: 'full', label: 'Full course' },
-  { track: 'reading', label: 'Reading mode — just browse the signs' },
+  {
+    track: 'pairs',
+    label: 'Challenge yourself with pairs',
+    description: 'Match signs against each other under pressure',
+    icon: Shuffle,
+  },
+  {
+    track: 'names',
+    label: 'Learn sign names',
+    description: 'Quiz yourself on what each sign is called',
+    icon: Tag,
+  },
+  {
+    track: 'meanings',
+    label: 'Learn what signs mean',
+    description: 'Understand exactly what each sign is telling you',
+    icon: BookOpen,
+  },
+  {
+    track: 'whereUsed',
+    label: 'Learn where signs are used',
+    description: 'See where on the road each sign belongs',
+    icon: MapPin,
+  },
+  {
+    track: 'full',
+    label: 'Full course',
+    description: 'Every topic, in order, start to finish',
+    icon: GraduationCap,
+  },
+  {
+    track: 'reading',
+    label: 'Reading mode — just browse the signs',
+    description: 'Browse all the signs at your own pace',
+    icon: Eye,
+  },
 ];
 
 interface LandingScreenProps {
@@ -78,8 +121,9 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
     setPageIndex(Math.max(0, Math.min(LANDING_SKILLS.length - 1, next)));
   };
 
-  // Mode picker (was the old bottom CTA list) — shown once a skill card is
-  // tapped. Same track/mode buttons as before, just gated behind the card.
+  // Mode picker — shown once a skill card is tapped. A proper page: back
+  // row, heading, then one ModeCard per track/mode (replaces the old flat
+  // pill-button list, which left the top of the screen empty).
   if (activeSkill) {
     return (
       <View style={styles.container}>
@@ -88,29 +132,34 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
             <ChevronLeft size={22} color={colors.onSurface} />
             <Text style={[styles.backBtnText, { color: colors.onSurface }]}>{activeSkill.subtitle}</Text>
           </Pressable>
+
+          <Text style={[Typography.headlineMd, styles.modePickerHeading, { color: colors.onSurface }]}>
+            Choose a mode
+          </Text>
+          <Text style={[styles.modePickerSubheading, { color: colors.onSurfaceVariant || '#9CA3AF' }]}>
+            How do you want to practice {activeSkill.subtitle.toLowerCase()}?
+          </Text>
         </View>
 
-        <View style={styles.bottom}>
-          <View style={styles.trackList}>
-            {TRACK_OPTIONS.map((option, i) => {
-              const label = i === 0 && completedTopics > 0 ? 'Resume session' : option.label;
-              return (
-                <Pressable
-                  key={option.track}
-                  onPress={() => onStart(option.track)}
-                  style={({ pressed }) => [
-                    i === 0 ? styles.startBtn : styles.trackBtn,
-                    pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-                  ]}
-                >
-                  <Text style={i === 0 ? styles.startBtnText : styles.trackBtnText}>
-                    {i === 0 ? label.toUpperCase() : label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+        <ScrollView
+          style={styles.modeList}
+          contentContainerStyle={styles.modeListContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {TRACK_OPTIONS.map((option, i) => {
+            const resume = i === 0 && completedTopics > 0;
+            return (
+              <ModeCard
+                key={option.track}
+                icon={resume ? Play : option.icon}
+                title={resume ? 'Resume session' : option.label}
+                description={option.description}
+                highlighted={resume}
+                onPress={() => onStart(option.track)}
+              />
+            );
+          })}
+        </ScrollView>
       </View>
     );
   }
@@ -174,10 +223,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: Spacing.marginMobile,
+    paddingTop: Spacing.xxl,
     justifyContent: 'space-between',
   },
   modePickerTop: {
-    paddingTop: Spacing.xxl,
+    paddingTop: Spacing.md,
   },
   backBtn: {
     flexDirection: 'row',
@@ -187,6 +237,23 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontFamily: FontFamily.semiBold,
     fontSize: 16,
+  },
+  modePickerHeading: {
+    marginTop: Spacing.xl,
+  },
+  modePickerSubheading: {
+    fontFamily: FontFamily.regular,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: Spacing.xs,
+  },
+  modeList: {
+    flex: 1,
+    marginTop: Spacing.xl,
+  },
+  modeListContent: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.lg,
   },
   middle: {
     flex: 1,
@@ -200,38 +267,6 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.lg,
     alignItems: 'center',
     width: '100%',
-  },
-  startBtn: {
-    width: '100%',
-    height: 56,
-    borderRadius: Radius.full,
-    backgroundColor: '#56D8B8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  startBtnText: {
-    color: '#10141A',
-    fontFamily: FontFamily.extraBold,
-    fontSize: 18,
-    letterSpacing: 0.2,
-  },
-  trackList: {
-    width: '100%',
-    gap: Spacing.sm,
-  },
-  trackBtn: {
-    width: '100%',
-    height: 48,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trackBtnText: {
-    color: '#E5E7EB',
-    fontFamily: FontFamily.semiBold,
-    fontSize: 15,
   },
   restoreLinkWrap: {
     marginTop: Spacing.md,
