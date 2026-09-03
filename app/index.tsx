@@ -15,6 +15,11 @@ type Stage = 'landing' | 'downloading' | 'session';
 
 const VALID_TRACKS: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading'];
 
+// Same reasoning as PlaySession's topic-transition delay: keep the
+// "Loading questions…" beat feeling consistent even when the real
+// download resolves almost instantly (cached, or a fast connection).
+const MIN_LOADING_MS = 2000;
+
 function parseTrack(value?: string): Track | null {
   return VALID_TRACKS.includes(value as Track) ? (value as Track) : null;
 }
@@ -35,7 +40,12 @@ export default function PlayEntry() {
     setError(null);
     setProgress(null);
     setCurrentTrack(track);
+    const startedAt = Date.now();
     const result = await downloadSession(track, (p) => setProgress(p));
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < MIN_LOADING_MS) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_LOADING_MS - elapsed));
+    }
     if ('error' in result) {
       setError(result.error);
       return;

@@ -35,7 +35,8 @@ interface ModeSwitcherSheetProps {
   visible: boolean;
   heading: ModeSwitcherHeading;
   /** The track the learner is currently on (or just finished) — shown
-   *  first in the list, relabeled "Continue in ..." mode. */
+   *  first in the list and highlighted, same illustration and label as
+   *  every other row. */
   currentTrack: Track;
   onSelectTrack: (track: Track) => void;
   onClose: () => void;
@@ -43,7 +44,8 @@ interface ModeSwitcherSheetProps {
 
 /**
  * All learning modes at once (no "load more") — first item is always the
- * current mode, relabeled "Continue in {mode}". Two heading states:
+ * current mode, reordered to the front and highlighted (same image and
+ * label as every other row, just a teal border/tint). Two heading states:
  * reached from "No, I'd like to switch" on ContinuePromptSheet ("switch"),
  * or reached directly when the learner has exhausted every topic in the
  * current mode ("trackComplete") — the confirmation sheet is skipped
@@ -81,7 +83,8 @@ export function ModeSwitcherSheet({
   const sheetGrad = getSheetGradient(isDark);
   const copy = HEADING_COPY[heading];
 
-  // Current track first (relabeled), the rest in their normal order.
+  // Current track first, same rendering as every other row — just
+  // reordered and left for ModeCard to highlight.
   const current = TRACK_OPTIONS.find((o) => o.track === currentTrack);
   const rest = TRACK_OPTIONS.filter((o) => o.track !== currentTrack);
   const ordered = current ? [current, ...rest] : TRACK_OPTIONS;
@@ -135,8 +138,8 @@ export function ModeSwitcherSheet({
                 return (
                   <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
                     <ModeCard
-                      icon={option.icon}
-                      title={isCurrent ? `Continue in ${option.label.toLowerCase()}` : option.label}
+                      image={option.image}
+                      title={option.label}
                       highlighted={isCurrent}
                       onPress={() => onSelectTrack(option.track)}
                     />
@@ -164,9 +167,11 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     alignItems: 'center',
     maxHeight: '85%',
+    overflow: 'hidden',
   },
   sheet: {
     width: '100%',
+    flexShrink: 1,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     borderWidth: 1,
@@ -199,6 +204,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   list: {
+    flexShrink: 1,
     marginTop: Spacing.md,
   },
   listContent: {

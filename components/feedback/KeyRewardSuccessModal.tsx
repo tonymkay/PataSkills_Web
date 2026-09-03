@@ -40,8 +40,8 @@ export function KeyRewardContent({
         styles.container,
         {
           backgroundColor: colors.background || '#14171C',
-          paddingTop: Math.max(insets.top + Spacing.xxl, Spacing.xxl * 2),
-          paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.xl),
+          paddingTop: Math.max(insets.top + Spacing.xl, Spacing.xl),
+          paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.lg),
         },
       ]}
     >
@@ -109,50 +109,56 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: Spacing.marginMobile,
-    justifyContent: 'space-between',
+    // Content is centered as one group instead of being pushed apart with
+    // space-between across the full device height — that's what made this
+    // screen look overly stretched on tall phones.
+    justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    maxWidth: 340,
+    alignSelf: 'center',
   },
   title: {
     fontFamily: FontFamily.bold,
-    fontSize: 28,
-    lineHeight: 36,
+    fontSize: 26,
+    lineHeight: 34,
     textAlign: 'center',
-    marginBottom: Spacing.xxl,
+    marginBottom: Spacing.lg,
   },
   rewardHeroRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    marginVertical: Spacing.xl,
+    gap: 10,
+    marginVertical: Spacing.md,
   },
   rewardNumber: {
     fontFamily: FontFamily.extraBold,
-    fontSize: 100,
-    lineHeight: 100,
+    fontSize: 72,
+    lineHeight: 72,
   },
   keyImage: {
-    width: 90,
-    height: 90,
+    width: 64,
+    height: 64,
     transform: [{ rotate: '-10deg' }],
   },
   subtitle: {
     fontFamily: FontFamily.medium,
-    fontSize: 22,
-    lineHeight: 30,
+    fontSize: 18,
+    lineHeight: 25,
     textAlign: 'center',
-    marginTop: Spacing.xl,
-    maxWidth: 280,
+    marginTop: Spacing.lg,
+    maxWidth: 260,
   },
   footer: {
     width: '100%',
+    maxWidth: 340,
     paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.xxl,
   },
   unlockButton: {
     width: '100%',

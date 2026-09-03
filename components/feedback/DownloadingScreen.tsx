@@ -100,6 +100,39 @@ export function DownloadingScreen({ progress, error, onRetry }: DownloadingScree
   );
 }
 
+/**
+ * Same look as DownloadingScreen's non-error state (label + bouncing dots),
+ * with no progress/error/retry plumbing — used anywhere a new topic is
+ * about to start and we want the same "Loading questions…" beat, even
+ * when nothing is actually being fetched (e.g. advancing within an
+ * already-downloaded track). Keeps that transition feeling consistent
+ * whether or not there's real async work behind it.
+ */
+export function LoadingQuestionsScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background || '#1A1D24',
+          paddingTop: Math.max(insets.top, Spacing.lg),
+          paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.md),
+        },
+      ]}
+    >
+      <View style={styles.content}>
+        <Text style={[Typography.headlineSm, styles.title, { color: colors.onSurface }]}>
+          {LOADING_LABEL}
+        </Text>
+        <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -58,12 +58,18 @@ export function WatchAdPromptSheet({
     onAdRewarded();
   };
 
+  // Modal props (transparent, animationType) are kept CONSTANT across
+  // steps. Changing `transparent` on an already-mounted Android <Modal>
+  // tears down and recreates the native dialog, which is what was closing
+  // the reward screen on its own before the user could tap anything. The
+  // 'reward' step gets its full-screen opaque look from a solid background
+  // on the content itself, not from the Modal's `transparent` prop.
   return (
     <Modal
       visible={visible}
-      transparent={step === 'prompt'}
-      animationType={step === 'prompt' ? 'slide' : 'fade'}
-      onRequestClose={step === 'prompt' ? onClose : undefined}
+      transparent
+      animationType="fade"
+      onRequestClose={step === 'prompt' ? onClose : () => {}}
     >
       {step === 'reward' ? (
         <KeyRewardContent onUnlockNextSession={handleUnlockNextSession} />

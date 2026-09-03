@@ -1,54 +1,53 @@
-import {
-  Shuffle,
-  Tag,
-  BookOpen,
-  MapPin,
-  GraduationCap,
-  Eye,
-  type LucideIcon,
-} from 'lucide-react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { Track } from '@/lib/curriculum';
+import { getPlayAssetPublicUrl } from '@/lib/supabase';
+import { CurriculumCoverImagePaths } from '@/constants/curriculumAssets';
 
 export interface TrackOption {
   track: Track;
   label: string;
-  icon: LucideIcon;
+  /** Illustration shown in ModeSwitcherSheet. Local assets for most
+   *  tracks (assets/driving/); 'full' reuses the same remote hero image
+   *  as the landing-screen SkillCard for this skill, since it has no
+   *  dedicated local asset. */
+  image: ImageSourcePropType;
 }
 
 /**
- * Single source of truth for the learning-mode list — consumed by the
- * initial LandingScreen mode picker AND the post-topic ModeSwitcherSheet,
- * so the two never drift out of sync.
+ * Single source of truth for the learning-mode list shown in
+ * ModeSwitcherSheet. The current track is reordered to the front and
+ * highlighted by the sheet itself — there's no separate "current" variant
+ * here, just the plain option shown first.
  */
 export const TRACK_OPTIONS: TrackOption[] = [
   {
     track: 'pairs',
-    label: 'Challenge yourself with pairs',
-    icon: Shuffle,
+    label: 'Differentiate Pairs',
+    image: require('@/assets/driving/differenciate.webp'),
   },
   {
     track: 'names',
-    label: 'Learn sign names',
-    icon: Tag,
+    label: 'Name a sign',
+    image: require('@/assets/driving/name.webp'),
   },
   {
     track: 'meanings',
-    label: 'Learn what signs mean',
-    icon: BookOpen,
+    label: 'Meaning of Signs',
+    image: require('@/assets/driving/meaning.webp'),
   },
   {
     track: 'whereUsed',
-    label: 'Learn where signs are used',
-    icon: MapPin,
-  },
-  {
-    track: 'full',
-    label: 'Full course',
-    icon: GraduationCap,
+    label: 'Where signs are used',
+    image: require('@/assets/driving/usage.webp'),
   },
   {
     track: 'reading',
-    label: 'Reading mode — just browse the signs',
-    icon: Eye,
+    label: 'Reading Only',
+    image: require('@/assets/driving/reading.webp'),
+  },
+  {
+    track: 'full',
+    label: 'Full Course',
+    image: { uri: getPlayAssetPublicUrl(CurriculumCoverImagePaths['driving-theory']) },
   },
 ];

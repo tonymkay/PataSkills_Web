@@ -6,7 +6,7 @@ import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
 import { ContinuePromptSheet } from '@/components/feedback/ContinuePromptSheet';
 import { ModeSwitcherSheet, ModeSwitcherHeading } from '@/components/landing/ModeSwitcherSheet';
-import { BouncingDots } from '@/components/feedback/DownloadingScreen';
+import { LoadingQuestionsScreen } from '@/components/feedback/DownloadingScreen';
 import { useKeys } from '@/hooks/useKeys';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
@@ -16,7 +16,7 @@ import { shouldShowContinuePrompt, hideContinuePromptForTrack } from '@/lib/cont
 
 const XP_PER_CORRECT = 10;
 
-type FlowState = 'playing' | 'topicComplete' | 'outOfKeys';
+type FlowState = 'playing' | 'topicComplete' | 'outOfKeys' | 'loadingTopic';
 
 type OutOfKeysReason = 'entry' | 'advance' | null;
 
@@ -139,7 +139,13 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
       return;
     }
 
-    // Immediately start the next session
+    // Same "Loading questions…" beat every topic start gets, held for a
+    // fixed 2s even though nothing's actually being fetched here — keeps
+    // the transition consistent with the initial download and with
+    // switching tracks.
+    setFlowState('loadingTopic');
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
     setSessionIndex((i) => i + 1);
     setOutOfKeysReason(null);
     setSessionStarted(true);
@@ -155,6 +161,10 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
     }
 
     if (outOfKeysReason === 'advance') {
+      // Ran out of keys right at a topic transition — this resume is
+      // itself a new topic starting, same loading beat applies.
+      setFlowState('loadingTopic');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       setSessionIndex((i) => i + 1);
     }
     setOutOfKeysReason(null);
@@ -255,11 +265,11 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
   // ── Render gates ────────────────────────────────────────────────────
 
   if (!ready) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
-      </View>
-    );
+    return <LoadingQuestionsScreen />;
+  }
+
+  if (flowState === 'loadingTopic') {
+    return <LoadingQuestionsScreen />;
   }
 
   if (flowState === 'outOfKeys') {
@@ -311,11 +321,7 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
   }
 
   if (!sessionStarted) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
-      </View>
-    );
+    return <LoadingQuestionsScreen />;
   }
 
   return (
@@ -348,10 +354,5 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
