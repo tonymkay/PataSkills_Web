@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { SlideInRight, SlideOutLeft, SlideInLeft, SlideOutRight } from 'react-native-reanimated';
 import { useTheme } from '@/theme/ThemeContext';
 import { PlaySession } from '@/components/play/PlaySession';
 import { LandingScreen } from '@/components/landing/LandingScreen';
@@ -46,8 +47,15 @@ export default function PlayEntry() {
   // TrackDetailSheet over the landing screen, same as picking a style from
   // LearningStyleScreen. null hides it.
   const [deepLinkPreviewTrack, setDeepLinkPreviewTrack] = useState<Track | null>(null);
+  // Direction for the stage transition animation — 'forward' slides the new
+  // stage in from the right (old one exits left), 'backward' is the mirror.
+  // Set explicitly at each transition site rather than inferred, since the
+  // stage order isn't a strict line (deep links can jump straight to
+  // downloading/session from landing).
+  const [stageDirection, setStageDirection] = useState<'forward' | 'backward'>('forward');
 
   const runDownload = useCallback(async (track: Track = 'pairs', deepLinked = false) => {
+    setStageDirection('forward');
     setStage('downloading');
     setError(null);
     setProgress(null);
@@ -69,10 +77,12 @@ export default function PlayEntry() {
   }, []);
 
   const handleStart = useCallback(() => {
+    setStageDirection('forward');
     setStage('learning-style');
   }, []);
 
   const handleBackToLanding = useCallback(() => {
+    setStageDirection('backward');
     setStage('landing');
   }, []);
 
@@ -88,6 +98,7 @@ export default function PlayEntry() {
   }, [runDownload, urlTrack, trackIsDeepLinked]);
 
   const handleExit = useCallback(() => {
+    setStageDirection('backward');
     setStage('landing');
     setSessions([]);
     setSignCatalog([]);
@@ -108,6 +119,12 @@ export default function PlayEntry() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#14171C' }]}>
+      <Animated.View
+        key={stage}
+        style={styles.stageContainer}
+        entering={stageDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
+        exiting={stageDirection === 'forward' ? SlideOutLeft.duration(220) : SlideOutRight.duration(220)}
+      >
       {stage === 'session' ? (
         <PlaySession
           sessions={sessions}
@@ -134,12 +151,16 @@ export default function PlayEntry() {
           />
         </>
       )}
+      </Animated.View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  stageContainer: {
     flex: 1,
   },
 });

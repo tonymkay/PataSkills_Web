@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
+import Animated, { SlideInRight, SlideOutLeft, SlideInLeft, SlideOutRight } from 'react-native-reanimated';
 import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
@@ -63,6 +64,10 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
 
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [switcherHeading, setSwitcherHeading] = useState<ModeSwitcherHeading>('switch');
+  // Direction for the questions <-> topic-complete slide transition —
+  // forward on finishing a topic, backward when Redo Session sends the
+  // learner back into the questions.
+  const [screenDirection, setScreenDirection] = useState<'forward' | 'backward'>('forward');
 
   // Resume from last completed topic index
   React.useEffect(() => {
@@ -114,6 +119,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
       setTotalXp((prev) => prev + stats.correctCount * XP_PER_CORRECT);
       // Source of truth: hitting topic complete screen marks topic done
       void markTopicCompleted(sessionIndex, sessions.length);
+      setScreenDirection('forward');
       setFlowState('topicComplete');
     },
     [sessionIndex, sessions.length],
@@ -145,6 +151,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
     // fixed 2s even though nothing's actually being fetched here — keeps
     // the transition consistent with the initial download and with
     // switching tracks.
+    setScreenDirection('forward');
     setFlowState('loadingTopic');
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
@@ -216,6 +223,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
   // Redo = replay the same session from scratch (no key spend — already paid)
   const handleRedoSession = useCallback(() => {
     setLastStats({ correctCount: 0, totalAnswered: 0 });
+    setScreenDirection('backward');
     setFlowState('playing');
   }, []);
 
@@ -271,7 +279,12 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
 
   if (flowState === 'topicComplete') {
     return (
-      <>
+      <Animated.View
+        key="topicComplete"
+        style={styles.container}
+        entering={screenDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
+        exiting={screenDirection === 'forward' ? SlideOutLeft.duration(220) : SlideOutRight.duration(220)}
+      >
         <SessionStateScreen
           kind="topicComplete"
           subtitle={currentSession?.title}
@@ -288,7 +301,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
           onSelectTrack={handleSelectTrack}
           onClose={() => setSwitcherVisible(false)}
         />
-      </>
+      </Animated.View>
     );
   }
 
@@ -307,7 +320,12 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Animated.View
+      key="playing"
+      style={[styles.container, { backgroundColor: colors.background }]}
+      entering={screenDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
+      exiting={screenDirection === 'forward' ? SlideOutLeft.duration(220) : SlideOutRight.duration(220)}
+    >
       {currentSession.kind === 'reading' ? (
         <CardDeck
           key={`session-${sessionIndex}`}
@@ -329,7 +347,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
           onExit={onExit}
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
 
