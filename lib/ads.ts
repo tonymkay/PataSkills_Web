@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import { grantBonusKey } from '@/lib/keys';
 
 const TEST_REWARDED_ANDROID = 'ca-app-pub-3940256099942544/5224354917';
 const ENV_REWARDED_ANDROID = process.env.EXPO_PUBLIC_ADMOB_REWARDED_ANDROID?.trim();
@@ -70,12 +69,11 @@ export async function showRewardedForSession(): Promise<RewardOutcome> {
           unsubscribeLoaded();
           unsubscribeEarned();
           unsubscribeClosed();
-          if (earned) {
-            await grantBonusKey(1, 'ad_reward');
-            resolve('earned');
-          } else {
-            resolve('skipped');
-          }
+          // Key is granted by the caller once the reward screen's CTA is
+          // actually tapped, not here — granting it immediately made the
+          // balance update (and the app auto-advance past the reward
+          // screen) before the learner had a chance to see or tap it.
+          resolve(earned ? 'earned' : 'skipped');
         });
 
         ad.load();
@@ -87,8 +85,7 @@ export async function showRewardedForSession(): Promise<RewardOutcome> {
 
   // Web & Dev Fallback: quick 1.5s simulated sponsor ad
   return new Promise((resolve) => {
-    setTimeout(async () => {
-      await grantBonusKey(1, 'ad_reward');
+    setTimeout(() => {
       resolve('earned');
     }, 1500);
   });

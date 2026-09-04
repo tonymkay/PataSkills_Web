@@ -21,19 +21,22 @@ const CONTENT_MAX_WIDTH = 480;
 const GRID_TEST_COUNT = 4;
 
 interface LandingScreenProps {
-  onStart: (track: Track) => void;
+  /** Skill card tap — advances to LearningStyleScreen. */
+  onStart: () => void;
+  /** Successful account restore — resumes the learner's existing
+   *  progress directly, skipping LearningStyleScreen (they already
+   *  picked a track on whichever device they started on). */
+  onRestore: (track: Track) => void;
 }
 
 /**
  * Entry screen — 2-column grid of skill cards ("Skills Corner"-style
- * redesign). Tapping a card starts the default 'pairs' track directly
- * (or resumes in-progress work — PlaySession's own progress lookup jumps
- * to the right topic regardless of which track kicked off the download).
- * Choosing a different learning mode happens later, via the
- * ModeSwitcherSheet shown after a topic completes — see
- * components/landing/ModeSwitcherSheet.tsx.
+ * redesign). Tapping a card advances to LearningStyleScreen, where the
+ * learner picks a track before download starts. Choosing a different
+ * learning mode later (after a topic completes) reuses the same track
+ * list via ModeSwitcherSheet — see components/landing/ModeSwitcherSheet.tsx.
  */
-export function LandingScreen({ onStart }: LandingScreenProps) {
+export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
   const { colors } = useTheme();
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
@@ -56,7 +59,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
   const handleRestoreSuccess = (result: RestoreResult) => {
     refreshProgress();
     setLinkedEmail(result.email);
-    onStart('pairs');
+    onRestore('pairs');
   };
 
   const gridSkills = Array.from({ length: GRID_TEST_COUNT }, (_, i) => ({
@@ -76,7 +79,7 @@ export function LandingScreen({ onStart }: LandingScreenProps) {
 
         <View style={styles.grid}>
           {gridSkills.map((skill) => (
-            <SkillGridCard key={skill.key} skill={skill} onPress={() => onStart('pairs')} />
+            <SkillGridCard key={skill.key} skill={skill} onPress={onStart} />
           ))}
         </View>
 

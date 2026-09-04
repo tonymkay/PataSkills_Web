@@ -4,7 +4,6 @@ import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
-import { ContinuePromptSheet } from '@/components/feedback/ContinuePromptSheet';
 import { ModeSwitcherSheet, ModeSwitcherHeading } from '@/components/landing/ModeSwitcherSheet';
 import { LoadingQuestionsScreen } from '@/components/feedback/DownloadingScreen';
 import { useKeys } from '@/hooks/useKeys';
@@ -12,7 +11,6 @@ import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
-import { shouldShowContinuePrompt, hideContinuePromptForTrack } from '@/lib/continuePrefs';
 
 const XP_PER_CORRECT = 10;
 
@@ -31,13 +29,18 @@ interface PlaySessionProps {
   /** The track these sessions were derived from — drives the continuation
    *  flow (which mode is "current", and the per-track don't-show-again pref). */
   track: Track;
+  /** True when this track came from a deep link (ad/payment link, or the
+   *  resume param) rather than the learner picking a learning style on
+   *  LearningStyleScreen — the mode-switcher sheet only opens on "Continue"
+   *  in this case, since no style was ever chosen for them to keep. */
+  deepLinked?: boolean;
   /** Starts a fresh download for a different track — wired to the same
    *  handler the initial LandingScreen mode picker uses. */
   onSwitchTrack: (track: Track) => void;
   onExit?: () => void;
 }
 
-export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExit }: PlaySessionProps) {
+export function PlaySession({ sessions, signCatalog, track, deepLinked = false, onSwitchTrack, onExit }: PlaySessionProps) {
   const { colors } = useTheme();
   const isFocused = useIsFocused();
   const {
@@ -58,7 +61,6 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
 
   const [outOfKeysReason, setOutOfKeysReason] = useState<OutOfKeysReason>(null);
 
-  const [showContinuePrompt, setShowContinuePrompt] = useState(false);
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [switcherHeading, setSwitcherHeading] = useState<ModeSwitcherHeading>('switch');
 
@@ -175,10 +177,13 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
   // Fires when the learner presses NEXT SESSION on the topicComplete screen.
   // Decides which continuation UI (if any) to show, per the spec:
   //  - no topics left in this track → mode switcher, "track complete" heading,
-  //    confirmation sheet skipped entirely.
+  //    always shown regardless of entry point (nowhere else to go).
   //  - next session locked (out of keys) → fall straight through to the
   //    existing outOfKeys screen, no continuation UI shown at all.
-  //  - otherwise → confirmation sheet, unless silenced for this track.
+  //  - deep-linked entry (no learning style was ever chosen) → mode
+  //    switcher, "switch" heading, every time.
+  //  - otherwise (learner picked a style on LearningStyleScreen) → advance
+  //    straight to the next session, no confirmation UI.
   const handleNextPress = useCallback(async () => {
     if (!hasMoreSessions) {
       setSwitcherHeading('trackComplete');
@@ -191,32 +196,14 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
       return;
     }
 
-    const show = await shouldShowContinuePrompt(track);
-    if (show) {
-      setShowContinuePrompt(true);
-    } else {
-      void advanceToNextSession();
-    }
-  }, [hasMoreSessions, isOutOfKeys, track, advanceToNextSession]);
-
-  const handleYesContinue = useCallback(
-    (dontShowAgain: boolean) => {
-      setShowContinuePrompt(false);
-      if (dontShowAgain) void hideContinuePromptForTrack(track);
-      void advanceToNextSession();
-    },
-    [track, advanceToNextSession],
-  );
-
-  const handleNoSwitch = useCallback(
-    (dontShowAgain: boolean) => {
-      setShowContinuePrompt(false);
-      if (dontShowAgain) void hideContinuePromptForTrack(track);
+    if (deepLinked) {
       setSwitcherHeading('switch');
       setSwitcherVisible(true);
-    },
-    [track],
-  );
+      return;
+    }
+
+    void advanceToNextSession();
+  }, [hasMoreSessions, isOutOfKeys, deepLinked, advanceToNextSession]);
 
   const handleSelectTrack = useCallback(
     (newTrack: Track) => {
@@ -293,11 +280,6 @@ export function PlaySession({ sessions, signCatalog, track, onSwitchTrack, onExi
           scoreText={`${sessionIndex + 1}/${sessions.length}`}
           onPrimaryPress={handleNextPress}
           onSecondaryPress={handleRedoSession}
-        />
-        <ContinuePromptSheet
-          visible={showContinuePrompt}
-          onYesContinue={handleYesContinue}
-          onNoSwitch={handleNoSwitch}
         />
         <ModeSwitcherSheet
           visible={switcherVisible}

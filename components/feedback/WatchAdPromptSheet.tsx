@@ -13,6 +13,7 @@ import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
 import { showRewardedForSession } from '@/lib/ads';
+import { grantBonusKey } from '@/lib/keys';
 import { KeyRewardContent } from './KeyRewardSuccessModal';
 
 interface WatchAdPromptSheetProps {
@@ -55,7 +56,14 @@ export function WatchAdPromptSheet({
   };
 
   const handleUnlockNextSession = () => {
-    onAdRewarded();
+    // Grant the key here, on the actual tap — not the moment the ad
+    // finished. Granting it earlier let the background balance-poll (see
+    // useKeys) flip isOutOfKeys to false while this screen was still
+    // showing, which auto-advanced the app past the reward screen before
+    // the learner could tap anything.
+    void grantBonusKey(1, 'ad_reward').then(() => {
+      onAdRewarded();
+    });
   };
 
   // Modal props (transparent, animationType) are kept CONSTANT across
