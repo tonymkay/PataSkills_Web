@@ -15,6 +15,11 @@ import { LANDING_SKILLS } from '@/constants/skills';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 
+// Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
+// / chunkSignsIntoSessions both slice into groups of 7) — the number of
+// questions the learner will actually see once they tap Start Practice.
+const QUESTIONS_PER_SESSION = 7;
+
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface TrackDetailSheetProps {
@@ -66,6 +71,7 @@ export function TrackDetailSheet({ track, onStartPractice, onClose }: TrackDetai
   const option = TRACK_OPTIONS.find((o) => o.track === track) ?? TRACK_OPTIONS[0];
   const skillSubtitle = LANDING_SKILLS[0].subtitle;
   const pct = progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
+  const filledDots = Math.min(QUESTIONS_PER_SESSION, Math.round(pct * QUESTIONS_PER_SESSION));
 
   const sheetGrad = getSheetGradient(isDark);
 
@@ -103,21 +109,28 @@ export function TrackDetailSheet({ track, onStartPractice, onClose }: TrackDetai
 
             <Text style={[styles.title, { color: colors.onSurface }]}>{option.label}</Text>
 
-            <View style={[styles.progressTrack, { backgroundColor: colors.surfaceContainerHigh }]}>
-              <LinearGradient
-                colors={BrandGradients.discovery.colors}
-                start={BrandGradients.discovery.start}
-                end={BrandGradients.discovery.end}
-                style={[styles.progressFill, { width: `${Math.max(pct * 100, 4)}%` }]}
-              />
-            </View>
-
             <Text style={[styles.subtitle, { color: colors.tealAccent || '#2BD9C4' }]}>
               {skillSubtitle}
             </Text>
 
             <View style={styles.illustrationWrap}>
               <Image source={option.image} style={styles.illustration} resizeMode="contain" />
+            </View>
+
+            <View style={styles.dotsRow}>
+              {Array.from({ length: QUESTIONS_PER_SESSION }).map((_, i) =>
+                i < filledDots ? (
+                  <LinearGradient
+                    key={i}
+                    colors={BrandGradients.discovery.colors}
+                    start={BrandGradients.discovery.start}
+                    end={BrandGradients.discovery.end}
+                    style={styles.dot}
+                  />
+                ) : (
+                  <View key={i} style={[styles.dot, { backgroundColor: colors.surfaceContainerHigh }]} />
+                ),
+              )}
             </View>
 
             <Pressable onPress={() => onStartPractice(track)} style={styles.ctaWrapper}>
@@ -181,14 +194,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     textAlign: 'center',
   },
-  progressTrack: {
-    height: 6,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-    marginTop: Spacing.md,
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Spacing.lg,
   },
-  progressFill: {
-    height: '100%',
+  dot: {
+    width: 28,
+    height: 8,
     borderRadius: Radius.full,
   },
   subtitle: {
@@ -200,11 +215,12 @@ const styles = StyleSheet.create({
   illustrationWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.xl,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.lg,
   },
   illustration: {
-    width: 180,
-    height: 180,
+    width: 220,
+    height: 220,
   },
   ctaWrapper: {
     borderRadius: Radius.full,

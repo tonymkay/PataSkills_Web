@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { TRACK_OPTIONS } from '@/constants/trackOptions';
 import { Track } from '@/lib/curriculum';
@@ -12,6 +13,7 @@ const CONTENT_MAX_WIDTH = 480;
 
 interface LearningStyleScreenProps {
   onSelectTrack: (track: Track) => void;
+  onBack: () => void;
 }
 
 /**
@@ -21,7 +23,7 @@ interface LearningStyleScreenProps {
  * page instead of a bottom sheet, and with nothing pre-highlighted since
  * there's no "current" track yet).
  */
-export function LearningStyleScreen({ onSelectTrack }: LearningStyleScreenProps) {
+export function LearningStyleScreen({ onSelectTrack, onBack }: LearningStyleScreenProps) {
   const { colors } = useTheme();
   const [previewTrack, setPreviewTrack] = useState<Track | null>(null);
 
@@ -33,7 +35,13 @@ export function LearningStyleScreen({ onSelectTrack }: LearningStyleScreenProps)
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <Text style={[styles.heading, { color: colors.onSurface }]}>Choose Learning Style</Text>
+        <View style={styles.header}>
+          <Pressable onPress={onBack} hitSlop={Spacing.sm} style={styles.backButton}>
+            <ArrowLeft size={22} color={colors.onSurface} strokeWidth={2.2} />
+          </Pressable>
+          <Text style={[styles.heading, { color: colors.onSurface }]}>Choose Learning Style</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
         <View style={styles.list}>
           {TRACK_OPTIONS.map((option, i) => (
@@ -76,11 +84,22 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.lg,
   },
-  heading: {
-    fontFamily: FontFamily.bold,
-    fontSize: 28,
-    textAlign: 'center',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: Spacing.lg,
+  },
+  backButton: {
+    padding: Spacing.xs,
+  },
+  headerSpacer: {
+    width: 22 + Spacing.xs * 2,
+  },
+  heading: {
+    flex: 1,
+    fontFamily: FontFamily.regular,
+    fontSize: 20,
+    textAlign: 'center',
   },
   list: {
     width: '100%',

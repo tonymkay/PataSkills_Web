@@ -56,8 +56,8 @@ const styles = StyleSheet.create({
     minHeight: 92,
   },
   illustration: {
-    width: 56,
-    height: 56,
+    width: 72,
+    height: 72,
   },
   title: {
     flex: 1,

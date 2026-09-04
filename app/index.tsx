@@ -72,6 +72,10 @@ export default function PlayEntry() {
     setStage('learning-style');
   }, []);
 
+  const handleBackToLanding = useCallback(() => {
+    setStage('landing');
+  }, []);
+
   const handleSelectTrack = useCallback(
     (track: Track) => {
       void runDownload(track);
@@ -116,7 +120,7 @@ export default function PlayEntry() {
       ) : stage === 'downloading' ? (
         <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
       ) : stage === 'learning-style' ? (
-        <LearningStyleScreen onSelectTrack={handleSelectTrack} />
+        <LearningStyleScreen onSelectTrack={handleSelectTrack} onBack={handleBackToLanding} />
       ) : (
         <>
           <LandingScreen onStart={handleStart} onRestore={handleSelectTrack} />
