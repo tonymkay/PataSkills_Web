@@ -36,9 +36,16 @@ export function ModeCard({ image, title, highlighted, onPress }: ModeCardProps) 
     >
       <Image source={image} style={styles.illustration} resizeMode="contain" />
 
-      <Text style={[Typography.titleMedium, styles.title, { color: colors.onSurface }]}>
-        {title}
-      </Text>
+      <View style={styles.titleRow}>
+        <Text style={[Typography.titleMedium, styles.title, { color: colors.onSurface }]}>
+          {title}
+        </Text>
+        {highlighted ? (
+          <View style={[styles.currentBadge, { backgroundColor: teal }]}>
+            <Text style={styles.currentBadgeText}>CURRENT</Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -58,8 +65,25 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
   },
-  title: {
+  titleRow: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  title: {
     fontSize: 18,
+  },
+  currentBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  currentBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    color: '#0B3B31',
   },
 });

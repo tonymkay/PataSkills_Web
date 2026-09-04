@@ -46,9 +46,14 @@ const soraExtraBold = fontAssets[FontFamily.extraBold];
 //     another). On any real phone (<=430px wide, <=932px tall) both caps
 //     are slack, so #root is just 100%x100% - true full-bleed, identical
 //     to a native mobile page, with zero letterboxing.
-//   - height uses 100dvh (falling back to 100vh for the ~5% of browsers
-//     without dvh support), so it always reflects the real visible
-//     viewport rather than the mobile-Safari "largest viewport" bug.
+//   - height uses 100svh (falling back to 100vh for the sliver of
+//     browsers without svh support). NOT 100dvh: on Android Chrome/Brave,
+//     dvh reports the large (toolbar-retracted) viewport on first paint
+//     and only corrects after the first scroll, cutting off bottom-sheet
+//     content (CTA button, dots) until the user scrolls once. svh pins to
+//     the small (toolbar-visible) viewport from the first frame instead —
+//     nothing is ever hidden below the fold, at the cost of some unused
+//     background once the toolbar retracts.
 //   - only a window taller than 932px (a large phone's height) or wider
 //     than 430px ever shows the dark backdrop, and even then only on the
 //     axis that's actually oversized - never both, never a forced ratio.
@@ -157,7 +162,7 @@ html, body {
   width: 100%;
   max-width: 430px;
   height: 100vh;
-  height: 100dvh;
+  height: 100svh;
   max-height: 932px;
   margin-left: auto;
   margin-right: auto;
