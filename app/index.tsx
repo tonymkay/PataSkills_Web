@@ -2,19 +2,24 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { SlideInRight, SlideOutLeft, SlideInLeft, SlideOutRight } from 'react-native-reanimated';
+import Animated, { SlideInRight, SlideInLeft, FadeOut } from 'react-native-reanimated';
 import { useTheme } from '@/theme/ThemeContext';
 import { PlaySession } from '@/components/play/PlaySession';
 import { LandingScreen } from '@/components/landing/LandingScreen';
 import { LearningStyleScreen } from '@/components/landing/LearningStyleScreen';
-import { TrackDetailSheet } from '@/components/landing/TrackDetailSheet';
+import { TrackDetailScreen } from '@/components/landing/TrackDetailScreen';
 import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
 import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
 import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 
-type Stage = 'landing' | 'learning-style' | 'downloading' | 'session';
+type Stage = 'landing' | 'learning-style' | 'track-detail' | 'downloading' | 'session';
+
+// Where a track-detail preview was opened from — determines both what the
+// back button returns to, and (since only the deep-link entry point skips
+// an explicit style choice) whether starting practice counts as deep-linked.
+type TrackDetailOrigin = 'landing' | 'learning-style';
 
 const VALID_TRACKS: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading'];
 
@@ -43,15 +48,19 @@ export default function PlayEntry() {
   // every "Continue" (deep link, no style was ever chosen) or just advances
   // straight to the next session (LearningStyleScreen already asked).
   const [trackIsDeepLinked, setTrackIsDeepLinked] = useState(false);
-  // A ?track= deep link (no resume) previews here instead of auto-starting —
-  // TrackDetailSheet over the landing screen, same as picking a style from
-  // LearningStyleScreen. null hides it.
-  const [deepLinkPreviewTrack, setDeepLinkPreviewTrack] = useState<Track | null>(null);
+  // Track being previewed on the track-detail page (picked from
+  // LearningStyleScreen's list, or a ?track= deep link straight from
+  // Landing) — null means the page has nothing to show.
+  const [previewTrack, setPreviewTrack] = useState<Track | null>(null);
+  const [trackDetailOrigin, setTrackDetailOrigin] = useState<TrackDetailOrigin>('landing');
   // Direction for the stage transition animation — 'forward' slides the new
-  // stage in from the right (old one exits left), 'backward' is the mirror.
-  // Set explicitly at each transition site rather than inferred, since the
-  // stage order isn't a strict line (deep links can jump straight to
-  // downloading/session from landing).
+  // stage in from the right, 'backward' slides it in from the left. Exiting
+  // is a plain fade regardless of direction: a directional slide-out reads
+  // the *previous* render's direction (stale by one transition whenever
+  // direction changes, e.g. forward-forward-back), which visibly looked
+  // like the wrong screen moving the wrong way — same reasoning Bluesky's
+  // own ScreenTransition component uses (FadeOut for exit, directional
+  // SlideIn for enter).
   const [stageDirection, setStageDirection] = useState<'forward' | 'backward'>('forward');
 
   const runDownload = useCallback(async (track: Track = 'pairs', deepLinked = false) => {
@@ -86,6 +95,35 @@ export default function PlayEntry() {
     setStage('landing');
   }, []);
 
+  const openTrackDetail = useCallback((track: Track, origin: TrackDetailOrigin) => {
+    setPreviewTrack(track);
+    setTrackDetailOrigin(origin);
+    setStageDirection('forward');
+    setStage('track-detail');
+  }, []);
+
+  const closeTrackDetail = useCallback(() => {
+    setStageDirection('backward');
+    setStage(trackDetailOrigin);
+  }, [trackDetailOrigin]);
+
+  const handlePreviewFromLanding = useCallback(
+    (track: Track) => openTrackDetail(track, 'landing'),
+    [openTrackDetail],
+  );
+
+  const handlePreviewFromLearningStyle = useCallback(
+    (track: Track) => openTrackDetail(track, 'learning-style'),
+    [openTrackDetail],
+  );
+
+  const handleStartFromTrackDetail = useCallback(
+    (track: Track) => {
+      void runDownload(track, trackDetailOrigin === 'landing');
+    },
+    [runDownload, trackDetailOrigin],
+  );
+
   const handleSelectTrack = useCallback(
     (track: Track) => {
       void runDownload(track);
@@ -107,12 +145,12 @@ export default function PlayEntry() {
   }, []);
 
   // Auto-start: resume from payment. A bare ?track= link (ad link, no
-  // resume) previews instead — see deepLinkPreviewTrack below.
+  // resume) opens the track-detail page instead — see openTrackDetail above.
   useEffect(() => {
     if (params.resume === 'true') {
       void runDownload(urlTrack ?? 'pairs', true);
     } else if (urlTrack) {
-      setDeepLinkPreviewTrack(urlTrack);
+      openTrackDetail(urlTrack, 'landing');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -123,7 +161,7 @@ export default function PlayEntry() {
         key={stage}
         style={styles.stageContainer}
         entering={stageDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
-        exiting={stageDirection === 'forward' ? SlideOutLeft.duration(220) : SlideOutRight.duration(220)}
+        exiting={FadeOut.duration(180)}
       >
       {stage === 'session' ? (
         <PlaySession
@@ -136,20 +174,16 @@ export default function PlayEntry() {
         />
       ) : stage === 'downloading' ? (
         <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
+      ) : stage === 'track-detail' ? (
+        <TrackDetailScreen
+          track={previewTrack}
+          onStartPractice={handleStartFromTrackDetail}
+          onBack={closeTrackDetail}
+        />
       ) : stage === 'learning-style' ? (
-        <LearningStyleScreen onSelectTrack={handleSelectTrack} onBack={handleBackToLanding} />
+        <LearningStyleScreen onPreviewTrack={handlePreviewFromLearningStyle} onBack={handleBackToLanding} />
       ) : (
-        <>
-          <LandingScreen onStart={handleStart} onRestore={handleSelectTrack} />
-          <TrackDetailSheet
-            track={deepLinkPreviewTrack}
-            onStartPractice={(track) => {
-              setDeepLinkPreviewTrack(null);
-              void runDownload(track, true);
-            }}
-            onClose={() => setDeepLinkPreviewTrack(null)}
-          />
-        </>
+        <LandingScreen onStart={handleStart} onRestore={handlePreviewFromLanding} />
       )}
       </Animated.View>
     </SafeAreaView>
