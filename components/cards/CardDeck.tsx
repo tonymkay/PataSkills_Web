@@ -171,6 +171,7 @@ function ReadingCardDeck({
       <View style={styles.cardViewport}>
         <ScrollView
           ref={scrollHint.scrollRef}
+          style={styles.readingScroll}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.readingScrollContent}
           bounces={false}
@@ -671,6 +672,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
     marginVertical: Spacing.xs,
+  },
+  readingScroll: {
+    flex: 1,
+    width: '100%',
   },
   readingScrollContent: {
     flexGrow: 1,
