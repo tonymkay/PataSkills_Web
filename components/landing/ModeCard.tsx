@@ -51,13 +51,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 2,
     paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.xs,
     gap: Spacing.md,
-    minHeight: 92,
   },
   illustration: {
-    width: 72,
-    height: 72,
+    width: 88,
+    height: 88,
   },
   title: {
     flex: 1,
