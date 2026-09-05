@@ -113,8 +113,8 @@ export function ModeSwitcherSheet({
 
   useEffect(() => {
     if (visible) {
-      getLocalProgress().then(setProgress).catch(() => {});
-      getCompletedTracks().then(setCompletedTracks).catch(() => {});
+      getLocalProgress(skillId).then(setProgress).catch(() => {});
+      getCompletedTracks(skillId).then(setCompletedTracks).catch(() => {});
       getTrackTotals(skillId).then(setTrackTotals).catch(() => {});
       getAvailableTracks(skillId)
         .then((tracks) => {

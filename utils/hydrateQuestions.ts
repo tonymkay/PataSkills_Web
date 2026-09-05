@@ -72,27 +72,42 @@ export function hydrateQuestionsList(
  * `signs` array is empty, so a JSON author never needs new app code just
  * to add a `{"kind":"reading"}` learning mode to a text-only skill.
  *
- * One derived entry per question: `meaning` is the correct answer text,
- * `explanation` is the question's own `explanation` field if it's been
- * authored, otherwise a plain fact statement built from the question +
- * correct answer (never blank, even for content like world-facts where
- * every source `explanation` is currently `""`).
+ * One derived entry per question: `meaning` is a true statement about the
+ * topic — the correct-answer text for "which is true" questions, or one of
+ * the other options for "which is false" questions (see the false-flip
+ * below). `explanation` is the question's own `explanation` field if it's
+ * been authored, otherwise falls back to that same fact statement (never
+ * blank, even for content like world-facts where every source
+ * `explanation` is currently `""`).
  */
 export function deriveReadingEntriesFromQuestions(questions: QuizQuestion[]): SignCatalogEntry[] {
   return questions.map((q) => {
     const answers = q.answers ?? [];
-    const correctAnswer = answers[q.correctAnswer] ?? '';
+    // "Which statement is FALSE about X?" flips which option is the real
+    // fact: `correctAnswer` there is deliberately the absurd/wrong option
+    // (that's what makes picking it the right response to a false-seeking
+    // question) — e.g. l1q088 ("false about a superhero costume?") has
+    // correctAnswer pointing at "It is a type of fruit". Blindly reading
+    // `answers[q.correctAnswer]` as "the fact" is only valid for
+    // "which is true" questions; for "which is false" ones it teaches the
+    // made-up distractor as if it were real. Pull a true statement from
+    // one of the other options instead whenever the question asks for the
+    // false one.
+    const asksForFalseStatement = /\bfalse\b/i.test(q.question);
+    const factIndex =
+      asksForFalseStatement && answers.length > 1
+        ? (q.correctAnswer === 0 ? 1 : 0)
+        : q.correctAnswer;
+    const fact = answers[factIndex] ?? '';
     const explanation =
-      q.explanation && q.explanation.trim().length > 0
-        ? q.explanation
-        : `${q.question} ${correctAnswer}`.trim();
+      q.explanation && q.explanation.trim().length > 0 ? q.explanation : fact || q.question;
     return {
       signId: q.id,
       pairId: q.pairId ?? q.id,
       signRef: 'A',
-      name: correctAnswer || q.question,
+      name: fact || q.question,
       signType: 'informational',
-      meaning: correctAnswer,
+      meaning: fact,
       whereUsed: q.section ?? '',
       explanation,
       image: null,

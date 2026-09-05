@@ -166,11 +166,17 @@ export function SessionStateScreen({
     }).catch(() => {});
   }, []);
 
+  // Both fallbacks below must forward skill/track, same as
+  // handleBuyKeys/handleSubscribe just above — otherwise app/index.tsx's
+  // mount effect sees no ?skill= on the resumed '/' navigation and falls
+  // back to DEFAULT_SKILL ('driving-theory'), silently swapping the
+  // learner into the wrong skill's questions after watching an ad or
+  // restoring an account from a non-driving-theory out-of-keys screen.
   const handleRestoreSuccess = () => {
     if (onPrimaryPress) {
       onPrimaryPress();
     } else {
-      navReplace(router, { pathname: '/', params: { resume: 'true' } });
+      navReplace(router, { pathname: '/', params: { resume: 'true', skill: skillId, track } });
     }
   };
 
@@ -178,7 +184,7 @@ export function SessionStateScreen({
     if (onPrimaryPress) {
       onPrimaryPress();
     } else {
-      navReplace(router, { pathname: '/', params: { resume: 'true' } });
+      navReplace(router, { pathname: '/', params: { resume: 'true', skill: skillId, track } });
     }
   };
 

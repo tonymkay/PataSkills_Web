@@ -78,12 +78,12 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
 
   // Resume from last completed topic index
   React.useEffect(() => {
-    getLocalProgress().then((p) => {
+    getLocalProgress(skillId).then((p) => {
       if (p && p.completedTopics > 0 && sessions.length > 0) {
         setSessionIndex(Math.min(p.completedTopics, sessions.length - 1));
       }
     }).catch(() => {});
-  }, [sessions]);
+  }, [sessions, skillId]);
 
   const currentSession = sessions[sessionIndex];
   const hasMoreSessions = sessionIndex + 1 < sessions.length;
@@ -125,11 +125,11 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
       setLastStats(stats);
       setTotalXp((prev) => prev + stats.correctCount * XP_PER_CORRECT);
       // Source of truth: hitting topic complete screen marks topic done
-      void markTopicCompleted(sessionIndex, sessions.length);
+      void markTopicCompleted(skillId, sessionIndex, sessions.length);
       setScreenDirection('forward');
       setFlowState('topicComplete');
     },
-    [sessionIndex, sessions.length],
+    [sessionIndex, sessions.length, skillId],
   );
 
   // Directly advances to next session if keys available, or shows outOfKeys.
@@ -203,7 +203,7 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
       // Source of truth for ModeSwitcherSheet's "N/6 tracks complete"
       // count and per-row DONE state — this is the one place we know for
       // certain every topic in `track` has been exhausted.
-      void markTrackCompleted(track);
+      void markTrackCompleted(skillId, track);
       setSwitcherHeading('trackComplete');
       setSwitcherVisible(true);
       return;
@@ -221,7 +221,7 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
     }
 
     void advanceToNextSession();
-  }, [hasMoreSessions, isOutOfKeys, deepLinked, advanceToNextSession, track]);
+  }, [hasMoreSessions, isOutOfKeys, deepLinked, advanceToNextSession, track, skillId]);
 
   const handleSelectTrack = useCallback(
     (newTrack: Track) => {

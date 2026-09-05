@@ -1,10 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { Track } from '@/lib/curriculum';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
-const PROGRESS_STORAGE_KEY = '@play/progress';
 const EMAIL_STORAGE_KEY = '@play/user_email';
-const COMPLETED_TRACKS_STORAGE_KEY = '@play/completed_tracks';
+
+// Both storage keys below are scoped per skill. Track ids like 'full' and
+// 'reading' are reused across every skill's curriculum (world-facts and
+// driving-theory both declare a 'full' track, for instance), so a single
+// shared key meant finishing world-facts' 'full' track marked
+// driving-theory's completely different 'full' track as done too, and
+// PlaySession's session-resume effect jumped a learner mid-way into one
+// skill's sessions using a completedTopics count earned in another skill
+// entirely. `skillId` defaults to a fixed legacy bucket only for the one
+// call site (LandingScreen's no-op progress prefetch) that has no skill
+// context yet and never reads the result — every real read/write below
+// passes a real skillId.
+const LEGACY_UNSCOPED_BUCKET = 'unscoped';
+
+function progressStorageKey(skillId: CurriculumSlug | string): string {
+  return `@play/progress:${skillId}`;
+}
+
+function completedTracksStorageKey(skillId: CurriculumSlug | string): string {
+  return `@play/completed_tracks:${skillId}`;
+}
 
 export interface ProgressState {
   completedTopics: number;
@@ -19,11 +39,13 @@ const DEFAULT_PROGRESS: ProgressState = {
 };
 
 /**
- * Gets the current progress from AsyncStorage.
+ * Gets the current progress from AsyncStorage, scoped to one skill.
  */
-export async function getLocalProgress(): Promise<ProgressState> {
+export async function getLocalProgress(
+  skillId: CurriculumSlug | string = LEGACY_UNSCOPED_BUCKET
+): Promise<ProgressState> {
   try {
-    const raw = await AsyncStorage.getItem(PROGRESS_STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(progressStorageKey(skillId));
     if (raw) {
       return JSON.parse(raw) as ProgressState;
     }
@@ -32,13 +54,15 @@ export async function getLocalProgress(): Promise<ProgressState> {
 }
 
 /**
- * Marks a topic index as completed when the user hits topicComplete screen.
+ * Marks a topic index as completed when the user hits topicComplete screen,
+ * within the given skill's own progress bucket.
  */
 export async function markTopicCompleted(
+  skillId: CurriculumSlug | string,
   topicIndex: number,
   totalTopics: number = 46
 ): Promise<ProgressState> {
-  const current = await getLocalProgress();
+  const current = await getLocalProgress(skillId);
   const nextCompleted = Math.max(current.completedTopics, topicIndex + 1);
 
   const updated: ProgressState = {
@@ -48,7 +72,7 @@ export async function markTopicCompleted(
   };
 
   try {
-    await AsyncStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(updated));
+    await AsyncStorage.setItem(progressStorageKey(skillId), JSON.stringify(updated));
   } catch {}
 
   // Sync to Supabase if email is known
@@ -71,9 +95,16 @@ export async function markTopicCompleted(
 }
 
 /**
- * Restores cloud progress from Supabase for a given email.
+ * Restores cloud progress from Supabase for a given email, merged into the
+ * given skill's local bucket. Note: `play_progress` doesn't currently exist
+ * as a Supabase table (confirmed via a PGRST205 error), so this silently
+ * no-ops today — kept scoped per-skill so it's correct the moment that
+ * table (and a skill column on it) gets added.
  */
-export async function syncProgressWithCloud(email: string): Promise<ProgressState> {
+export async function syncProgressWithCloud(
+  email: string,
+  skillId: CurriculumSlug | string = LEGACY_UNSCOPED_BUCKET
+): Promise<ProgressState> {
   try {
     const { data, error } = await supabase
       .from('play_progress')
@@ -82,30 +113,32 @@ export async function syncProgressWithCloud(email: string): Promise<ProgressStat
       .single();
 
     if (!error && data) {
-      const local = await getLocalProgress();
+      const local = await getLocalProgress(skillId);
       const mergedCompleted = Math.max(local.completedTopics, data.completed_topics || 0);
       const merged: ProgressState = {
         completedTopics: mergedCompleted,
         totalTopics: data.total_topics || 34,
         lastUpdated: new Date().toISOString(),
       };
-      await AsyncStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(merged));
+      await AsyncStorage.setItem(progressStorageKey(skillId), JSON.stringify(merged));
       return merged;
     }
   } catch {}
 
-  return await getLocalProgress();
+  return await getLocalProgress(skillId);
 }
 
 /**
  * Which learning-mode tracks the learner has fully exhausted (hit
- * trackComplete on), across all skills. Used by ModeSwitcherSheet to show
+ * trackComplete on), scoped to one skill. Used by ModeSwitcherSheet to show
  * a real "N/6 tracks complete" count and per-row DONE state instead of
  * hardcoded/zeroed values.
  */
-export async function getCompletedTracks(): Promise<Track[]> {
+export async function getCompletedTracks(
+  skillId: CurriculumSlug | string = LEGACY_UNSCOPED_BUCKET
+): Promise<Track[]> {
   try {
-    const raw = await AsyncStorage.getItem(COMPLETED_TRACKS_STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(completedTracksStorageKey(skillId));
     if (raw) {
       return JSON.parse(raw) as Track[];
     }
@@ -114,19 +147,22 @@ export async function getCompletedTracks(): Promise<Track[]> {
 }
 
 /**
- * Marks a track as fully completed. Idempotent — calling this again for a
- * track that's already recorded is a no-op (no duplicate entries, no
- * extra AsyncStorage write).
+ * Marks a track as fully completed within one skill. Idempotent — calling
+ * this again for a track that's already recorded is a no-op (no duplicate
+ * entries, no extra AsyncStorage write).
  */
-export async function markTrackCompleted(track: Track): Promise<Track[]> {
-  const current = await getCompletedTracks();
+export async function markTrackCompleted(
+  skillId: CurriculumSlug | string,
+  track: Track
+): Promise<Track[]> {
+  const current = await getCompletedTracks(skillId);
   if (current.includes(track)) {
     return current;
   }
 
   const updated = [...current, track];
   try {
-    await AsyncStorage.setItem(COMPLETED_TRACKS_STORAGE_KEY, JSON.stringify(updated));
+    await AsyncStorage.setItem(completedTracksStorageKey(skillId), JSON.stringify(updated));
   } catch {}
 
   return updated;

@@ -61,7 +61,7 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
   const trackOptions = getTrackOptionsForSkill(skill, availableTracks, trackDefs);
 
   useEffect(() => {
-    getCompletedTracks().then(setCompletedTracks).catch(() => {});
+    getCompletedTracks(skillId).then(setCompletedTracks).catch(() => {});
     getTrackTotals(skillId).then(setTrackTotals).catch(() => {});
     getAvailableTracks(skillId).then(setAvailableTracks).catch(() => {});
     getCurriculumTrackDefs(skillId).then(setTrackDefs).catch(() => {});

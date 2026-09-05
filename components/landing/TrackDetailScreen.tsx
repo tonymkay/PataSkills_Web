@@ -57,8 +57,8 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: T
   }
 
   useEffect(() => {
-    getLocalProgress().then(setProgress).catch(() => {});
-  }, []);
+    getLocalProgress(skillId).then(setProgress).catch(() => {});
+  }, [skillId]);
 
   useEffect(() => {
     let active = true;

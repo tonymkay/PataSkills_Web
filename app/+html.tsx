@@ -13,6 +13,16 @@ const drivingTheoryCoverImageUrl = SUPABASE_URL
   ? `${SUPABASE_URL}/storage/v1/object/public/play-assets/${CurriculumCoverImagePaths['driving-theory']}`
   : null;
 
+// AdSense client ID for the web build — same underlying Google Ads
+// publisher account as the AdMob IDs in lib/ads.ts (5256043046254310),
+// just the "ca-pub-" (web/AdSense) form instead of "ca-app-pub-"
+// (in-app/AdMob). Read once here at static-HTML-generation time so the
+// verification/serving script lands in every page's <head> — AdSense's
+// site-ownership check crawls the page and looks for exactly this script
+// tag, so it has to be server-rendered into the static shell rather than
+// injected client-side after hydration.
+const ADSENSE_CLIENT_ID = process.env.EXPO_PUBLIC_ADSENSE_CLIENT_ID?.trim();
+
 // Full-weight .ttf files plus their subsetted .woff2 counterparts (generated
 // by glyphhanger + fonttools, stripped to just the ASCII range this app
 // actually uses — ~56KB each down to ~10KB each). Both come from
@@ -83,6 +93,13 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="preload" as="font" type="font/woff2" href={soraExtraBoldWoff2} crossOrigin="anonymous" />
         {drivingTheoryCoverImageUrl && (
           <link rel="preload" as="image" type="image/webp" href={drivingTheoryCoverImageUrl} />
+        )}
+        {ADSENSE_CLIENT_ID && (
+          <script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
+            crossOrigin="anonymous"
+          />
         )}
         <style dangerouslySetInnerHTML={{ __html: fontFaceStyle }} />
         <style dangerouslySetInnerHTML={{ __html: webShellStyle }} />
