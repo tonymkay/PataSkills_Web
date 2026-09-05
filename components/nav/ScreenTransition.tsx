@@ -1,10 +1,8 @@
 import React, { useCallback } from 'react';
-import { Dimensions, Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
 import { peekNavDirection, resetNavDirection } from '@/lib/navDirection';
-
-const screenWidth = Dimensions.get('window').width;
 
 // Wrap the root of a routed screen (keys-packs, keys-confirm, how-keys-work,
 // subscription-plans, subscription-confirm, premium-benefits,
@@ -36,6 +34,15 @@ const screenWidth = Dimensions.get('window').width;
 export function ScreenTransition({ children }: { children: React.ReactNode }) {
   const isWeb = Platform.OS === 'web';
   const translateX = useSharedValue(0);
+  // Read live, not via a module-scope Dimensions.get() snapshot: on the
+  // very first screen the app loads (app/index.tsx), this module can
+  // evaluate before the web view has committed layout, so a one-time
+  // Dimensions.get('window').width can be 0/stale — the slide then runs
+  // from 0 to 0 and is invisible. Every screen reached by navigating (not
+  // loaded first) mounts after hydration, so the static value happened to
+  // be correct there, masking the bug. useWindowDimensions re-renders with
+  // the real width once layout is known, on every screen including this one.
+  const { width: screenWidth } = useWindowDimensions();
 
   useFocusEffect(
     useCallback(() => {
@@ -46,7 +53,7 @@ export function ScreenTransition({ children }: { children: React.ReactNode }) {
       translateX.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
       // No cleanup needed: nothing to tear down between focus/blur here.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isWeb])
+    }, [isWeb, screenWidth])
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
