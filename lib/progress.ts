@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { Track } from '@/lib/curriculum';
 
 const PROGRESS_STORAGE_KEY = '@play/progress';
 const EMAIL_STORAGE_KEY = '@play/user_email';
+const COMPLETED_TRACKS_STORAGE_KEY = '@play/completed_tracks';
 
 export interface ProgressState {
   completedTopics: number;
@@ -93,4 +95,39 @@ export async function syncProgressWithCloud(email: string): Promise<ProgressStat
   } catch {}
 
   return await getLocalProgress();
+}
+
+/**
+ * Which learning-mode tracks the learner has fully exhausted (hit
+ * trackComplete on), across all skills. Used by ModeSwitcherSheet to show
+ * a real "N/6 tracks complete" count and per-row DONE state instead of
+ * hardcoded/zeroed values.
+ */
+export async function getCompletedTracks(): Promise<Track[]> {
+  try {
+    const raw = await AsyncStorage.getItem(COMPLETED_TRACKS_STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw) as Track[];
+    }
+  } catch {}
+  return [];
+}
+
+/**
+ * Marks a track as fully completed. Idempotent — calling this again for a
+ * track that's already recorded is a no-op (no duplicate entries, no
+ * extra AsyncStorage write).
+ */
+export async function markTrackCompleted(track: Track): Promise<Track[]> {
+  const current = await getCompletedTracks();
+  if (current.includes(track)) {
+    return current;
+  }
+
+  const updated = [...current, track];
+  try {
+    await AsyncStorage.setItem(COMPLETED_TRACKS_STORAGE_KEY, JSON.stringify(updated));
+  } catch {}
+
+  return updated;
 }

@@ -10,7 +10,7 @@ import { LoadingQuestionsScreen } from '@/components/feedback/DownloadingScreen'
 import { useKeys } from '@/hooks/useKeys';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
-import { getLocalProgress, markTopicCompleted } from '@/lib/progress';
+import { getLocalProgress, markTopicCompleted, markTrackCompleted } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 
 const XP_PER_CORRECT = 5;
@@ -196,6 +196,10 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
   //    straight to the next session, no confirmation UI.
   const handleNextPress = useCallback(async () => {
     if (!hasMoreSessions) {
+      // Source of truth for ModeSwitcherSheet's "N/6 tracks complete"
+      // count and per-row DONE state — this is the one place we know for
+      // certain every topic in `track` has been exhausted.
+      void markTrackCompleted(track);
       setSwitcherHeading('trackComplete');
       setSwitcherVisible(true);
       return;
@@ -213,7 +217,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
     }
 
     void advanceToNextSession();
-  }, [hasMoreSessions, isOutOfKeys, deepLinked, advanceToNextSession]);
+  }, [hasMoreSessions, isOutOfKeys, deepLinked, advanceToNextSession, track]);
 
   const handleSelectTrack = useCallback(
     (newTrack: Track) => {

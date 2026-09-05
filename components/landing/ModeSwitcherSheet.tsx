@@ -14,7 +14,7 @@ import { Spacing, Radius } from '@/constants/spacing';
 import { getSheetGradient } from '@/constants/gradients';
 import { StaticColors } from '@/constants/colors';
 import { TRACK_OPTIONS } from '@/constants/trackOptions';
-import { getLocalProgress } from '@/lib/progress';
+import { getLocalProgress, getCompletedTracks } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 import { ModeCard } from './ModeCard';
 
@@ -26,16 +26,19 @@ export type ModeSwitcherHeading = 'switch' | 'trackComplete';
 // topic." — the DONE badge + progress row on the current track's card now
 // carry that meaning, so the subtitle just needs to nudge toward the list
 // instead of re-explaining it.
-const HEADING_COPY: Record<ModeSwitcherHeading, { title: string; subtitle?: string }> = {
+const HEADING_COPY: Record<ModeSwitcherHeading, { title?: string; subtitle?: string }> = {
   switch: {
     title: 'Switch to a different learning style',
   },
   trackComplete: {
-    title: "You've completed this track!",
     subtitle: 'Pick another way to keep learning.',
   },
 };
 
+// trackComplete's title is a fraction ("N/6 tracks complete") instead of
+// static copy, so the learner can see how much of the full mode set
+// they've worked through — N comes from real per-track completion
+// persisted in storage (lib/progress.ts), not a hardcoded value.
 interface ModeSwitcherSheetProps {
   visible: boolean;
   heading: ModeSwitcherHeading;
@@ -68,14 +71,19 @@ export function ModeSwitcherSheet({
   const translateY = useSharedValue(600);
   const backdropOpacity = useSharedValue(0);
   // Shared/global progress (same source TrackDetailScreen's dots use) —
-  // there's no per-track progress tracked in storage, so this is the only
-  // real completion figure available for the current row. Other rows get
-  // 0%: no data exists for tracks the learner hasn't touched this session.
+  // drives the CURRENT row's in-progress segment fill while the current
+  // track is still ongoing ('switch' heading).
   const [progress, setProgress] = useState({ completedTopics: 0, totalTopics: 46 });
+  // Tracks the learner has fully exhausted (persisted in AsyncStorage via
+  // markTrackCompleted, written from PlaySession the moment a track runs
+  // out of topics) — real source for both the header fraction and each
+  // row's DONE state, refetched every time the sheet opens.
+  const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
 
   useEffect(() => {
     if (visible) {
       getLocalProgress().then(setProgress).catch(() => {});
+      getCompletedTracks().then(setCompletedTracks).catch(() => {});
     }
   }, [visible]);
 
@@ -98,6 +106,21 @@ export function ModeSwitcherSheet({
 
   const sheetGrad = getSheetGradient(isDark);
   const copy = HEADING_COPY[heading];
+
+  // Effective completed set: persisted completedTracks, plus currentTrack
+  // when trackComplete fired this render — PlaySession writes it to
+  // storage in the same tick it opens this sheet, but that write is async,
+  // so the very first render here can't rely on the fetch having landed
+  // yet. Union avoids a "0/6" flash on the track you just finished.
+  const effectiveCompleted =
+    heading === 'trackComplete' && !completedTracks.includes(currentTrack)
+      ? [...completedTracks, currentTrack]
+      : completedTracks;
+  const completedCount = TRACK_OPTIONS.filter((o) => effectiveCompleted.includes(o.track)).length;
+  const title =
+    heading === 'trackComplete'
+      ? `${completedCount}/${TRACK_OPTIONS.length} tracks complete`
+      : copy.title;
 
   // Current track first, same rendering as every other row — just
   // reordered and left for ModeCard to highlight.
@@ -138,7 +161,7 @@ export function ModeSwitcherSheet({
             </View>
 
             <Text style={[Typography.headlineSm, styles.title, { color: colors.onSurface }]}>
-              {copy.title}
+              {title}
             </Text>
             {copy.subtitle ? (
               <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>{copy.subtitle}</Text>
@@ -151,21 +174,31 @@ export function ModeSwitcherSheet({
             >
               {ordered.map((option, i) => {
                 const isCurrent = option.track === currentTrack;
+                const isDone = !isCurrent && effectiveCompleted.includes(option.track);
                 // Current row: trackComplete means we know for a fact this
                 // track's sessions are exhausted, so show it as fully done
                 // regardless of what the shared pct happens to compute to —
                 // a "you've completed this" screen showing a partial bar
                 // for the very card it's about would read as a bug. The
                 // 'switch' heading (mid-track, not finished) shows the real
-                // shared pct instead. Every other row has no data, so 0%.
+                // shared pct instead. Other rows use the real persisted
+                // completedTracks set: full bar if done, empty if untouched.
                 const currentPct =
                   progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
-                const rowProgress = isCurrent ? (heading === 'trackComplete' ? 1 : currentPct) : 0;
+                const rowProgress = isCurrent
+                  ? heading === 'trackComplete'
+                    ? 1
+                    : currentPct
+                  : isDone
+                    ? 1
+                    : 0;
                 const rowStatus: 'current' | 'done' | undefined = isCurrent
                   ? heading === 'trackComplete'
                     ? 'done'
                     : 'current'
-                  : undefined;
+                  : isDone
+                    ? 'done'
+                    : undefined;
                 return (
                   <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
                     <ModeCard

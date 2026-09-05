@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Image, Platform } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Image, Platform, ScrollView } from 'react-native';
 import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Clock, Bell, Check, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -261,7 +261,11 @@ export function SessionStateScreen({
           },
         ]}
       >
-        <View style={styles.proceedContent}>
+        <ScrollView
+          style={styles.proceedScroll}
+          contentContainerStyle={styles.proceedContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Dismiss Button — top-left, above the title */}
           <Pressable onPress={handleAttemptExit} hitSlop={12} style={styles.proceedCloseBtnTopLeft}>
             <X size={22} color={colors.onSurfaceVariant} />
@@ -417,7 +421,7 @@ export function SessionStateScreen({
               </Text>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
 
         {/* Bottom Single Continue Button (Like CheckButton) */}
         <View style={styles.actions}>
@@ -631,10 +635,15 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   /* Proceed / Out of Keys Screen */
-  proceedContent: {
+  proceedScroll: {
     flex: 1,
+    width: '100%',
+  },
+  proceedContent: {
+    flexGrow: 1,
     alignItems: 'center',
     width: '100%',
+    paddingBottom: Spacing.md,
   },
   proceedTitle: {
     fontFamily: FontFamily.bold,
