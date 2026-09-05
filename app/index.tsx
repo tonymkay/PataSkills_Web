@@ -144,35 +144,48 @@ export default function PlayEntry() {
         },
       ]}
     >
-      <Animated.View
-        key={stage}
-        style={styles.stageContainer}
-        entering={stageDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
-        exiting={FadeOut.duration(180)}
-      >
       {stage === 'session' ? (
-        <PlaySession
-          sessions={sessions}
-          signCatalog={signCatalog}
-          track={currentTrack}
-          deepLinked={trackIsDeepLinked}
-          onSwitchTrack={handleSelectTrack}
-          onExit={handleExit}
-        />
-      ) : stage === 'downloading' ? (
-        <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
-      ) : stage === 'track-detail' ? (
-        <TrackDetailScreen
-          track={previewTrack}
-          onStartPractice={handleStartFromTrackDetail}
-          onBack={closeTrackDetail}
-        />
-      ) : stage === 'learning-style' ? (
-        <LearningStyleScreen onPreviewTrack={handlePreviewFromLearningStyle} onBack={handleBackToLanding} />
+        // No inner slide wrapper here — this stage is what a browser
+        // back-nav from /subscription-plans or /subscription-confirm
+        // lands back on. Wrapping it in a second, independently-directed
+        // animation (stageDirection, which back-nav never updates) meant
+        // that return trip played two un-synced slides at once, unlike
+        // subscription-plans <-> subscription-confirm which only ever
+        // have the single page-level ScreenTransition slide. PlaySession
+        // already animates its own internal states (playing/topicComplete),
+        // so it doesn't need this outer wrapper.
+        <View style={styles.stageContainer}>
+          <PlaySession
+            sessions={sessions}
+            signCatalog={signCatalog}
+            track={currentTrack}
+            deepLinked={trackIsDeepLinked}
+            onSwitchTrack={handleSelectTrack}
+            onExit={handleExit}
+          />
+        </View>
       ) : (
-        <LandingScreen onStart={handleStart} onRestore={handlePreviewFromLanding} />
+        <Animated.View
+          key={stage}
+          style={styles.stageContainer}
+          entering={stageDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
+          exiting={FadeOut.duration(180)}
+        >
+          {stage === 'downloading' ? (
+            <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
+          ) : stage === 'track-detail' ? (
+            <TrackDetailScreen
+              track={previewTrack}
+              onStartPractice={handleStartFromTrackDetail}
+              onBack={closeTrackDetail}
+            />
+          ) : stage === 'learning-style' ? (
+            <LearningStyleScreen onPreviewTrack={handlePreviewFromLearningStyle} onBack={handleBackToLanding} />
+          ) : (
+            <LandingScreen onStart={handleStart} onRestore={handlePreviewFromLanding} />
+          )}
+        </Animated.View>
       )}
-      </Animated.View>
     </View>
     </ScreenTransition>
   );
