@@ -16,7 +16,7 @@ export default function SubscriptionConfirmScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ plan?: string }>();
+  const params = useLocalSearchParams<{ plan?: string; skill?: string; track?: string }>();
   const plan = planById(params.plan);
 
   const [email, setEmail] = useState('');
@@ -50,7 +50,7 @@ export default function SubscriptionConfirmScreen() {
 
     setBusy(true);
     setEmailError(null);
-    const result = await purchasePlan(plan.packageId, sanitized);
+    const result = await purchasePlan(plan.packageId, sanitized, params.skill, params.track);
     setBusy(false);
     if (result === 'error') {
       alert('Could not initiate checkout. Please try again.');

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
@@ -15,6 +15,12 @@ export default function KeysPacksScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  // Forwarded through from SessionStateScreen's out-of-keys handoff, and
+  // onward to keys-confirm below — carries the skill/track context so the
+  // eventual payment-complete redirect knows what to resume (Bug B fix,
+  // §B.2/§C.1 of the multi-skill architecture doc). Either can be absent
+  // (e.g. this screen reached from a context with no active session).
+  const params = useLocalSearchParams<{ skill?: string; track?: string }>();
   const [balance, setBalance] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -68,7 +74,7 @@ export default function KeysPacksScreen() {
           {KEY_PACKS.map((pack: KeyPack) => (
             <Pressable
               key={pack.id}
-              onPress={() => navPush(router, { pathname: '/keys-confirm', params: { pack: pack.id } })}
+              onPress={() => navPush(router, { pathname: '/keys-confirm', params: { pack: pack.id, skill: params.skill, track: params.track } })}
               style={({ pressed }) => [
                 styles.packCard,
                 {

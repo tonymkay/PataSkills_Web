@@ -19,7 +19,7 @@ export default function PaymentCompleteScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ type?: string; count?: string; reference?: string; email?: string }>();
+  const params = useLocalSearchParams<{ type?: string; count?: string; reference?: string; email?: string; skill?: string; track?: string }>();
 
   const isKeys = params.type === 'keys' || (!params.type && !!params.count);
   const keysCount = Number(params.count || 20);
@@ -41,7 +41,18 @@ export default function PaymentCompleteScreen() {
   }, [isKeys, keysCount, paystackRef, userEmail]);
 
   const handleContinuePlaying = () => {
-    navReplace(router, { pathname: '/', params: { resume: 'true' } });
+    // Forward skill/track (when the purchase flow carried them — Bug B
+    // fix, §B.2/§C.1 of the multi-skill architecture doc) so app/index.tsx's
+    // resume flow resolves the same skill/track this purchase started
+    // from, instead of silently falling back to driving-theory.
+    navReplace(router, {
+      pathname: '/',
+      params: {
+        resume: 'true',
+        ...(params.skill ? { skill: params.skill } : {}),
+        ...(params.track ? { track: params.track } : {}),
+      },
+    });
   };
 
   return (

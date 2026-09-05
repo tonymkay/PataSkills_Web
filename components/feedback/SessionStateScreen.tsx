@@ -15,6 +15,8 @@ import { truncateEmailMiddle } from '@/lib/email';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { WatchAdPromptSheet } from '@/components/feedback/WatchAdPromptSheet';
 import { navPush, navReplace } from '@/lib/navDirection';
+import type { Track } from '@/lib/curriculum';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 export type SessionStateKind =
   | 'topicComplete'
@@ -44,6 +46,16 @@ interface SessionStateScreenProps {
   onSecondaryPress?: () => void;
   onBuyKeysPress?: () => void;
   onSubscribePress?: () => void;
+  /** Which skill/track this out-of-keys screen belongs to — forwarded as
+   *  ?skill=&track= through keys-packs/subscription-plans → …-confirm →
+   *  billing.ts's payment-complete redirect, so "Continue Playing" after
+   *  a purchase resumes the same skill/track instead of silently falling
+   *  back to driving-theory (Bug B, §B.2/§C.1 of the multi-skill
+   *  architecture doc). Only relevant for the default (unhandled)
+   *  handleBuyKeys/handleSubscribe navigation below — irrelevant when the
+   *  caller supplies its own onBuyKeysPress/onSubscribePress. */
+  skillId?: CurriculumSlug;
+  track?: Track;
 }
 
 const stateCopy: Record<
@@ -133,6 +145,8 @@ export function SessionStateScreen({
   onSecondaryPress,
   onBuyKeysPress,
   onSubscribePress,
+  skillId,
+  track,
 }: SessionStateScreenProps) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -211,7 +225,7 @@ export function SessionStateScreen({
     if (onBuyKeysPress) {
       onBuyKeysPress();
     } else {
-      navPush(router, '/keys-packs');
+      navPush(router, { pathname: '/keys-packs', params: { skill: skillId, track } });
     }
   };
 
@@ -219,7 +233,7 @@ export function SessionStateScreen({
     if (onSubscribePress) {
       onSubscribePress();
     } else {
-      navPush(router, '/subscription-plans');
+      navPush(router, { pathname: '/subscription-plans', params: { skill: skillId, track } });
     }
   };
 

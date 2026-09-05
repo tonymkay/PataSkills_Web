@@ -17,7 +17,7 @@ export default function KeysConfirmScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ pack?: string }>();
+  const params = useLocalSearchParams<{ pack?: string; skill?: string; track?: string }>();
   const pack = keyPackById(params.pack);
   
   const [email, setEmail] = useState('');
@@ -52,7 +52,7 @@ export default function KeysConfirmScreen() {
 
     setBusy(true);
     setEmailError(null);
-    const result = await purchaseKeyPack(pack.id, sanitized);
+    const result = await purchaseKeyPack(pack.id, sanitized, params.skill, params.track);
     setBusy(false);
     if (result === 'error') {
       alert('Could not initiate checkout. Please try again.');

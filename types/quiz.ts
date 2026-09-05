@@ -13,6 +13,7 @@ export type QuizImageSource = ImageSourcePropType | string | null | undefined;
 export interface BaseQuestion {
   id: string;
   pairId?: string;
+  topicId?: string;
   section?: string;
   difficulty?: 'easy' | 'medium' | 'hard' | string;
   sequence?: number;

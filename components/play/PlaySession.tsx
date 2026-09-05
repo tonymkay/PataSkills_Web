@@ -284,6 +284,8 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
         kind="outOfKeys"
         resetAt={resetAt}
         onSecondaryPress={onExit}
+        skillId={skillId}
+        track={track}
       />
     );
   }
@@ -323,6 +325,8 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
         kind="outOfKeys"
         resetAt={resetAt}
         onSecondaryPress={onExit}
+        skillId={skillId}
+        track={track}
       />
     );
   }

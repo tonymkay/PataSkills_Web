@@ -71,7 +71,7 @@ async function openCheckout(
 
 export type PurchaseResult = 'purchased' | 'cancelled' | 'unavailable' | 'error';
 
-export async function purchasePlan(packageId: string, email: string): Promise<PurchaseResult> {
+export async function purchasePlan(packageId: string, email: string, skill?: string, track?: string): Promise<PurchaseResult> {
   const plan = PLANS.find((p) => p.packageId === packageId) || PLANS[1];
   const amountKES = usdToKES(plan.annualUSD ?? plan.weeklyUSD ?? plan.monthlyUSD);
   const periodDays = plan.weeklyUSD ? 7 : plan.annualUSD ? 365 : 30;
@@ -89,14 +89,19 @@ export async function purchasePlan(packageId: string, email: string): Promise<Pu
       );
     } catch {}
     const { router } = await import('expo-router');
-    router.replace({ pathname: '/payment-complete', params: { reference, type: 'subscription', email } });
+    // skill/track carried through so "Continue Playing" on payment-complete
+    // resumes the same skill/track instead of falling back to
+    // driving-theory (Bug B fix, §B.2/§C.1 of the multi-skill architecture
+    // doc). Both are optional -- this purchase flow can be entered without
+    // an active session context.
+    router.replace({ pathname: '/payment-complete', params: { reference, type: 'subscription', email, ...(skill ? { skill } : {}), ...(track ? { track } : {}) } });
     return 'purchased';
   } catch {
     return 'error';
   }
 }
 
-export async function purchaseKeyPack(packId: string, email: string): Promise<PurchaseResult> {
+export async function purchaseKeyPack(packId: string, email: string, skill?: string, track?: string): Promise<PurchaseResult> {
   const pack = keyPackById(packId);
   if (!pack) return 'error';
   const amountKES = usdToKES(pack.priceUSD);
@@ -113,7 +118,8 @@ export async function purchaseKeyPack(packId: string, email: string): Promise<Pu
       );
     } catch {}
     const { router } = await import('expo-router');
-    router.replace({ pathname: '/payment-complete', params: { reference, type: 'keys', count: String(pack.keys), email } });
+    // See purchasePlan()'s identical comment above -- same skill/track handoff.
+    router.replace({ pathname: '/payment-complete', params: { reference, type: 'keys', count: String(pack.keys), email, ...(skill ? { skill } : {}), ...(track ? { track } : {}) } });
     return 'purchased';
   } catch {
     return 'error';

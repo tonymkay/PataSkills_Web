@@ -15,6 +15,7 @@ import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
+import { LANDING_SKILLS } from '@/constants/skills';
 
 type Stage = 'landing' | 'learning-style' | 'track-detail' | 'downloading' | 'session';
 
@@ -34,10 +35,17 @@ function parseTrack(value?: string): Track | null {
   return VALID_TRACKS.includes(value as Track) ? (value as Track) : null;
 }
 
+// Validated against LANDING_SKILLS, mirroring parseTrack() above — an
+// unrecognized/mistyped ?skill= falls back to DEFAULT_SKILL rather than
+// erroring, same backward-compatible spirit as an old track-only link.
+function parseSkill(value?: string): CurriculumSlug | null {
+  return LANDING_SKILLS.some((s) => s.id === value) ? (value as CurriculumSlug) : null;
+}
+
 export default function PlayEntry() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ resume?: string; track?: string }>();
+  const params = useLocalSearchParams<{ resume?: string; track?: string; skill?: string; topic?: string }>();
   const urlTrack = parseTrack(params.track);
   const [stage, setStage] = useState<Stage>('landing');
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
@@ -51,7 +59,8 @@ export default function PlayEntry() {
   const [trackDetailOrigin, setTrackDetailOrigin] = useState<TrackDetailOrigin>('landing');
   const [stageDirection, setStageDirection] = useState<'forward' | 'backward'>('forward');
 
-  const runDownload = useCallback(async (track: Track = 'full', deepLinked = false) => {
+  const runDownload = useCallback(async (track: Track = 'full', deepLinked = false, skillOverride?: CurriculumSlug) => {
+    const skill = skillOverride ?? selectedSkill;
     setStageDirection('forward');
     setStage('downloading');
     setError(null);
@@ -59,7 +68,7 @@ export default function PlayEntry() {
     setCurrentTrack(track);
     setTrackIsDeepLinked(deepLinked);
     const startedAt = Date.now();
-    const result = await downloadSession(track, selectedSkill, (p) => setProgress(p));
+    const result = await downloadSession(track, skill, (p) => setProgress(p));
     const elapsed = Date.now() - startedAt;
     if (elapsed < MIN_LOADING_MS) {
       await new Promise((resolve) => setTimeout(resolve, MIN_LOADING_MS - elapsed));
@@ -68,10 +77,26 @@ export default function PlayEntry() {
       setError(result.error);
       return;
     }
-    setSessions(result.sessions);
+    // Topic-level deep link (§E of the multi-skill architecture doc): jump
+    // straight to whichever session contains this topicId instead of
+    // session 1. Only meaningful for track=full on topic-grouped skills —
+    // pairId-grouped skills (driving-theory) and track=reading sessions
+    // never carry a matching topicId, so the search below just finds
+    // nothing and silently falls through to session 1, exactly like an
+    // unrecognized topicId would. Never treated as an error.
+    let sessions = result.sessions;
+    if (params.topic) {
+      const topicSessionIndex = sessions.findIndex(
+        (s) => s.kind === 'quiz' && s.questions.some((q) => q.topicId === params.topic),
+      );
+      if (topicSessionIndex > 0) {
+        sessions = sessions.slice(topicSessionIndex);
+      }
+    }
+    setSessions(sessions);
     setSignCatalog(result.signCatalog);
     setStage('session');
-  }, [selectedSkill]);
+  }, [selectedSkill, params.topic]);
 
   const handleStart = useCallback((skillId: CurriculumSlug) => {
     setSelectedSkill(skillId);
@@ -134,8 +159,18 @@ export default function PlayEntry() {
   }, []);
 
   useEffect(() => {
+    // Resolve skill before dispatching either mount-time flow below.
+    // Passed explicitly into runDownload as skillOverride rather than
+    // relying solely on the setSelectedSkill call landing before
+    // runDownload reads selectedSkill from closure — that update is
+    // async, so without the explicit override this effect could still
+    // download DEFAULT_SKILL's curriculum on the very first deep-linked
+    // load (Bug B, §B.2/§C.1 of the multi-skill architecture doc).
+    const urlSkill = parseSkill(params.skill);
+    if (urlSkill) setSelectedSkill(urlSkill);
+
     if (params.resume === 'true') {
-      void runDownload(urlTrack ?? 'full', true);
+      void runDownload(urlTrack ?? 'full', true, urlSkill ?? DEFAULT_SKILL);
     } else if (urlTrack) {
       openTrackDetail(urlTrack, 'landing');
     }

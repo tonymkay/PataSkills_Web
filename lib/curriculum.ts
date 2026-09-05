@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
-import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, PlaySession } from '@/utils/groupSessions';
+import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, chunkByTopicBounded, PlaySession, QuizPlaySession } from '@/utils/groupSessions';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 const DEFAULT_SLUG: CurriculumSlug = 'driving-theory';
@@ -24,9 +24,30 @@ const TRACK_LABEL: Record<FilterTrack, string> = {
 };
 
 /**
+ * Shared 'full'-track dispatch, used by both deriveTrack() and
+ * getTrackTotals() so the sessions a learner actually plays through and
+ * the session count shown on the progress bar can never disagree.
+ *
+ * pairId-grouped skills (driving-theory) take priority since that's an
+ * intentional multi-question bundle; topicId-grouped skills (world-facts
+ * and similar, §A.4/§C of the multi-skill architecture doc) come next;
+ * skills with neither signal fall back to plain 7-question chunking.
+ */
+function deriveFullSessions(questions: QuizQuestion[]): QuizPlaySession[] {
+  if (questions.some((q) => q.pairId)) {
+    return groupQuestionsBySession(questions);
+  }
+  if (questions.some((q) => q.topicId)) {
+    return chunkByTopicBounded(questions, 'Full');
+  }
+  return chunkIntoSessions(questions, 'Full');
+}
+
+/**
  * Filters the flat question list by role, then builds sessions for the
- * given track. 'full' groups by pairId; 'reading' builds sessions directly
- * from the signs catalog instead of from questions at all.
+ * given track. 'full' dispatches via deriveFullSessions(); 'reading'
+ * builds sessions directly from the signs catalog instead of from
+ * questions at all.
  */
 export function deriveTrack(
   questions: QuizQuestion[],
@@ -34,7 +55,7 @@ export function deriveTrack(
   track: Track = 'pairs',
 ): PlaySession[] {
   if (track === 'full') {
-    return groupQuestionsBySession(questions);
+    return deriveFullSessions(questions);
   }
 
   if (track === 'reading') {
@@ -82,7 +103,7 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
         });
         totals.full = {
           totalQuestions: remote.questions.length,
-          totalSessions: groupQuestionsBySession(remote.questions).length,
+          totalSessions: deriveFullSessions(remote.questions).length,
         };
         totals.reading = {
           totalQuestions: remote.signs.length,

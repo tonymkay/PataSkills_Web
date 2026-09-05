@@ -7,6 +7,17 @@
  * follows (same rules: textChoice format, 0-indexed correctAnswer,
  * multi-select questions excluded -- no app support for them).
  *
+ * Also adds `topicId` to every question (see PART A.2/C.1/D.1 of the
+ * multi-skill architecture doc): required so the app can group
+ * world-facts questions into real multi-question sessions (today it
+ * falls back to one-question-per-session, since these questions have no
+ * `pairId`), and because `topicId` will double as a public, addressable
+ * unit for future topic-level ad-campaign deep links -- so it must be
+ * globally unique across the whole file, not just per chapter. Composed
+ * as `${chapter.id}${topic.id}` rather than trusting the source's bare
+ * `topic.id` as-is, then verified with a uniqueness check below (throws
+ * on any collision instead of silently shipping a broken id).
+ *
  * Usage: node scripts/fix-world-facts-answers.mjs
  */
 import { createClient } from '@supabase/supabase-js';
@@ -34,12 +45,24 @@ function loadEnv() {
 const source = JSON.parse(readFileSync(SOURCE_PATH, 'utf8'));
 
 const questions = [];
+const seenTopicIds = new Set();
 let sequence = 0;
 let excludedMulti = 0;
 
 for (const level of source.levels) {
   for (const chapter of level.chapters) {
     for (const topic of chapter.topics) {
+      // Globally-unique topicId, generated here rather than trusted from
+      // the source (topic.id is only chapter-scoped in the source schema).
+      // See PART D.1 of the multi-skill architecture doc: this will double
+      // as a public identifier for topic-level deep links, so it must be
+      // stable and collision-free across the whole file.
+      const topicId = `${level.id}-${chapter.id}-${topic.id}`;
+      if (seenTopicIds.has(topicId)) {
+        throw new Error(`Duplicate topicId generated: ${topicId} (level=${level.id}, chapter=${chapter.id}, topic=${topic.id})`);
+      }
+      seenTopicIds.add(topicId);
+
       for (const q of topic.questions) {
         if (q.type !== 'single') {
           excludedMulti += 1;
@@ -55,12 +78,15 @@ for (const level of source.levels) {
           correctAnswer: correctIndex,
           explanation: q.explanation ?? '',
           section: chapter.title,
+          topicId,
           sequence,
         });
       }
     }
   }
 }
+
+console.log(`Generated ${seenTopicIds.size} unique topicIds across ${questions.length} questions.`);
 
 console.log(`Converted ${questions.length} single-answer questions (excluded ${excludedMulti} multi-select).`);
 

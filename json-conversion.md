@@ -51,6 +51,7 @@ so no new rendering code was needed:
   "correctAnswer": 0,
   "explanation": "",
   "section": "Animals and Nature",
+  "topicId": "level1-chapter1-topic1",
   "sequence": 1
 }
 ```
@@ -66,8 +67,9 @@ so no new rendering code was needed:
 | index of the option where `correct: true` | `correctAnswer` | 0-indexed, per `BaseQuestion.correctAnswer`. |
 | `question.explanation` | `explanation` | Passed through. All 250 source explanations were empty strings — harmless, the field is optional. |
 | `chapter.title` | `section` | Informational only — nothing in the current app reads `section` for filtering or grouping. Kept for future reference/debugging. |
+| `` `${level.id}-${chapter.id}-${topic.id}` `` (generated, not the source's bare `topic.id`) | `topicId` | **Added in the multi-skill architecture fix (2026-09-05).** Globally unique across the whole file — verified with a `Set` check at conversion time, throws on collision. Used by `utils/groupSessions.ts`'s `chunkByTopicBounded()` to group questions into real multi-question sessions for skills with no `pairId` (world-facts and similar), and doubles as the addressable unit for future topic-level deep links (see the multi-skill architecture doc, §A.2/§D.1/§E) — once a `topicId` ships in a live link, treat it as a permanent identifier, not something to regenerate on a later re-conversion. |
 | running counter | `sequence` | Global 1-based order across the whole flattened file. Also informational only. |
-| `question.rule`, `level.id`, `topic.id`, `appMeta`, `country`, `imageMap`, `engineRules`, `learningModes`, `schemaVersion` | *(dropped)* | No equivalent concept in this app's data model. |
+| `question.rule`, `appMeta`, `country`, `imageMap`, `engineRules`, `learningModes`, `schemaVersion` | *(dropped)* | No equivalent concept in this app's data model. (`level.id`/`topic.id` are no longer fully dropped — see `topicId` above.) |
 
 ## The one real incompatibility: multi-select questions
 
