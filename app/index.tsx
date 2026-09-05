@@ -17,16 +17,10 @@ import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 type Stage = 'landing' | 'learning-style' | 'track-detail' | 'downloading' | 'session';
 
-// Where a track-detail preview was opened from — determines both what the
-// back button returns to, and (since only the deep-link entry point skips
-// an explicit style choice) whether starting practice counts as deep-linked.
 type TrackDetailOrigin = 'landing' | 'learning-style';
 
 const VALID_TRACKS: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading'];
 
-// Same reasoning as PlaySession's topic-transition delay: keep the
-// "Loading questions…" beat feeling consistent even when the real
-// download resolves almost instantly (cached, or a fast connection).
 const MIN_LOADING_MS = 2000;
 
 function parseTrack(value?: string): Track | null {
@@ -44,25 +38,9 @@ export default function PlayEntry() {
   const [sessions, setSessions] = useState<PlaySessionData[]>([]);
   const [signCatalog, setSignCatalog] = useState<SignCatalogEntry[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track>('pairs');
-  // Whether the current track came from a deep link (ad/payment link with a
-  // ?track= param) rather than the learner explicitly picking a learning
-  // style — drives whether PlaySession opens the mode-switcher sheet on
-  // every "Continue" (deep link, no style was ever chosen) or just advances
-  // straight to the next session (LearningStyleScreen already asked).
   const [trackIsDeepLinked, setTrackIsDeepLinked] = useState(false);
-  // Track being previewed on the track-detail page (picked from
-  // LearningStyleScreen's list, or a ?track= deep link straight from
-  // Landing) — null means the page has nothing to show.
   const [previewTrack, setPreviewTrack] = useState<Track | null>(null);
   const [trackDetailOrigin, setTrackDetailOrigin] = useState<TrackDetailOrigin>('landing');
-  // Direction for the stage transition animation — 'forward' slides the new
-  // stage in from the right, 'backward' slides it in from the left. Exiting
-  // is a plain fade regardless of direction: a directional slide-out reads
-  // the *previous* render's direction (stale by one transition whenever
-  // direction changes, e.g. forward-forward-back), which visibly looked
-  // like the wrong screen moving the wrong way — same reasoning Bluesky's
-  // own ScreenTransition component uses (FadeOut for exit, directional
-  // SlideIn for enter).
   const [stageDirection, setStageDirection] = useState<'forward' | 'backward'>('forward');
 
   const runDownload = useCallback(async (track: Track = 'pairs', deepLinked = false) => {
@@ -146,22 +124,14 @@ export default function PlayEntry() {
     setProgress(null);
   }, []);
 
-  // Auto-start: resume from payment. A bare ?track= link (ad link, no
-  // resume) opens the track-detail page instead — see openTrackDetail above.
   useEffect(() => {
     if (params.resume === 'true') {
       void runDownload(urlTrack ?? 'pairs', true);
     } else if (urlTrack) {
       openTrackDetail(urlTrack, 'landing');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Plain View with a static inset instead of SafeAreaView: SafeAreaView
-  // re-derives/re-lays-out its own insets on web, and doing that inside a
-  // node that ScreenTransition is actively sliding with translateX caused
-  // the jank you saw on this screen (the confirm/plans screens never had
-  // this — they already just use a fixed insets.top padding number).
   return (
     <ScreenTransition>
     <View
