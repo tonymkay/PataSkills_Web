@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
-import { TRACK_OPTIONS } from '@/constants/trackOptions';
+import { getTrackOptionsForSkill } from '@/constants/trackOptions';
+import { LANDING_SKILLS } from '@/constants/skills';
 import { getCompletedTracks } from '@/lib/progress';
 import { Track, TrackTotals, getTrackTotals } from '@/lib/curriculum';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { ModeCard } from './ModeCard';
 
 // Matches LandingScreen's bottom-sheet-style width cap so this screen
@@ -12,6 +14,9 @@ import { ModeCard } from './ModeCard';
 const CONTENT_MAX_WIDTH = 480;
 
 interface LearningStyleScreenProps {
+  /** Which skill's track list to show — set by whichever LandingScreen
+   *  card was tapped. */
+  skillId: CurriculumSlug;
   /** Track a card was tapped for — parent opens the full-page TrackDetailScreen. */
   onPreviewTrack: (track: Track) => void;
   onBack: () => void;
@@ -19,28 +24,32 @@ interface LearningStyleScreenProps {
 
 /**
  * Full-page "Choose Learning Style" screen — reached by tapping a skill
- * card on LandingScreen. Lists every TRACK_OPTIONS entry as a ModeCard
- * row (same list ModeSwitcherSheet uses later on, just as a standalone
- * page instead of a bottom sheet). Same done/not-started treatment and
- * next-up teal highlight as ModeSwitcherSheet — here there's no "current"
- * track yet, so the highlight falls on the first not-yet-done track
- * (Differentiate Pairs, for a learner who hasn't completed anything).
- * Tapping a card hands off to the parent to open TrackDetailScreen — this
- * screen owns no preview state itself.
+ * card on LandingScreen. Lists only the tracks that skill actually
+ * supports (constants/skills.ts's `tracks` field, resolved via
+ * getTrackOptionsForSkill) as a ModeCard row each — same list
+ * ModeSwitcherSheet uses later on, just as a standalone page instead of a
+ * bottom sheet. Same done/not-started treatment and next-up teal
+ * highlight as ModeSwitcherSheet — here there's no "current" track yet,
+ * so the highlight falls on the first not-yet-done track. Tapping a card
+ * hands off to the parent to open TrackDetailScreen — this screen owns no
+ * preview state itself.
  */
-export function LearningStyleScreen({ onPreviewTrack, onBack }: LearningStyleScreenProps) {
+export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: LearningStyleScreenProps) {
   const { colors } = useTheme();
   const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
   // Real per-track question counts for the "N questions" label on each
   // row — same source and shape as ModeSwitcherSheet uses.
   const [trackTotals, setTrackTotals] = useState<Record<Track, TrackTotals> | null>(null);
 
+  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+  const trackOptions = getTrackOptionsForSkill(skill);
+
   useEffect(() => {
     getCompletedTracks().then(setCompletedTracks).catch(() => {});
-    getTrackTotals().then(setTrackTotals).catch(() => {});
-  }, []);
+    getTrackTotals(skillId).then(setTrackTotals).catch(() => {});
+  }, [skillId]);
 
-  const nextUpTrack = TRACK_OPTIONS.find((o) => !completedTracks.includes(o.track))?.track;
+  const nextUpTrack = trackOptions.find((o) => !completedTracks.includes(o.track))?.track;
 
   return (
     <View style={styles.screen}>
@@ -59,7 +68,7 @@ export function LearningStyleScreen({ onPreviewTrack, onBack }: LearningStyleScr
         </View>
 
         <View style={styles.list}>
-          {TRACK_OPTIONS.map((option, i) => {
+          {trackOptions.map((option, i) => {
             const isDone = completedTracks.includes(option.track);
             return (
               <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>

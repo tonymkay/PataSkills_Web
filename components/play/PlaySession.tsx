@@ -12,6 +12,7 @@ import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted, markTrackCompleted } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 const XP_PER_CORRECT = 5;
 
@@ -27,6 +28,9 @@ interface SessionStats {
 interface PlaySessionProps {
   sessions: PlaySessionData[];
   signCatalog?: SignCatalogEntry[];
+  /** Which skill this session belongs to — drives which tracks
+   *  ModeSwitcherSheet offers when switching mid-session. */
+  skillId: CurriculumSlug;
   /** The track these sessions were derived from — drives the continuation
    *  flow (which mode is "current", and the per-track don't-show-again pref). */
   track: Track;
@@ -41,7 +45,7 @@ interface PlaySessionProps {
   onExit?: () => void;
 }
 
-export function PlaySession({ sessions, signCatalog, track, deepLinked = false, onSwitchTrack, onExit }: PlaySessionProps) {
+export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked = false, onSwitchTrack, onExit }: PlaySessionProps) {
   const { colors } = useTheme();
   const isFocused = useIsFocused();
   const {
@@ -304,6 +308,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
         <ModeSwitcherSheet
           visible={switcherVisible}
           heading={switcherHeading}
+          skillId={skillId}
           currentTrack={track}
           onSelectTrack={handleSelectTrack}
           onClose={() => setSwitcherVisible(false)}

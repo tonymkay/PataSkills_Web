@@ -1,53 +1,39 @@
 import type { ImageSourcePropType } from 'react-native';
-import { Track } from '@/lib/curriculum';
 import { getPlayAssetPublicUrl } from '@/lib/supabase';
 import { CurriculumCoverImagePaths } from '@/constants/curriculumAssets';
+import { LandingSkill, SimpleTrack } from '@/constants/skills';
 
 export interface TrackOption {
-  track: Track;
+  track: SimpleTrack;
   label: string;
-  /** Illustration shown in ModeSwitcherSheet. Local assets for most
-   *  tracks (assets/driving/); 'full' reuses the same remote hero image
-   *  as the landing-screen SkillCard for this skill, since it has no
-   *  dedicated local asset. */
+  /** Illustration shown in ModeCard rows (LearningStyleScreen /
+   *  ModeSwitcherSheet). 'reading' uses a fixed local asset; 'full'
+   *  reuses the skill's own remote cover image, since it has no
+   *  dedicated local illustration and this keeps working for any
+   *  future skill without a new asset. */
   image: ImageSourcePropType;
 }
 
+const READING_IMAGE = require('@/assets/driving/reading.webp');
+
+const TRACK_LABELS: Record<SimpleTrack, string> = {
+  reading: 'Reading Only',
+  full: 'Questions & Answers',
+};
+
 /**
- * Single source of truth for the learning-mode list shown in
- * ModeSwitcherSheet. The current track is reordered to the front and
- * highlighted by the sheet itself — there's no separate "current" variant
- * here, just the plain option shown first.
+ * Builds the learning-style option list for one skill — only the tracks
+ * that skill actually lists in `LANDING_SKILLS[].tracks` (see
+ * constants/skills.ts). Single source of truth for LearningStyleScreen,
+ * TrackDetailScreen, and ModeSwitcherSheet.
  */
-export const TRACK_OPTIONS: TrackOption[] = [
-  {
-    track: 'pairs',
-    label: 'Differentiate Pairs',
-    image: require('@/assets/driving/differenciate.webp'),
-  },
-  {
-    track: 'names',
-    label: 'Name a sign',
-    image: require('@/assets/driving/name.webp'),
-  },
-  {
-    track: 'meanings',
-    label: 'Meaning of Signs',
-    image: require('@/assets/driving/meaning.webp'),
-  },
-  {
-    track: 'whereUsed',
-    label: 'Where signs are used',
-    image: require('@/assets/driving/usage.webp'),
-  },
-  {
-    track: 'reading',
-    label: 'Reading Only',
-    image: require('@/assets/driving/reading.webp'),
-  },
-  {
-    track: 'full',
-    label: 'Full Course',
-    image: { uri: getPlayAssetPublicUrl(CurriculumCoverImagePaths['driving-theory']) },
-  },
-];
+export function getTrackOptionsForSkill(skill: LandingSkill): TrackOption[] {
+  return skill.tracks.map((track) => ({
+    track,
+    label: TRACK_LABELS[track],
+    image:
+      track === 'reading'
+        ? READING_IMAGE
+        : { uri: getPlayAssetPublicUrl(CurriculumCoverImagePaths[skill.id]) },
+  }));
+}

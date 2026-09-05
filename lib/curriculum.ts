@@ -1,8 +1,9 @@
 import { supabase } from './supabase';
 import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, PlaySession } from '@/utils/groupSessions';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
-const DEFAULT_SLUG = 'driving-theory';
+const DEFAULT_SLUG: CurriculumSlug = 'driving-theory';
 
 export type Track = 'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading';
 
@@ -53,22 +54,25 @@ export interface TrackTotals {
   totalSessions: number;
 }
 
-// Module-level cache: the browse screens (LearningStyleScreen,
-// ModeSwitcherSheet) both need this, and it only takes one curriculum
+// Module-level cache, keyed by skill slug: the browse screens
+// (LearningStyleScreen, ModeSwitcherSheet) both need this per whichever
+// skill the learner is currently in, and it only takes one curriculum
 // fetch (no sign assets/pairs — those don't affect the counts) to compute
-// every track's totals at once. Shared across callers within the app
-// session; cleared on failure so a later call can retry.
-let cachedTrackTotals: Promise<Record<Track, TrackTotals>> | null = null;
+// every track's totals for that skill at once. Shared across callers
+// within the app session; a skill's entry is cleared on failure so a
+// later call for that same skill can retry.
+const trackTotalsCache = new Map<CurriculumSlug, Promise<Record<Track, TrackTotals>>>();
 
 /**
- * Real per-track totals for the progress bars on the browse screens —
- * one lightweight curriculum fetch (JSON only, no sign images/pairs),
- * filtered/grouped the same way deriveTrack does, just counted instead
- * of hydrated into full sessions.
+ * Real per-track totals for the progress bars on the browse screens, for
+ * one skill's curriculum — one lightweight curriculum fetch (JSON only,
+ * no sign images/pairs), filtered/grouped the same way deriveTrack does,
+ * just counted instead of hydrated into full sessions.
  */
-export function getTrackTotals(): Promise<Record<Track, TrackTotals>> {
-  if (!cachedTrackTotals) {
-    cachedTrackTotals = loadRemoteCurriculum()
+export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Record<Track, TrackTotals>> {
+  let cached = trackTotalsCache.get(slug);
+  if (!cached) {
+    cached = loadRemoteCurriculum(slug)
       .then((remote) => {
         const totals = {} as Record<Track, TrackTotals>;
         (Object.keys(TRACK_ROLE) as FilterTrack[]).forEach((t) => {
@@ -87,11 +91,12 @@ export function getTrackTotals(): Promise<Record<Track, TrackTotals>> {
         return totals;
       })
       .catch((e) => {
-        cachedTrackTotals = null;
+        trackTotalsCache.delete(slug);
         throw e;
       });
+    trackTotalsCache.set(slug, cached);
   }
-  return cachedTrackTotals;
+  return cached;
 }
 
 interface CurriculumRow {
@@ -118,7 +123,7 @@ export interface RemoteCurriculum {
  * the questions — both are accepted.
  */
 export async function loadRemoteCurriculum(
-  slug: string = DEFAULT_SLUG,
+  slug: CurriculumSlug = DEFAULT_SLUG,
 ): Promise<RemoteCurriculum> {
   const { data: row, error } = await supabase
     .from('play_curricula')

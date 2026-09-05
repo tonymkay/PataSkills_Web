@@ -7,7 +7,7 @@ import type { LandingSkill } from '@/constants/skills';
 
 interface SkillGridCardProps {
   skill: LandingSkill;
-  onPress: () => void;
+  onPress: (skillId: LandingSkill['id']) => void;
 }
 
 /**
@@ -24,7 +24,7 @@ export function SkillGridCard({ skill, onPress }: SkillGridCardProps) {
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(skill.id)}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.surfaceContainerLow },

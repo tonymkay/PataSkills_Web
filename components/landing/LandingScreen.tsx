@@ -9,20 +9,15 @@ import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 // Bottom-sheet-style width cap (matches FeedbackSheet/RestoreAccountModal/etc.)
 // so the landing screen doesn't stretch edge-to-edge on wide/desktop viewports.
 const CONTENT_MAX_WIDTH = 480;
 
-// TEMP: layout smoke-test only. LANDING_SKILLS currently ships a single
-// real skill (driving-theory) — this repeats it 4x purely to check how the
-// 2-column "Skills Corner"-style grid reads with a full 2x2 layout. Remove
-// once there's more than one real skill and map LANDING_SKILLS directly.
-const GRID_TEST_COUNT = 4;
-
 interface LandingScreenProps {
-  /** Skill card tap — advances to LearningStyleScreen. */
-  onStart: () => void;
+  /** Skill card tap — advances to LearningStyleScreen for that skill. */
+  onStart: (skillId: CurriculumSlug) => void;
   /** Successful account restore — resumes the learner's existing
    *  progress directly, skipping LearningStyleScreen (they already
    *  picked a track on whichever device they started on). */
@@ -59,13 +54,10 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
   const handleRestoreSuccess = (result: RestoreResult) => {
     refreshProgress();
     setLinkedEmail(result.email);
-    onRestore('pairs');
+    onRestore('full');
   };
 
-  const gridSkills = Array.from({ length: GRID_TEST_COUNT }, (_, i) => ({
-    ...LANDING_SKILLS[0],
-    key: `${LANDING_SKILLS[0].id}-${i}`,
-  }));
+  const gridSkills = LANDING_SKILLS.map((skill) => ({ ...skill, key: skill.id }));
 
   return (
     <View style={styles.screen}>

@@ -14,12 +14,19 @@ import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 type Stage = 'landing' | 'learning-style' | 'track-detail' | 'downloading' | 'session';
 
 type TrackDetailOrigin = 'landing' | 'learning-style';
 
-const VALID_TRACKS: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading'];
+const DEFAULT_SKILL: CurriculumSlug = 'driving-theory';
+
+// Only these two learning-style modes are selectable now (see
+// constants/skills.ts's SimpleTrack) — an old ?track= link referencing a
+// retired driving-theory-specific track (pairs/names/meanings/whereUsed)
+// just falls through to the default landing flow instead of parsing.
+const VALID_TRACKS: Track[] = ['reading', 'full'];
 
 const MIN_LOADING_MS = 2000;
 
@@ -37,13 +44,14 @@ export default function PlayEntry() {
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<PlaySessionData[]>([]);
   const [signCatalog, setSignCatalog] = useState<SignCatalogEntry[]>([]);
-  const [currentTrack, setCurrentTrack] = useState<Track>('pairs');
+  const [selectedSkill, setSelectedSkill] = useState<CurriculumSlug>(DEFAULT_SKILL);
+  const [currentTrack, setCurrentTrack] = useState<Track>('full');
   const [trackIsDeepLinked, setTrackIsDeepLinked] = useState(false);
   const [previewTrack, setPreviewTrack] = useState<Track | null>(null);
   const [trackDetailOrigin, setTrackDetailOrigin] = useState<TrackDetailOrigin>('landing');
   const [stageDirection, setStageDirection] = useState<'forward' | 'backward'>('forward');
 
-  const runDownload = useCallback(async (track: Track = 'pairs', deepLinked = false) => {
+  const runDownload = useCallback(async (track: Track = 'full', deepLinked = false) => {
     setStageDirection('forward');
     setStage('downloading');
     setError(null);
@@ -51,7 +59,7 @@ export default function PlayEntry() {
     setCurrentTrack(track);
     setTrackIsDeepLinked(deepLinked);
     const startedAt = Date.now();
-    const result = await downloadSession(track, (p) => setProgress(p));
+    const result = await downloadSession(track, selectedSkill, (p) => setProgress(p));
     const elapsed = Date.now() - startedAt;
     if (elapsed < MIN_LOADING_MS) {
       await new Promise((resolve) => setTimeout(resolve, MIN_LOADING_MS - elapsed));
@@ -63,9 +71,10 @@ export default function PlayEntry() {
     setSessions(result.sessions);
     setSignCatalog(result.signCatalog);
     setStage('session');
-  }, []);
+  }, [selectedSkill]);
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback((skillId: CurriculumSlug) => {
+    setSelectedSkill(skillId);
     setStageDirection('forward');
     setStage('learning-style');
   }, []);
@@ -112,7 +121,7 @@ export default function PlayEntry() {
   );
 
   const handleRetry = useCallback(() => {
-    void runDownload(urlTrack ?? 'pairs', trackIsDeepLinked);
+    void runDownload(urlTrack ?? 'full', trackIsDeepLinked);
   }, [runDownload, urlTrack, trackIsDeepLinked]);
 
   const handleExit = useCallback(() => {
@@ -126,7 +135,7 @@ export default function PlayEntry() {
 
   useEffect(() => {
     if (params.resume === 'true') {
-      void runDownload(urlTrack ?? 'pairs', true);
+      void runDownload(urlTrack ?? 'full', true);
     } else if (urlTrack) {
       openTrackDetail(urlTrack, 'landing');
     }
@@ -158,6 +167,7 @@ export default function PlayEntry() {
           <PlaySession
             sessions={sessions}
             signCatalog={signCatalog}
+            skillId={selectedSkill}
             track={currentTrack}
             deepLinked={trackIsDeepLinked}
             onSwitchTrack={handleSelectTrack}
@@ -175,12 +185,17 @@ export default function PlayEntry() {
             <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
           ) : stage === 'track-detail' ? (
             <TrackDetailScreen
+              skillId={selectedSkill}
               track={previewTrack}
               onStartPractice={handleStartFromTrackDetail}
               onBack={closeTrackDetail}
             />
           ) : stage === 'learning-style' ? (
-            <LearningStyleScreen onPreviewTrack={handlePreviewFromLearningStyle} onBack={handleBackToLanding} />
+            <LearningStyleScreen
+              skillId={selectedSkill}
+              onPreviewTrack={handlePreviewFromLearningStyle}
+              onBack={handleBackToLanding}
+            />
           ) : (
             <LandingScreen onStart={handleStart} onRestore={handlePreviewFromLanding} />
           )}

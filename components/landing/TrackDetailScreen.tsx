@@ -4,10 +4,11 @@ import { ArrowLeft } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, BrandGradients } from '@/theme/tokens';
-import { TRACK_OPTIONS } from '@/constants/trackOptions';
+import { getTrackOptionsForSkill } from '@/constants/trackOptions';
 import { LANDING_SKILLS } from '@/constants/skills';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { Button } from '@/components/ui/Button';
 
 // Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
@@ -20,6 +21,9 @@ const QUESTIONS_PER_SESSION = 7;
 const CONTENT_MAX_WIDTH = 480;
 
 interface TrackDetailScreenProps {
+  /** Which skill this preview belongs to — resolves the right title,
+   *  subtitle, and cover illustration. */
+  skillId: CurriculumSlug;
   track: Track | null;
   onStartPractice: (track: Track) => void;
   onBack: () => void;
@@ -33,7 +37,7 @@ interface TrackDetailScreenProps {
  * a real page with the preview as a plain card so mobile-browser toolbar
  * quirks can't clip the CTA the way a fixed-position sheet could.
  */
-export function TrackDetailScreen({ track, onStartPractice, onBack }: TrackDetailScreenProps) {
+export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: TrackDetailScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [progress, setProgress] = useState({ completedTopics: 0, totalTopics: 46 });
@@ -44,8 +48,10 @@ export function TrackDetailScreen({ track, onStartPractice, onBack }: TrackDetai
 
   if (!track) return null;
 
-  const option = TRACK_OPTIONS.find((o) => o.track === track) ?? TRACK_OPTIONS[0];
-  const skillSubtitle = LANDING_SKILLS[0].subtitle;
+  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+  const trackOptions = getTrackOptionsForSkill(skill);
+  const option = trackOptions.find((o) => o.track === track) ?? trackOptions[0];
+  const skillSubtitle = skill.subtitle;
   const pct = progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
   const filledDots = Math.min(QUESTIONS_PER_SESSION, Math.round(pct * QUESTIONS_PER_SESSION));
 

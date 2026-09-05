@@ -13,9 +13,11 @@ import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing, Radius } from '@/constants/spacing';
 import { getSheetGradient } from '@/constants/gradients';
 import { StaticColors } from '@/constants/colors';
-import { TRACK_OPTIONS } from '@/constants/trackOptions';
+import { getTrackOptionsForSkill } from '@/constants/trackOptions';
+import { LANDING_SKILLS } from '@/constants/skills';
 import { getLocalProgress, getCompletedTracks } from '@/lib/progress';
 import { Track, TrackTotals, getTrackTotals } from '@/lib/curriculum';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { ModeCard } from './ModeCard';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -42,6 +44,9 @@ const HEADING_COPY: Record<ModeSwitcherHeading, { title?: string; subtitle?: str
 interface ModeSwitcherSheetProps {
   visible: boolean;
   heading: ModeSwitcherHeading;
+  /** Which skill's track list to show — same skill the current session
+   *  is playing through. */
+  skillId: CurriculumSlug;
   /** The track the learner is currently on (or just finished) — shown
    *  first in the list and highlighted, same illustration and label as
    *  every other row. */
@@ -62,6 +67,7 @@ interface ModeSwitcherSheetProps {
 export function ModeSwitcherSheet({
   visible,
   heading,
+  skillId,
   currentTrack,
   onSelectTrack,
   onClose,
@@ -88,9 +94,9 @@ export function ModeSwitcherSheet({
     if (visible) {
       getLocalProgress().then(setProgress).catch(() => {});
       getCompletedTracks().then(setCompletedTracks).catch(() => {});
-      getTrackTotals().then(setTrackTotals).catch(() => {});
+      getTrackTotals(skillId).then(setTrackTotals).catch(() => {});
     }
-  }, [visible]);
+  }, [visible, skillId]);
 
   useEffect(() => {
     translateY.value = withTiming(visible ? 0 : 600, {
@@ -111,27 +117,29 @@ export function ModeSwitcherSheet({
 
   const sheetGrad = getSheetGradient(isDark);
   const copy = HEADING_COPY[heading];
+  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+  const trackOptions = getTrackOptionsForSkill(skill);
 
   // Effective completed set: persisted completedTracks, plus currentTrack
   // when trackComplete fired this render — PlaySession writes it to
   // storage in the same tick it opens this sheet, but that write is async,
   // so the very first render here can't rely on the fetch having landed
-  // yet. Union avoids a "0/6" flash on the track you just finished.
+  // yet. Union avoids a "0/N" flash on the track you just finished.
   const effectiveCompleted =
     heading === 'trackComplete' && !completedTracks.includes(currentTrack)
       ? [...completedTracks, currentTrack]
       : completedTracks;
-  const completedCount = TRACK_OPTIONS.filter((o) => effectiveCompleted.includes(o.track)).length;
+  const completedCount = trackOptions.filter((o) => effectiveCompleted.includes(o.track)).length;
   const title =
     heading === 'trackComplete'
-      ? `${completedCount}/${TRACK_OPTIONS.length} tracks complete`
+      ? `${completedCount}/${trackOptions.length} tracks complete`
       : copy.title;
 
   // Current track first, same rendering as every other row — just
   // reordered and left for ModeCard to highlight.
-  const current = TRACK_OPTIONS.find((o) => o.track === currentTrack);
-  const rest = TRACK_OPTIONS.filter((o) => o.track !== currentTrack);
-  const ordered = current ? [current, ...rest] : TRACK_OPTIONS;
+  const current = trackOptions.find((o) => o.track === currentTrack);
+  const rest = trackOptions.filter((o) => o.track !== currentTrack);
+  const ordered = current ? [current, ...rest] : trackOptions;
 
   // Only meaningful once the current track is done (trackComplete): the
   // first not-yet-done track after it is the one we point the learner to
