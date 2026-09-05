@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -7,16 +7,25 @@ import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tok
 import { KEY_PACKS, type KeyPack } from '@/lib/premium';
 import { formatUSDAmount } from '@/lib/currency';
 import { getKeyBalance } from '@/lib/keys';
+import { ConnectionError } from '@/components/ui/ConnectionError';
 
 export default function KeysPacksScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [balance, setBalance] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState(false);
+
+  const loadBalance = useCallback(() => {
+    setLoadError(false);
+    getKeyBalance()
+      .then((b) => setBalance(Number.isFinite(b) ? b : null))
+      .catch(() => setLoadError(true));
+  }, []);
 
   useEffect(() => {
-    getKeyBalance().then((b) => setBalance(Number.isFinite(b) ? b : null)).catch(() => {});
-  }, []);
+    loadBalance();
+  }, [loadBalance]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
@@ -30,6 +39,9 @@ export default function KeysPacksScreen() {
         </Text>
       </View>
 
+      {loadError ? (
+        <ConnectionError onReload={loadBalance} />
+      ) : (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Balance Hero */}
         <View style={styles.balanceHero}>
@@ -97,6 +109,7 @@ export default function KeysPacksScreen() {
           </Text>
         </Pressable>
       </ScrollView>
+      )}
     </View>
   );
 }
