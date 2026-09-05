@@ -5,6 +5,7 @@ import { ArrowLeft, Unlock, ShoppingBag, Snowflake, Crown } from 'lucide-react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import { navPush, navBack } from '@/lib/navDirection';
 
 interface InfoItem {
   icon: React.ReactNode;
@@ -45,7 +46,7 @@ export default function HowKeysWorkScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={Spacing.sm} style={styles.backButton}>
+        <Pressable onPress={() => navBack(router)} hitSlop={Spacing.sm} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.onSurface }]}>How Keys work</Text>
@@ -83,7 +84,7 @@ export default function HowKeysWorkScreen() {
 
         {/* Bottom CTA */}
         <Pressable
-          onPress={() => router.push('/subscription-plans')}
+          onPress={() => navPush(router, '/subscription-plans')}
           style={({ pressed }) => [
             styles.ctaButton,
             { backgroundColor: StaticColors.achievementAmber },

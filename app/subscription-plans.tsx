@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { PLANS, planDisplay, type Plan } from '@/lib/premium';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import { navPush, navBack } from '@/lib/navDirection';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function SubscriptionPlansScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={Spacing.sm} style={styles.backButton}>
+        <Pressable onPress={() => navBack(router)} hitSlop={Spacing.sm} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.onSurface }]}>
@@ -50,7 +51,7 @@ export default function SubscriptionPlansScreen() {
             return (
               <Pressable
                 key={plan.id}
-                onPress={() => router.push({ pathname: '/subscription-confirm', params: { plan: plan.id } })}
+                onPress={() => navPush(router, { pathname: '/subscription-confirm', params: { plan: plan.id } })}
                 style={({ pressed }) => [
                   styles.planCard,
                   {
@@ -94,7 +95,7 @@ export default function SubscriptionPlansScreen() {
 
         {/* Centered Underlined Bottom Link */}
         <Pressable
-          onPress={() => router.push('/premium-benefits')}
+          onPress={() => navPush(router, '/premium-benefits')}
           style={({ pressed }) => [styles.bottomLink, pressed && { opacity: 0.6 }]}
         >
           <Text style={[styles.bottomLinkText, { color: colors.onSurfaceVariant }]}>

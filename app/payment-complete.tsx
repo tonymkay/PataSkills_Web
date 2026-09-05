@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { grantBonusKey, setPremium } from '@/lib/keys';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import { navReplace } from '@/lib/navDirection';
 
 export default function PaymentCompleteScreen() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function PaymentCompleteScreen() {
   }, [isKeys, keysCount, paystackRef, userEmail]);
 
   const handleContinuePlaying = () => {
-    router.replace({ pathname: '/', params: { resume: 'true' } });
+    navReplace(router, { pathname: '/', params: { resume: 'true' } });
   };
 
   return (

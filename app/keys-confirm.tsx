@@ -10,6 +10,7 @@ import { formatUSDAmount, splitCurrencyAmount } from '@/lib/currency';
 import { purchaseKeyPack } from '@/lib/billing';
 import { sanitizeAndValidateEmail } from '@/lib/email';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import { navBack } from '@/lib/navDirection';
 
 export default function KeysConfirmScreen() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function KeysConfirmScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={Spacing.sm} style={styles.backButton}>
+        <Pressable onPress={() => navBack(router)} hitSlop={Spacing.sm} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Confirm Purchase</Text>

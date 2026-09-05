@@ -5,6 +5,7 @@ import { ArrowLeft, Check, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import { navPush, navBack } from '@/lib/navDirection';
 
 interface BenefitItem {
   feature: string;
@@ -31,7 +32,7 @@ export default function PremiumBenefitsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={Spacing.sm} style={styles.backButton}>
+        <Pressable onPress={() => navBack(router)} hitSlop={Spacing.sm} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Benefits of premium</Text>
@@ -105,7 +106,7 @@ export default function PremiumBenefitsScreen() {
 
         {/* Bottom CTA */}
         <Pressable
-          onPress={() => router.push('/subscription-plans')}
+          onPress={() => navPush(router, '/subscription-plans')}
           style={({ pressed }) => [
             styles.ctaButton,
             { backgroundColor: StaticColors.successLime },

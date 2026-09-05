@@ -14,6 +14,7 @@ import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminde
 import { truncateEmailMiddle } from '@/lib/email';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { WatchAdPromptSheet } from '@/components/feedback/WatchAdPromptSheet';
+import { navPush, navReplace } from '@/lib/navDirection';
 
 export type SessionStateKind =
   | 'topicComplete'
@@ -155,7 +156,7 @@ export function SessionStateScreen({
     if (onPrimaryPress) {
       onPrimaryPress();
     } else {
-      router.replace({ pathname: '/', params: { resume: 'true' } });
+      navReplace(router, { pathname: '/', params: { resume: 'true' } });
     }
   };
 
@@ -163,7 +164,7 @@ export function SessionStateScreen({
     if (onPrimaryPress) {
       onPrimaryPress();
     } else {
-      router.replace({ pathname: '/', params: { resume: 'true' } });
+      navReplace(router, { pathname: '/', params: { resume: 'true' } });
     }
   };
 
@@ -210,7 +211,7 @@ export function SessionStateScreen({
     if (onBuyKeysPress) {
       onBuyKeysPress();
     } else {
-      router.push('/keys-packs');
+      navPush(router, '/keys-packs');
     }
   };
 
@@ -218,7 +219,7 @@ export function SessionStateScreen({
     if (onSubscribePress) {
       onSubscribePress();
     } else {
-      router.push('/subscription-plans');
+      navPush(router, '/subscription-plans');
     }
   };
 
@@ -360,7 +361,7 @@ export function SessionStateScreen({
             <Pressable
               onPress={() => {
                 setSelectedProceedOption('trial');
-                router.push('/how-free-mode-works');
+                navPush(router, '/how-free-mode-works');
               }}
               style={({ pressed }) => [
                 styles.proceedCard,

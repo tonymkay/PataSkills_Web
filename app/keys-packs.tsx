@@ -9,6 +9,7 @@ import { formatUSDAmount } from '@/lib/currency';
 import { getKeyBalance } from '@/lib/keys';
 import { ConnectionError } from '@/components/ui/ConnectionError';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import { navPush, navBack } from '@/lib/navDirection';
 
 export default function KeysPacksScreen() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function KeysPacksScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={Spacing.sm} style={styles.backButton}>
+        <Pressable onPress={() => navBack(router)} hitSlop={Spacing.sm} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.onSurface }]}>
@@ -67,7 +68,7 @@ export default function KeysPacksScreen() {
           {KEY_PACKS.map((pack: KeyPack) => (
             <Pressable
               key={pack.id}
-              onPress={() => router.push({ pathname: '/keys-confirm', params: { pack: pack.id } })}
+              onPress={() => navPush(router, { pathname: '/keys-confirm', params: { pack: pack.id } })}
               style={({ pressed }) => [
                 styles.packCard,
                 {
@@ -103,7 +104,7 @@ export default function KeysPacksScreen() {
 
         {/* Centered Underlined Bottom Link */}
         <Pressable
-          onPress={() => router.push('/how-keys-work')}
+          onPress={() => navPush(router, '/how-keys-work')}
           style={({ pressed }) => [styles.bottomLink, pressed && { opacity: 0.6 }]}
         >
           <Text style={[styles.bottomLinkText, { color: colors.onSurfaceVariant }]}>

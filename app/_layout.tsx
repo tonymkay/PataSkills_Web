@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ThemeProvider as NavigationThemeProvider, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
 import { fontAssets } from '@/constants/typography';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 
@@ -36,20 +37,39 @@ function RootLayoutInner() {
 
   if (!fontsLoaded) return null;
 
+  // react-navigation's native-stack renders its own screen "card"
+  // container underneath whatever each screen paints, and that card
+  // defaults to a light background (react-navigation's DefaultTheme).
+  // For an instant either side of a transition — and permanently on web,
+  // where native-stack doesn't animate at all — that default shows
+  // through as a white flash. The app is always dark, so this navigation
+  // theme is the fix, not a per-platform toggle.
+  const appBackground = colors.background || '#0B0D12';
+  const navigationTheme = {
+    ...NavigationDarkTheme,
+    colors: {
+      ...NavigationDarkTheme.colors,
+      background: appBackground,
+      card: appBackground,
+    },
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          // react-native-screens doesn't animate native-stack transitions
-          // on web (screens just swap instantly), so this Stack-level
-          // animation only ever does anything on iOS/Android. Web screens
-          // animate themselves instead — see components/nav/ScreenTransition.
-          animation: Platform.OS === 'web' ? 'none' : 'slide_from_right',
-          animationDuration: 280,
-        }}
-      />
+      <NavigationThemeProvider value={navigationTheme}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            // react-native-screens doesn't animate native-stack transitions
+            // on web (screens just swap instantly), so this Stack-level
+            // animation only ever does anything on iOS/Android. Web screens
+            // animate themselves instead — see components/nav/ScreenTransition.
+            animation: Platform.OS === 'web' ? 'none' : 'slide_from_right',
+            animationDuration: 280,
+          }}
+        />
+      </NavigationThemeProvider>
     </View>
   );
 }

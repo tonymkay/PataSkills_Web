@@ -1,28 +1,48 @@
 import { Platform } from 'react-native';
 
-// Web-only. expo-router drives navigation through the browser History API:
-// router.push()/router.replace() call history.pushState (no event fires),
-// while router.back() and the hardware/browser back button call
-// history.back(), which fires a native 'popstate' event synchronously
-// before the router re-renders the new screen. native-stack's own
-// slide_from_right animation (set in app/_layout.tsx) is a no-op on web —
-// react-native-screens doesn't animate native-stack transitions there — so
-// each screen animates itself (see components/nav/ScreenTransition.tsx) and
-// needs to know which direction it arrived from. This flag is that signal.
-let poppedFlag = false;
+// Web-only screen-transition direction. This is set explicitly by
+// navPush/navBack/navReplace below at the moment navigation is triggered —
+// NOT inferred from the browser's 'popstate' event, which doesn't fire
+// reliably for router.back() (expo-router doesn't guarantee it calls the
+// real browser history.back() versus just updating navigation state and
+// replacing the URL). Explicit beats inferred here: every screen in app/
+// that navigates goes through these three helpers instead of calling
+// `router.*` directly, so this flag is always accurate by construction.
+let pendingDirection: 'forward' | 'backward' = 'forward';
 
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  window.addEventListener('popstate', () => {
-    poppedFlag = true;
-  });
-}
-
-// Call once per screen mount (ScreenTransition does this via useState
-// initializer) — reads and clears the flag so it only ever applies to the
-// screen that's actually arriving right now.
+// Consumed once per screen mount (ScreenTransition's useState initializer)
+// then reset to the common case, so a screen that happens to remount for
+// an unrelated reason doesn't inherit a stale direction.
 export function consumeNavDirection(): 'forward' | 'backward' {
   if (Platform.OS !== 'web') return 'forward';
-  const direction = poppedFlag ? 'backward' : 'forward';
-  poppedFlag = false;
+  const direction = pendingDirection;
+  pendingDirection = 'forward';
   return direction;
+}
+
+type RouterLike = {
+  push: (href: any) => void;
+  replace: (href: any) => void;
+  back: () => void;
+};
+
+/** Navigate forward to a new screen — slides in from the right. */
+export function navPush(router: RouterLike, href: any) {
+  pendingDirection = 'forward';
+  router.push(href);
+}
+
+/** Replace the current screen — slides the new one in from the right by
+ *  default (it's still a forward step from the learner's point of view),
+ *  or from the left when explicitly marked as a "return trip" (e.g.
+ *  dismissing an info screen back to the session). */
+export function navReplace(router: RouterLike, href: any, direction: 'forward' | 'backward' = 'forward') {
+  pendingDirection = direction;
+  router.replace(href);
+}
+
+/** Go back to the previous screen — slides it in from the left. */
+export function navBack(router: RouterLike) {
+  pendingDirection = 'backward';
+  router.back();
 }
