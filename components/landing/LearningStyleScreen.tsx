@@ -5,8 +5,9 @@ import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { getTrackOptionsForSkill } from '@/constants/trackOptions';
 import { LANDING_SKILLS } from '@/constants/skills';
 import { getCompletedTracks } from '@/lib/progress';
-import { Track, TrackTotals, getTrackTotals } from '@/lib/curriculum';
+import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
+import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { ModeCard } from './ModeCard';
 
 // Matches LandingScreen's bottom-sheet-style width cap so this screen
@@ -36,17 +37,34 @@ interface LearningStyleScreenProps {
  */
 export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: LearningStyleScreenProps) {
   const { colors } = useTheme();
+  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
   const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
   // Real per-track question counts for the "N questions" label on each
   // row — same source and shape as ModeSwitcherSheet uses.
   const [trackTotals, setTrackTotals] = useState<Record<Track, TrackTotals> | null>(null);
+  // Custom track definitions declared in curriculum JSON (if any)
+  const [trackDefs, setTrackDefs] = useState<CurriculumTrackDefinition[] | undefined>();
+  // Fallback to the skill's static tracks until the live per-curriculum
+  // detection resolves — avoids a flash of an empty list, and is already
+  // the right answer for skills with no role-tagged questions to detect
+  // (world-facts).
+  const [prevSkillId, setPrevSkillId] = useState(skillId);
+  const [availableTracks, setAvailableTracks] = useState<Track[]>(skill.tracks);
 
-  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
-  const trackOptions = getTrackOptionsForSkill(skill);
+  if (prevSkillId !== skillId) {
+    setPrevSkillId(skillId);
+    setAvailableTracks(skill.tracks);
+    setTrackTotals(null);
+    setTrackDefs(undefined);
+  }
+
+  const trackOptions = getTrackOptionsForSkill(skill, availableTracks, trackDefs);
 
   useEffect(() => {
     getCompletedTracks().then(setCompletedTracks).catch(() => {});
     getTrackTotals(skillId).then(setTrackTotals).catch(() => {});
+    getAvailableTracks(skillId).then(setAvailableTracks).catch(() => {});
+    getCurriculumTrackDefs(skillId).then(setTrackDefs).catch(() => {});
   }, [skillId]);
 
   const nextUpTrack = trackOptions.find((o) => !completedTracks.includes(o.track))?.track;

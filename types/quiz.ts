@@ -10,6 +10,15 @@ export type QuestionFormat =
 
 export type QuizImageSource = ImageSourcePropType | string | null | undefined;
 
+export interface CurriculumTrackDefinition {
+  id: string;
+  title: string;
+  filterRole?: string;
+  filterFormat?: QuestionFormat | QuestionFormat[];
+  kind?: 'quiz' | 'reading' | 'full';
+  image?: string;
+}
+
 export interface BaseQuestion {
   id: string;
   pairId?: string;
@@ -17,7 +26,7 @@ export interface BaseQuestion {
   section?: string;
   difficulty?: 'easy' | 'medium' | 'hard' | string;
   sequence?: number;
-  role?: 'pair' | 'name' | 'meaning' | 'whereUsed';
+  role?: 'pair' | 'name' | 'meaning' | 'whereUsed' | string;
   format: QuestionFormat;
   question: string;
   correctAnswer: number; // 0-indexed

@@ -16,8 +16,9 @@ import { StaticColors } from '@/constants/colors';
 import { getTrackOptionsForSkill } from '@/constants/trackOptions';
 import { LANDING_SKILLS } from '@/constants/skills';
 import { getLocalProgress, getCompletedTracks } from '@/lib/progress';
-import { Track, TrackTotals, getTrackTotals } from '@/lib/curriculum';
+import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
+import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { ModeCard } from './ModeCard';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -89,14 +90,43 @@ export function ModeSwitcherSheet({
   // questions" label on each row. Undefined until the fetch resolves —
   // ModeCard just hides the label rather than showing a placeholder.
   const [trackTotals, setTrackTotals] = useState<Record<Track, TrackTotals> | null>(null);
+  const [trackDefs, setTrackDefs] = useState<CurriculumTrackDefinition[] | undefined>();
+
+  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+  const [prevSkillId, setPrevSkillId] = useState(skillId);
+  const [availableTracks, setAvailableTracks] = useState<Track[]>(() => {
+    return skill.tracks.includes(currentTrack as any)
+      ? skill.tracks
+      : [currentTrack, ...skill.tracks];
+  });
+
+  if (prevSkillId !== skillId) {
+    setPrevSkillId(skillId);
+    setAvailableTracks(
+      skill.tracks.includes(currentTrack as any)
+        ? skill.tracks
+        : [currentTrack, ...skill.tracks],
+    );
+    setTrackTotals(null);
+    setTrackDefs(undefined);
+  }
 
   useEffect(() => {
     if (visible) {
       getLocalProgress().then(setProgress).catch(() => {});
       getCompletedTracks().then(setCompletedTracks).catch(() => {});
       getTrackTotals(skillId).then(setTrackTotals).catch(() => {});
+      getAvailableTracks(skillId)
+        .then((tracks) => {
+          const combined = tracks.includes(currentTrack) ? tracks : [currentTrack, ...tracks];
+          setAvailableTracks(combined);
+        })
+        .catch(() => {});
+      getCurriculumTrackDefs(skillId)
+        .then(setTrackDefs)
+        .catch(() => {});
     }
-  }, [visible, skillId]);
+  }, [visible, skillId, currentTrack]);
 
   useEffect(() => {
     translateY.value = withTiming(visible ? 0 : 600, {
@@ -117,8 +147,7 @@ export function ModeSwitcherSheet({
 
   const sheetGrad = getSheetGradient(isDark);
   const copy = HEADING_COPY[heading];
-  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
-  const trackOptions = getTrackOptionsForSkill(skill);
+  const trackOptions = getTrackOptionsForSkill(skill, availableTracks, trackDefs);
 
   // Effective completed set: persisted completedTracks, plus currentTrack
   // when trackComplete fired this render — PlaySession writes it to

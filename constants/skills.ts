@@ -1,22 +1,34 @@
+import type { ImageSourcePropType } from 'react-native';
 import type { CurriculumSlug } from './curriculumAssets';
+import type { Track } from '@/lib/curriculum';
 
-// The learning-style picker only ever offers these two modes now — the
-// old driving-theory-specific pairs/names/meanings/whereUsed tracks are
-// no longer surfaced in the UI (see constants/trackOptions.ts). 'reading'
-// is a browse-only mode over a skill's signs/image catalog; 'full' is the
-// standard question-and-answer quiz over every question in the skill.
+// 'reading' and 'full' are the two universal modes every skill can offer.
+// The four role tracks (pairs/names/meanings/whereUsed) are detected
+// per-curriculum at runtime instead — see lib/curriculum.ts's
+// detectAvailableTracks()/getAvailableTracks(). This alias just names the
+// two that are always safe to list as a skill's static fallback below.
 export type SimpleTrack = 'reading' | 'full';
 
 // Landing-screen skill catalog. One entry per skill card shown on the
 // homepage grid. Adding a skill is just another array entry, matching how
-// CurriculumCoverImagePaths already works. `tracks` lists which of the
-// two learning-style modes actually have content for this skill — e.g.
-// world-facts has no image/signs catalog, so it only offers 'full'.
+// CurriculumCoverImagePaths already works.
 export interface LandingSkill {
   id: CurriculumSlug;
   title: string;
   subtitle: string;
+  /** Fallback list shown before getAvailableTracks() resolves, and the
+   *  full list for skills with no role-tagged questions to detect (e.g.
+   *  world-facts). The real, authoritative list is always the live
+   *  per-curriculum detection — this never needs the four role tracks
+   *  added manually for driving-theory. */
   tracks: SimpleTrack[];
+  /** Optional per-curriculum override of a track's display label —
+   *  merged over the shared defaults in constants/trackOptions.ts.
+   *  Rendering/components stay untouched; only the copy changes. */
+  trackLabels?: Partial<Record<Track, string>>;
+  /** Optional per-curriculum override of a track's illustration image —
+   *  merged over the shared defaults in constants/trackOptions.ts. */
+  trackImages?: Partial<Record<Track, ImageSourcePropType>>;
 }
 
 export const LANDING_SKILLS: LandingSkill[] = [

@@ -1,13 +1,14 @@
 import { supabase } from './supabase';
-import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
+import { QuizQuestion, SignCatalogEntry, CurriculumTrackDefinition } from '@/types/quiz';
 import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, chunkByTopicBounded, PlaySession, QuizPlaySession } from '@/utils/groupSessions';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 const DEFAULT_SLUG: CurriculumSlug = 'driving-theory';
 
-export type Track = 'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading';
+export type StandardTrack = 'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading';
+export type Track = StandardTrack | (string & {});
 
-type FilterTrack = Exclude<Track, 'full' | 'reading'>;
+type FilterTrack = Exclude<StandardTrack, 'full' | 'reading'>;
 
 const TRACK_ROLE: Record<FilterTrack, string> = {
   pairs: 'pair',
@@ -22,6 +23,12 @@ const TRACK_LABEL: Record<FilterTrack, string> = {
   meanings: 'Meanings',
   whereUsed: 'Where Used',
 };
+
+// Canonical display order for a skill's detected tracks — matches the
+// order these were shown in before the four role tracks were gated out
+// of the UI. 'full' last, since every skill has it and it reads as the
+// "everything" option.
+const TRACK_ORDER: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'reading', 'full'];
 
 /**
  * Shared 'full'-track dispatch, used by both deriveTrack() and
@@ -47,13 +54,33 @@ function deriveFullSessions(questions: QuizQuestion[]): QuizPlaySession[] {
  * Filters the flat question list by role, then builds sessions for the
  * given track. 'full' dispatches via deriveFullSessions(); 'reading'
  * builds sessions directly from the signs catalog instead of from
- * questions at all.
+ * questions at all. Supports custom track definitions from JSON if provided.
  */
 export function deriveTrack(
   questions: QuizQuestion[],
   signs: SignCatalogEntry[],
   track: Track = 'pairs',
+  customTrackDefs?: CurriculumTrackDefinition[],
 ): PlaySession[] {
+  const customDef = customTrackDefs?.find((d) => d.id === track);
+  if (customDef) {
+    if (customDef.kind === 'reading') {
+      return chunkSignsIntoSessions(signs, customDef.title || 'Reading');
+    }
+    if (customDef.kind === 'full') {
+      return deriveFullSessions(questions);
+    }
+    let filtered = questions;
+    if (customDef.filterRole) {
+      filtered = filtered.filter((q) => q.role === customDef.filterRole);
+    }
+    if (customDef.filterFormat) {
+      const formats = Array.isArray(customDef.filterFormat) ? customDef.filterFormat : [customDef.filterFormat];
+      filtered = filtered.filter((q) => formats.includes(q.format));
+    }
+    return chunkIntoSessions(filtered, customDef.title || 'Practice');
+  }
+
   if (track === 'full') {
     return deriveFullSessions(questions);
   }
@@ -62,9 +89,47 @@ export function deriveTrack(
     return chunkSignsIntoSessions(signs, 'Reading');
   }
 
-  const role = TRACK_ROLE[track];
+  const role = TRACK_ROLE[track as FilterTrack] ?? track;
   const filtered = questions.filter((q) => q.role === role);
-  return chunkIntoSessions(filtered, TRACK_LABEL[track]);
+  return chunkIntoSessions(filtered, TRACK_LABEL[track as FilterTrack] ?? track);
+}
+
+/**
+ * Inspects a skill's actual question/sign data and returns which tracks
+ * it has real content for. If customTrackDefs is provided in the JSON,
+ * uses those definitions directly. Otherwise falls back to data-driven
+ * detection of standard tracks.
+ */
+export function detectAvailableTracks(
+  questions: QuizQuestion[],
+  signs: SignCatalogEntry[],
+  customTrackDefs?: CurriculumTrackDefinition[],
+): Track[] {
+  if (customTrackDefs && customTrackDefs.length > 0) {
+    const available: Track[] = [];
+    for (const def of customTrackDefs) {
+      if (def.kind === 'reading') {
+        if (signs.length > 0) available.push(def.id);
+      } else if (def.kind === 'full') {
+        if (questions.length > 0) available.push(def.id);
+      } else if (def.filterRole) {
+        if (questions.some((q) => q.role === def.filterRole)) available.push(def.id);
+      } else if (def.filterFormat) {
+        const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
+        if (questions.some((q) => formats.includes(q.format))) available.push(def.id);
+      } else {
+        if (questions.length > 0) available.push(def.id);
+      }
+    }
+    return available;
+  }
+
+  const available = new Set<Track>(['full']);
+  if (signs.length > 0) available.add('reading');
+  (Object.keys(TRACK_ROLE) as FilterTrack[]).forEach((t) => {
+    if (questions.some((q) => q.role === TRACK_ROLE[t])) available.add(t);
+  });
+  return TRACK_ORDER.filter((t) => available.has(t));
 }
 
 export interface TrackTotals {
@@ -75,40 +140,97 @@ export interface TrackTotals {
   totalSessions: number;
 }
 
-// Module-level cache, keyed by skill slug: the browse screens
-// (LearningStyleScreen, ModeSwitcherSheet) both need this per whichever
-// skill the learner is currently in, and it only takes one curriculum
-// fetch (no sign assets/pairs — those don't affect the counts) to compute
-// every track's totals for that skill at once. Shared across callers
-// within the app session; a skill's entry is cleared on failure so a
-// later call for that same skill can retry.
+// Module-level cache of the lightweight curriculum fetch itself (JSON
+// only, no sign images/pairs), keyed by skill slug — shared by
+// getTrackTotals() and getAvailableTracks() below so a skill's
+// questions/signs are only ever fetched once per app session no matter
+// how many browse screens ask for totals vs. track availability. A
+// skill's entry is cleared on failure so a later call can retry.
+const curriculumCache = new Map<CurriculumSlug, Promise<RemoteCurriculum>>();
+
+function loadCurriculumCached(slug: CurriculumSlug): Promise<RemoteCurriculum> {
+  let cached = curriculumCache.get(slug);
+  if (!cached) {
+    cached = loadRemoteCurriculum(slug).catch((e) => {
+      curriculumCache.delete(slug);
+      throw e;
+    });
+    curriculumCache.set(slug, cached);
+  }
+  return cached;
+}
+
+// Second-level cache: the totals computed *from* the shared fetch above,
+// so repeat calls for the same skill don't redo the per-track filtering
+// either. Browse screens (LearningStyleScreen, ModeSwitcherSheet) both
+// need this per whichever skill the learner is currently in.
 const trackTotalsCache = new Map<CurriculumSlug, Promise<Record<Track, TrackTotals>>>();
 
 /**
  * Real per-track totals for the progress bars on the browse screens, for
  * one skill's curriculum — one lightweight curriculum fetch (JSON only,
  * no sign images/pairs), filtered/grouped the same way deriveTrack does,
- * just counted instead of hydrated into full sessions.
+ * just counted instead of hydrated into full sessions. Supports both
+ * JSON-defined custom tracks and legacy/standard track keys.
  */
 export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Record<Track, TrackTotals>> {
   let cached = trackTotalsCache.get(slug);
   if (!cached) {
-    cached = loadRemoteCurriculum(slug)
+    cached = loadCurriculumCached(slug)
       .then((remote) => {
         const totals = {} as Record<Track, TrackTotals>;
+
+        // 1. If curriculum JSON defined custom tracks, compute counts for each
+        if (remote.tracks && remote.tracks.length > 0) {
+          for (const def of remote.tracks) {
+            if (def.kind === 'reading') {
+              totals[def.id] = {
+                totalQuestions: remote.signs.length,
+                totalSessions: Math.max(1, Math.ceil(remote.signs.length / 7)),
+              };
+            } else if (def.kind === 'full') {
+              totals[def.id] = {
+                totalQuestions: remote.questions.length,
+                totalSessions: deriveFullSessions(remote.questions).length,
+              };
+            } else {
+              let filtered = remote.questions;
+              if (def.filterRole) {
+                filtered = filtered.filter((q) => q.role === def.filterRole);
+              }
+              if (def.filterFormat) {
+                const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
+                filtered = filtered.filter((q) => formats.includes(q.format));
+              }
+              totals[def.id] = {
+                totalQuestions: filtered.length,
+                totalSessions: Math.max(1, Math.ceil(filtered.length / 7)),
+              };
+            }
+          }
+        }
+
+        // 2. Also populate standard track keys for backwards-compatibility
         (Object.keys(TRACK_ROLE) as FilterTrack[]).forEach((t) => {
-          const role = TRACK_ROLE[t];
-          const count = remote.questions.filter((q) => q.role === role).length;
-          totals[t] = { totalQuestions: count, totalSessions: Math.max(1, Math.ceil(count / 7)) };
+          if (!totals[t]) {
+            const role = TRACK_ROLE[t];
+            const count = remote.questions.filter((q) => q.role === role).length;
+            totals[t] = { totalQuestions: count, totalSessions: Math.max(1, Math.ceil(count / 7)) };
+          }
         });
-        totals.full = {
-          totalQuestions: remote.questions.length,
-          totalSessions: deriveFullSessions(remote.questions).length,
-        };
-        totals.reading = {
-          totalQuestions: remote.signs.length,
-          totalSessions: Math.max(1, Math.ceil(remote.signs.length / 7)),
-        };
+        if (!totals.full) {
+          totals.full = {
+            totalQuestions: remote.questions.length,
+            totalSessions: deriveFullSessions(remote.questions).length,
+          };
+        }
+        if (!totals.reading) {
+          totals.reading = {
+            totalQuestions: remote.signs.length,
+            totalSessions: Math.max(1, Math.ceil(remote.signs.length / 7)),
+          };
+        }
+
         return totals;
       })
       .catch((e) => {
@@ -118,6 +240,28 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
     trackTotalsCache.set(slug, cached);
   }
   return cached;
+}
+
+/**
+ * Async, per-skill version of detectAvailableTracks() for screens that
+ * only know the skill slug (LearningStyleScreen et al.) — shares
+ * loadCurriculumCached()'s fetch with getTrackTotals(), so calling both
+ * for the same skill costs one network round-trip, not two.
+ */
+export function getAvailableTracks(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Track[]> {
+  return loadCurriculumCached(slug).then((remote) =>
+    detectAvailableTracks(remote.questions, remote.signs, remote.tracks),
+  );
+}
+
+/**
+ * Returns any custom track definitions declared in the curriculum JSON,
+ * or undefined if the curriculum only uses legacy auto-detection.
+ */
+export function getCurriculumTrackDefs(
+  slug: CurriculumSlug = DEFAULT_SLUG,
+): Promise<CurriculumTrackDefinition[] | undefined> {
+  return loadCurriculumCached(slug).then((remote) => remote.tracks);
 }
 
 interface CurriculumRow {
@@ -130,6 +274,7 @@ interface CurriculumRow {
 export interface RemoteCurriculum {
   title: string;
   coverImageUrl: string | null;
+  tracks?: CurriculumTrackDefinition[];
   questions: QuizQuestion[];
   signs: SignCatalogEntry[];
 }
@@ -140,8 +285,7 @@ export interface RemoteCurriculum {
  * is responsible for surfacing that as a failed download step.
  *
  * The JSON file is either the legacy flat `QuizQuestion[]` shape, or the
- * newer `{ questions, signs }` shape carrying the signs catalog alongside
- * the questions — both are accepted.
+ * newer `{ tracks?, questions, signs? }` shape.
  */
 export async function loadRemoteCurriculum(
   slug: CurriculumSlug = DEFAULT_SLUG,
@@ -161,10 +305,13 @@ export async function loadRemoteCurriculum(
 
   const res = await fetch(jsonPub.publicUrl);
   if (!res.ok) throw new Error(`curriculum fetch failed: ${res.status}`);
-  const body = (await res.json()) as QuizQuestion[] | { questions: QuizQuestion[]; signs?: SignCatalogEntry[] };
+  const body = (await res.json()) as
+    | QuizQuestion[]
+    | { tracks?: CurriculumTrackDefinition[]; questions: QuizQuestion[]; signs?: SignCatalogEntry[] };
 
   const questions = Array.isArray(body) ? body : body.questions;
   const signs = Array.isArray(body) ? [] : (body.signs ?? []);
+  const tracks = Array.isArray(body) ? undefined : body.tracks;
   if (!Array.isArray(questions) || questions.length === 0) {
     throw new Error('curriculum JSON was empty or malformed');
   }
@@ -173,5 +320,5 @@ export async function loadRemoteCurriculum(
     ? supabase.storage.from('play-assets').getPublicUrl(row.cover_image_path).data?.publicUrl ?? null
     : null;
 
-  return { title: row.title, coverImageUrl, questions, signs };
+  return { title: row.title, coverImageUrl, tracks, questions, signs };
 }

@@ -33,19 +33,37 @@ Only the question/option content itself carries over.
 
 ## Target shape
 
-`loadRemoteCurriculum()` accepts either a bare `QuizQuestion[]` array or
-`{ questions: QuizQuestion[], signs: SignCatalogEntry[] }` (see `types/quiz.ts`).
-World facts has no image catalog, so the output uses the object form with
-`signs: []`.
+`loadRemoteCurriculum()` accepts a top-level curriculum object (or legacy bare `QuizQuestion[]` array):
 
-Each converted question uses the `textChoice` format (plain text options,
-no images) — already supported by `TwoImageCard.tsx`'s `text_only` layout,
-so no new rendering code was needed:
+```json
+{
+  "tracks": [
+    {
+      "id": "full",
+      "title": "All World Facts"
+    },
+    {
+      "id": "nature-trivia",
+      "title": "Nature & Animals",
+      "filterRole": "nature"
+    }
+  ],
+  "questions": [ ... ],
+  "signs": []
+}
+```
+
+- **`tracks`** *(optional)*: Declares custom learning tracks/modes directly in the JSON (see `types/quiz.ts`'s `CurriculumTrackDefinition`). This allows a curriculum to define its own category names, role/format filters, and presentation modes without changing app code.
+- **`questions`**: Array of `QuizQuestion` objects.
+- **`signs`**: Array of `SignCatalogEntry` objects. World facts has no image catalog, so the output uses `signs: []` (or omits it).
+
+Each converted question uses the `textChoice` format (plain text options, no images) — supported by `TwoImageCard.tsx`'s `text_only` layout, so no new rendering code is needed:
 
 ```json
 {
   "id": "l1q001",
   "format": "textChoice",
+  "role": "nature",
   "question": "Which statement is true about lions?",
   "answers": ["Lions are big cats", "Lions are reptiles", "Lions live underwater"],
   "correctAnswer": 0,
@@ -62,7 +80,7 @@ so no new rendering code was needed:
 |---|---|---|
 | `question.id` | `id` | Kept as-is. All 250 source ids were already globally unique. |
 | — | `format` | Hardcoded `"textChoice"` for every question — no source field maps to this, it's what tells `TwoImageCard` to render plain stacked text options instead of image cards. |
-| `question.question` | `question` | Unchanged. |
+| — (or source tag/topic) | `role` | Optional question tag (e.g. `"nature"`, `"history"`, `"science"`). If specified, a custom track in the `"tracks"` array can filter questions with `"filterRole": "<role>"`. |
 | `options[].text` (in order) | `answers` | Order preserved — `correctAnswer` is a positional index, not an id, so the option order must not be reshuffled here (the app reshuffles per-attempt at runtime itself, via `shuffleAnswers()` in `CardDeck.tsx`). |
 | index of the option where `correct: true` | `correctAnswer` | 0-indexed, per `BaseQuestion.correctAnswer`. |
 | `question.explanation` | `explanation` | Passed through. All 250 source explanations were empty strings — harmless, the field is optional. |
@@ -92,10 +110,30 @@ conversion pass. The 100 excluded question ids are reproducible by
 re-running the conversion and diffing against the source; they weren't
 archived separately.
 
+## Defining Custom Learning Tracks in JSON
+
+Unlike earlier versions of the app where learning modes were hardcoded to driving-theory tracks (`pairs`, `names`, `meanings`, etc.), learning modes can now be declared dynamically per curriculum:
+
+1. **Custom `tracks` header**:
+   Add a top-level `"tracks"` array to the JSON. Each entry conforms to:
+   ```typescript
+   interface CurriculumTrackDefinition {
+     id: string;                // URL & state ID (e.g. "quick-quiz", "image-identification")
+     title: string;             // UI display label (e.g. "Quick Quiz")
+     filterRole?: string;       // Matches question.role
+     filterFormat?: string;     // Matches question.format (e.g. "textChoice")
+     kind?: 'quiz' | 'reading'; // 'quiz' (default) or 'reading' (chunked signs)
+     image?: string;            // Optional custom asset name
+   }
+   ```
+2. **Automatic Empty-Track Elimination**:
+   If `"tracks"` is omitted, the app automatically runs dynamic track detection (`detectAvailableTracks()`), ensuring that skills without signs or without certain roles (e.g. `world-facts`) **only show tracks that have actual questions** (e.g. only `full` is displayed; driving-specific tracks like `pairs` or `meanings` are omitted automatically).
+3. **No App Code Changes**:
+   Adding, renaming, or reordering tracks in the `"tracks"` array will immediately reflect in the Learning Style list (`LearningStyleScreen`), Track Detail preview (`TrackDetailScreen`), and mid-session Switcher (`ModeSwitcherSheet`) without needing a new app build.
+
 ## What conversion does *not* cover
 
-Getting `world-facts.json` playable end-to-end also needs, outside this
-JSON transform:
+Getting `world-facts.json` (or any converted curriculum) playable end-to-end also needs, outside this JSON transform:
 
 1. **Upload** the file to Storage bucket `play-assets` at some `curricula/`
    path, and **insert a `play_curricula` row** (`slug`, `title`,
@@ -105,13 +143,5 @@ JSON transform:
    card shows up on the homepage grid, and **`constants/curriculumAssets.ts`**
    needs a matching `CurriculumSlug`/cover-image-path entry (the `id` field
    is typed against that file's keys).
-3. **The learning-style track model does not carry over.** `deriveTrack()`
-   and `constants/trackOptions.ts`'s six tracks (Differentiate Pairs, Name a
-   Sign, Meaning of Signs, Where Signs Are Used, Reading Only, Full Course)
-   are driving-theory-specific labels and `role` filters. None of the
-   world-facts questions carry a `role`, so only the **`full`** track
-   (which just groups everything into sessions of 7, no role filtering)
-   actually has content. The other five tracks would render as selectable
-   but empty for this skill. Deciding what "learning style" even means for
-   a trivia skill — or whether it should skip that screen entirely — is a
-   product/design decision, not something this conversion resolves.
+3. **Local Track Fallbacks (optional)**:
+   In `constants/skills.ts`, `skill.tracks` provides the synchronous fallback list before runtime network detection resolves (e.g. `tracks: ['full']` for single-track skills). Optional title and illustration overrides can also be specified via `skill.trackLabels` or `skill.trackImages` if needed.

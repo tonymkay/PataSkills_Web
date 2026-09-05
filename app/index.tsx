@@ -23,16 +23,22 @@ type TrackDetailOrigin = 'landing' | 'learning-style';
 
 const DEFAULT_SKILL: CurriculumSlug = 'driving-theory';
 
-// Only these two learning-style modes are selectable now (see
-// constants/skills.ts's SimpleTrack) — an old ?track= link referencing a
-// retired driving-theory-specific track (pairs/names/meanings/whereUsed)
-// just falls through to the default landing flow instead of parsing.
-const VALID_TRACKS: Track[] = ['reading', 'full'];
+// All six Track values are accepted again — lib/curriculum.ts's
+// deriveTrack() always supported the four driving-theory role tracks
+// (pairs/names/meanings/whereUsed), they just weren't reachable from any
+// URL/UI surface. Which of these a given skill actually shows in its
+// picker is now decided per-curriculum by detectAvailableTracks()/
+// getAvailableTracks() (lib/curriculum.ts), not by this list — this list
+// only decides which ?track= values parse at all, same backward-
+// compatible spirit as parseSkill() below.
+const VALID_TRACKS: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading'];
 
 const MIN_LOADING_MS = 2000;
 
 function parseTrack(value?: string): Track | null {
-  return VALID_TRACKS.includes(value as Track) ? (value as Track) : null;
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? (trimmed as Track) : null;
 }
 
 // Validated against LANDING_SKILLS, mirroring parseTrack() above — an

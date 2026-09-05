@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-05 (b) — this pass fixed drift the same-day "full re-audit" (2026-09-05, a) still missed or introduced: **(1)** `ModeCard.tsx`'s actual `status` shape (`'done' | 'inProgress' | 'notStarted'` plain-text labels + a separate `highlighted` border prop) had been documented as a stale `'current'`/`'done'` badge pair that doesn't exist in the source; **(2)** a whole undocumented web screen-transition system — `components/nav/ScreenTransition.tsx` + `lib/navDirection.ts` (`navPush`/`navBack`/`navReplace`), wrapping every standalone route in `app/`; **(3)** two undocumented shared UI components, `components/ui/Button.tsx` and `components/ui/ConnectionError.tsx`; **(4)** `app/+not-found.tsx` missing from the tree; **(5)** `ModeCard`/`ModeSwitcherSheet`/`LearningStyleScreen` gained a real per-track **question-count label**, wired through `lib/curriculum.ts`'s `getTrackTotals()` (that function itself predates this pass but was never called from the UI until now). · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — no inline comments taken on faith, no section carried over from a previous revision without re-reading the source.
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-05 (d) — this pass updates documentation to reflect the dynamic JSON-driven learning tracks system, multi-skill routing, and per-curriculum customization: **(1)** JSON-driven track definitions (`CurriculumTrackDefinition` in `types/quiz.ts`) allowing curricula to define arbitrary track IDs, custom titles, filtering rules (`filterRole`, `filterFormat`, `kind`), and custom icons directly in curriculum JSON without code changes; **(2)** Dynamic track detection (`detectAvailableTracks`/`getAvailableTracks`/`getCurriculumTrackDefs` in `lib/curriculum.ts`) supporting both custom JSON tracks and legacy question `role`/sign auto-detection with 100% backward compatibility; **(3)** Deduplicated cache (`loadCurriculumCached`) ensuring a single in-flight network promise shared across `getTrackTotals()`, `getAvailableTracks()`, and `getCurriculumTrackDefs()`; **(4)** `constants/trackOptions.ts` dynamic builders (`getTrackOptionsForSkill`, `getTrackOption`) prioritizing skill overrides → JSON `trackDef.title` → default labels; **(5)** `LearningStyleScreen`, `TrackDetailScreen`, and `ModeSwitcherSheet` updated to consume dynamic tracks and track definitions; **(6)** Multi-skill catalog in `constants/skills.ts` and deep linking in `app/index.tsx` supporting custom track IDs. · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — verified against active source code and `tsc` typecheck.
 
 ---
 
@@ -136,8 +136,8 @@ play/
 │   ├── spacing.ts                     # Spacing scale & border radius tokens
 │   ├── icons.ts                       # Icon size tokens
 │   ├── curriculumAssets.ts            # Static cover-image paths by curriculum slug
-│   ├── skills.ts                      # LANDING_SKILLS catalog (currently one skill: driving-theory)
-│   └── trackOptions.ts                # TRACK_OPTIONS — single source of truth for the learning-mode list/illustrations
+│   ├── skills.ts                      # LANDING_SKILLS catalog with trackLabels / trackImages overrides
+│   └── trackOptions.ts                # getTrackOptionsForSkill / getTrackOption — single source of truth for mode list & visuals
 │
 ├── theme/
 │   ├── ThemeContext.tsx                # React context: dark/light/auto theme
@@ -186,7 +186,7 @@ play/
 │   └── learning-tracks-and-reading-mode.md   # Feature spec for Learning Tracks + Reading Mode
 │
 ├── data/
-│   └── questions.sample.json          # { questions: QuizQuestion[] (322, tagged with role), signs: SignCatalogEntry[] (92) }
+│   └── questions.sample.json          # { tracks?: CurriculumTrackDefinition[], questions: QuizQuestion[] (322, tagged with role), signs: SignCatalogEntry[] (92) }
 │
 ├── dist/                              # Static web export output (expo export -p web) — build artifact, not source
 ├── .claude/                           # Claude Code project settings
@@ -298,14 +298,14 @@ A **five-stage** state machine (`Stage = 'landing' | 'learning-style' | 'track-d
 
 **Track-detail origin tracking** — `TrackDetailOrigin = 'landing' | 'learning-style'` records where the preview was opened from, so the back button returns to the right place AND so starting practice from a Landing-originated deep link (no explicit style ever chosen) is flagged `deepLinked` for `PlaySession` (drives whether "Continue" always reopens the mode switcher).
 
-**Track resolution:** `VALID_TRACKS = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading']`; `parseTrack()` validates the `?track=` param, defaulting to `'pairs'` when absent/invalid.
+**Track and skill resolution:** `VALID_TRACKS = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading']`; `parseTrack()` validates the `?track=` param, accepting any non-empty track string (including custom JSON-defined tracks like `?track=image-identification` or standard tracks) or returning `null`; while `parseSkill()` validates `?skill=` against `LANDING_SKILLS` (defaulting to `DEFAULT_SKILL = 'driving-theory'`).
 
 **Auto-start on mount:**
-- `?resume=true` (returning from checkout) → `runDownload(urlTrack ?? 'pairs', deepLinked: true)`, skipping straight to a session.
+- `?resume=true` (returning from checkout) → `runDownload(urlTrack ?? 'full', deepLinked: true, urlSkill ?? DEFAULT_SKILL)`, skipping straight to a session.
 - A bare `?track=` (ad link) → opens Track Detail directly (`openTrackDetail(urlTrack, 'landing')`), skipping the grid and style list but still showing the preview + CTA.
 - Otherwise → starts on `LandingScreen`.
 
-**`runDownload(track, deepLinked)`** — sets stage to `downloading`, calls `downloadSession(track, onProgress)`, enforces a **minimum 2000ms** loading time (`MIN_LOADING_MS`) even on a fast/cached response so the loading beat doesn't flash, then moves to `session` on success or leaves the error on the downloading screen for RETRY.
+**`runDownload(track, deepLinked, skillOverride?)`** — sets stage to `downloading`, calls `downloadSession(track, skill, onProgress)`, supports topic-level deep linking (`?topic=`) by advancing directly to the session containing that topicId, enforces a **minimum 2000ms** loading time (`MIN_LOADING_MS`) even on a fast/cached response so the loading beat doesn't flash, then moves to `session` on success or leaves the error on the downloading screen for RETRY.
 
 **Exit** (`handleExit`) resets everything — `sessions`, `signCatalog`, `error`, `progress` — and returns to `landing`.
 
@@ -431,19 +431,27 @@ Unchanged from the prior audit.
 The single `LandingScreen` "skill pager + mode picker" described in the prior audit **no longer exists in that shape**. The flow is now three separate screens plus a bottom sheet, each a standalone file:
 
 #### `LandingScreen.tsx` — "Skills Corner" grid
-A 2-column grid of `SkillGridCard`s (compact — title + remote cover image, no progress bar, no CTA button; the whole card is the tap target) below a "Skills Corner" heading, plus a bottom "Existing user, login" link that opens `RestoreAccountModal`. Tapping any card calls `onStart()` (no track argument — the parent just advances to `LearningStyleScreen`).
+A 2-column grid of `SkillGridCard`s (compact — title + remote cover image, no progress bar, no CTA button; the whole card is the tap target) below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS` (`driving-theory`, `world-facts`), plus a bottom "Existing user, login" link that opens `RestoreAccountModal`. Tapping any card calls `onStart(skill.id)` passing the selected `CurriculumSlug` so the parent advances to `LearningStyleScreen` with that skill's context.
 
-**Temporary 2×2 test data:** `GRID_TEST_COUNT = 4` repeats `LANDING_SKILLS[0]` four times purely to smoke-test the grid layout with a full 2×2 — `LANDING_SKILLS` currently ships one real skill. A code comment explicitly flags this as temporary, to be removed once a second real skill exists.
-
-A successful account restore (`onRestore(track)`) skips `LearningStyleScreen` entirely and opens `TrackDetailScreen` directly with `'pairs'` (the restoring learner already picked a track on whichever device they started on).
+A successful account restore (`onRestore(track)`) skips `LearningStyleScreen` entirely and opens `TrackDetailScreen` directly with `'full'` (the restoring learner already picked a track on whichever device they started on).
 
 **`SkillCard.tsx` is currently unused** — a fuller bordered card (title, progress bar, illustration, RESUME/GET STARTED CTA) that appears to be what `LandingScreen` rendered before the grid redesign. Left in the tree; not imported anywhere as of this audit. `CarouselDots.tsx` is similarly currently unused (no pager exists to paginate) but kept for the same reason.
 
-#### `LearningStyleScreen.tsx` — full-page track list (new)
-Back-arrow header ("Choose Learning Style") + a scrollable list of every `TRACK_OPTIONS` entry as a `ModeCard`. `highlighted` falls on the first not-yet-done track (`nextUpTrack`, from `getCompletedTracks()`) since nothing is "current" yet on this screen; `status`/`progress` are boolean-only here (`done`/`1` or `notStarted`/`0` — no fractional in-progress state, since only the current track in `ModeSwitcherSheet` has one). Also fetches `getTrackTotals()` on mount to pass each row's real `totalQuestions`. Tapping a card calls `onPreviewTrack(track)`, which the parent (`index.tsx`) wires to open `TrackDetailScreen`.
+#### `LearningStyleScreen.tsx` — full-page track list (updated)
+Back-arrow header ("Choose Learning Style") + a scrollable list of detected learning styles rendered as `ModeCard` rows:
+- Receives `skillId: CurriculumSlug`.
+- Dynamically fetches available tracks via `getAvailableTracks(skillId)` and custom track definitions via `getCurriculumTrackDefs(skillId)` (from `lib/curriculum.ts`), falling back to `skill.tracks` synchronously on mount.
+- Resolves row models via `getTrackOptionsForSkill(skill, availableTracks, trackDefs)` (from `constants/trackOptions.ts`), automatically applying per-skill overrides or JSON-defined custom track titles and images.
+- Implements synchronous state reconciliation on `skillId` changes (`prevSkillId !== skillId`) to reset tracks, definitions, and totals immediately, eliminating stale-track flashes when switching skills.
+- Fetches real question counts from `getTrackTotals(skillId)`. `highlighted` falls on the first not-yet-done track (`nextUpTrack`, from `getCompletedTracks()`). Tapping a card calls `onPreviewTrack(track)`, opening `TrackDetailScreen`.
 
-#### `TrackDetailScreen.tsx` — full-page single-track preview (new)
-Replaces what an inline comment calls a former `TrackDetailSheet` (bottom sheet) — moved to a full page so mobile-browser toolbar quirks can't clip the CTA the way a fixed-position sheet could. Shows the track's title + illustration (from `TRACK_OPTIONS`) inside a bordered card, a 7-dot progress row (reusing the same shared/global `getLocalProgress()` percentage every other progress indicator in the app uses — there's still no true per-track progress here, only the one global topic counter), and a gradient "Start Practice" CTA pinned at the bottom that calls `onStartPractice(track)`.
+#### `TrackDetailScreen.tsx` — full-page single-track preview (updated)
+Full-page single-track preview card + "Start Practice" CTA:
+- Receives `skillId: CurriculumSlug` and `track: Track | null`.
+- Concurrently fetches `getAvailableTracks(skillId)` and `getCurriculumTrackDefs(skillId)`. Looks up track visual and copy via `getTrackOption(skill, effectiveTrack, trackDefs)` (from `constants/trackOptions.ts`), honoring JSON titles/images and skill overrides.
+- If a deep link specifies a track unsupported by the current curriculum (e.g. `pairs` for `world-facts`), it gracefully falls back to `availableTracks[0]`.
+- Start Practice CTA `Button` shows a loading spinner (`loading={isLoadingTracks}`) until track availability is confirmed, preventing race conditions.
+- Displays the 7-dot session progress row based on `getLocalProgress()`.
 
 #### `ModeCard.tsx` — shared learning-mode row
 Illustration + title, plus three independent optional pieces of state, not a single badge:
@@ -454,17 +462,17 @@ Illustration + title, plus three independent optional pieces of state, not a sin
 
 Used by both `LearningStyleScreen` and `ModeSwitcherSheet` — same component, same rendering, each caller just supplies different values for these four props.
 
-#### `ModeSwitcherSheet.tsx` — mid-flow track switcher (new)
+#### `ModeSwitcherSheet.tsx` — mid-flow track switcher (updated)
 Bottom sheet with two heading states:
 - **`'switch'`** — "Switch to a different learning style", reached from `PlaySession`'s continue-prompt when the current track came from a deep link.
-- **`'trackComplete'`** — title is a **fraction**, `"{completedCount}/{TRACK_OPTIONS.length} tracks complete"`, reached automatically once every session in the current track is exhausted.
+- **`'trackComplete'`** — title is a dynamic fraction, `"{completedCount}/{trackOptions.length} tracks complete"`, reached automatically once every session in the current track is exhausted.
 
-The current track is always reordered to the front of the list and highlighted. Per-track completion is real, persisted data — not a placeholder count:
-- `lib/progress.ts`'s `getCompletedTracks()`/`markTrackCompleted()` (AsyncStorage-backed, idempotent) track which tracks have actually been exhausted, across all skills.
-- `PlaySession.tsx` calls `markTrackCompleted(track)` at the exact moment a track runs out of topics (`handleNextPress`'s `!hasMoreSessions` branch) — the one place that fact is known for certain.
-- The sheet unions the persisted set with the current track whenever `heading === 'trackComplete'` fires, so the just-finished track counts immediately even before its async AsyncStorage write has landed (avoids a "0/6" flash).
-- Every row (not just the current one) reflects this same completed set — a previously-finished track shows a real "Done" status and a full progress bar, not a hardcoded 0%.
-- Also fetches `getTrackTotals()` alongside `getLocalProgress()`/`getCompletedTracks()` (same three-call pattern as `LearningStyleScreen`) to pass each row's real `totalQuestions` into `ModeCard`.
+Builds options dynamically via `getTrackOptionsForSkill(skill, availableTracks, trackDefs)`:
+- Initializes `availableTracks` with `skill.tracks` seeded with `currentTrack` so the active track is guaranteed present without initial UI flicker.
+- Reconciles state when `skillId` changes (`prevSkillId !== skillId`).
+- Concurrently fetches `getAvailableTracks(skillId)`, `getCurriculumTrackDefs(skillId)`, and `getTrackTotals(skillId)` when opened.
+- Persisted completion from `getCompletedTracks()` is unioned with `currentTrack` when `heading === 'trackComplete'` to prevent a "0/N" flash before storage commits.
+- Current track is moved to the front and highlighted. Tapping any option triggers `onSelectTrack(track)`.
 
 #### `SkillGridCard.tsx` (new)
 Compact 2-column grid cell — centered title, remote cover illustration below, no progress/CTA (whole card is the tap target). Cover image resolved via `getPlayAssetPublicUrl(CurriculumCoverImagePaths[skill.id])`, same source as `LandingIllustration`/`SkillCard`.
@@ -520,29 +528,65 @@ Barrel export — unchanged in role, now also re-exporting `trackOptions.ts` and
 ### `colors.ts` / `gradients.ts` / `typography.ts` / `spacing.ts` / `icons.ts` / `curriculumAssets.ts`
 Unchanged from the prior audit (see that revision for the full token tables) — `StaticColors.tealAccent` fix, `BrandGradients.discovery`, the Sora `FontFamily`/`Typography` system, `Spacing`/`Radius` scales, and `CurriculumCoverImagePaths` are all still current.
 
-### `skills.ts` (new)
+### `skills.ts` (updated)
 ```typescript
-export interface LandingSkill { id: CurriculumSlug; title: string; subtitle: string; }
-export const LANDING_SKILLS: LandingSkill[] = [
-  { id: 'driving-theory', title: 'Practice over 1000\nhighway code\nquestions', subtitle: 'Driving theory' },
-];
-```
-One entry per homepage skill card. The shape exists so a second skill is just another array entry — a code comment explicitly frames this as future-proofing for when the app ships more than one skill.
+export type SimpleTrack = 'reading' | 'full';
 
-### `trackOptions.ts` (new)
-Single source of truth for the learning-mode list shown across `LearningStyleScreen`, `ModeSwitcherSheet`, and `TrackDetailScreen`:
-```typescript
-export interface TrackOption { track: Track; label: string; image: ImageSourcePropType; }
-export const TRACK_OPTIONS: TrackOption[] = [
-  { track: 'pairs',     label: 'Differentiate Pairs',   image: require('@/assets/driving/differenciate.webp') },
-  { track: 'names',     label: 'Name a sign',           image: require('@/assets/driving/name.webp') },
-  { track: 'meanings',  label: 'Meaning of Signs',      image: require('@/assets/driving/meaning.webp') },
-  { track: 'whereUsed', label: 'Where signs are used',  image: require('@/assets/driving/usage.webp') },
-  { track: 'reading',   label: 'Reading Only',          image: require('@/assets/driving/reading.webp') },
-  { track: 'full',      label: 'Full Course',           image: { uri: getPlayAssetPublicUrl(...) } },
+export interface LandingSkill {
+  id: CurriculumSlug;
+  title: string;
+  subtitle: string;
+  tracks: SimpleTrack[];
+  trackLabels?: Partial<Record<Track, string>>;
+  trackImages?: Partial<Record<Track, ImageSourcePropType>>;
+}
+
+export const LANDING_SKILLS: LandingSkill[] = [
+  {
+    id: 'driving-theory',
+    title: 'Practice over 1000\nhighway code\nquestions',
+    subtitle: 'Driving theory',
+    tracks: ['reading', 'full'],
+  },
+  {
+    id: 'world-facts',
+    title: 'Test yourself with\n150 true or false\nworld facts',
+    subtitle: 'World facts',
+    tracks: ['full'],
+  },
 ];
 ```
-This **supersedes** the icon-based `TRACK_OPTIONS` array that used to live inline inside `LandingScreen.tsx` (documented in the prior audit) — that version, its `Shuffle`/`Tag`/`BookOpen`/etc. lucide icons, and its different label wording ("Challenge yourself with pairs", etc.) no longer exist anywhere in the codebase. Note the list order differs slightly from the old one too (`reading` now sits before `full`).
+Defines each skill card shown on the homepage grid. `tracks` provides the synchronous fallback list before runtime detection resolves; `trackLabels` and `trackImages` allow individual curricula to override default track copy and illustration assets without modifying component logic.
+
+### `trackOptions.ts` (updated)
+Single source of truth for the learning-mode list and illustrations shown across `LearningStyleScreen`, `ModeSwitcherSheet`, and `TrackDetailScreen`:
+```typescript
+export interface TrackOption {
+  track: Track;
+  label: string;
+  image: ImageSourcePropType;
+}
+
+export function getTrackOptionsForSkill(
+  skill: LandingSkill,
+  tracks: Track[],
+  customTrackDefs?: CurriculumTrackDefinition[]
+): TrackOption[];
+
+export function getTrackOption(
+  skill: LandingSkill,
+  track: Track,
+  customTrackDefs?: CurriculumTrackDefinition[]
+): TrackOption;
+```
+- **Title resolution priority**:
+  1. `skill.trackLabels?.[track]` (hardcoded app override)
+  2. `customTrackDef?.title` (dynamic JSON-defined custom track title)
+  3. `DEFAULT_TRACK_LABELS[track]` (standard built-in titles)
+  4. Formatted fallback string
+- **Default visuals**: `LOCAL_IMAGES` maps the 5 driving-theory tracks (`differenciate.webp`, `name.webp`, `meaning.webp`, `usage.webp`, `reading.webp`), while `full` reuses the skill's remote cover image (`CurriculumCoverImagePaths[skill.id]`). Supports custom JSON image references (`customTrackDef.image`).
+- **Dynamic builder**: `getTrackOptionsForSkill(skill, tracks, customTrackDefs)` maps whichever tracks the caller provides, decorating them with titles and icons from custom definitions or defaults.
+- **Fast lookup**: `getTrackOption(skill, track, customTrackDefs)` provides synchronous-like lookup with fallback defaults.
 
 ---
 
@@ -555,13 +599,21 @@ Unchanged from the prior audit — `ThemeContext.tsx` (dark/light/auto, AsyncSto
 ## 9. Library / Data Layer (`lib/`)
 
 ### `supabase.ts` / `downloadSession.ts` / `signs.ts`
-Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`hydrateSignCatalog`, track-aware `downloadSession`) documented there is still current. See that revision for the download pipeline's stage weights.
+Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`hydrateSignCatalog`, track-aware `downloadSession`) documented there is still current. `downloadSession` extracts optional `remote.tracks` and forwards them to `deriveTrack(hydrated, signCatalog, track, remote.tracks)`.
 
-### `curriculum.ts` — `deriveTrack()` unchanged, `getTrackTotals()` now actually wired up
-`deriveTrack`/`TRACK_ROLE`/`TRACK_LABEL` are unchanged from the prior audit. **`getTrackTotals(): Promise<Record<Track, TrackTotals>>`** was already present in source but had never been called from any screen until this pass:
-- One lightweight `loadRemoteCurriculum()` fetch (JSON only — no sign images/pairs), memoized at module scope (`cachedTrackTotals`, cleared on failure so a later call can retry) since both `LearningStyleScreen` and `ModeSwitcherSheet` need it.
-- Filters/counts the same way `deriveTrack` does, just counting instead of hydrating into full sessions — `TrackTotals = { totalQuestions: number; totalSessions: number }` per track, `totalSessions = Math.ceil(totalQuestions / 7)` (matching the session chunk size), `full`/`reading` computed from `groupQuestionsBySession`/the signs count respectively.
-- Now consumed by `ModeCard`'s `totalQuestions` prop via both browse screens (see §6.4).
+### `curriculum.ts` — Dynamic Track Detection, Cached Fetching, and Session Derivation
+Core curriculum orchestration layer:
+- **JSON-Defined Custom Tracks**: `RemoteCurriculum` parses an optional `tracks?: CurriculumTrackDefinition[]` header. When present, tracks and their filtering logic are driven entirely by the curriculum JSON.
+- **Dynamic Track Availability**: `detectAvailableTracks(questions, signs, customTrackDefs?): Track[]`:
+  - If `customTrackDefs` is defined, each custom definition is checked against questions (`filterRole`, `filterFormat`) or signs (`kind === 'reading'`).
+  - If omitted, falls back to legacy auto-detection: `full` is universal, `reading` is included if signs exist (`signs.length > 0`), and each role track is included only if questions contain that role.
+- **Deduplicated Cache**: `loadCurriculumCached(slug)` stores in-flight and resolved promises in `curriculumCache`. When screens request `getTrackTotals(slug)`, `getAvailableTracks(slug)`, and `getCurriculumTrackDefs(slug)` on mount, they share a single network round-trip.
+- **`getCurriculumTrackDefs(slug)`**: Returns custom track definitions from the curriculum JSON (or undefined if legacy).
+- **`getAvailableTracks(slug)`**: Asynchronous per-skill track detection, backed by `loadCurriculumCached`.
+- **`getTrackTotals(slug)`**: Computes `totalQuestions` and `totalSessions` per track (for both custom and standard tracks), cached in `trackTotalsCache`.
+- **`deriveTrack(questions, signs, track, customTrackDefs?)`**: Builds hydrated `PlaySession[]` for gameplay:
+  - If a matching `CurriculumTrackDefinition` exists, filters questions by `filterRole` or `filterFormat`, or chunks signs if `kind === 'reading'`.
+  - Otherwise dispatches via standard logic (`full` via `deriveFullSessions()`, `reading` via sign chunking, or legacy role matching `q.role === TRACK_ROLE[track]`).
 
 ### `navDirection.ts` (previously undocumented — see §6.5 for the full writeup, paired with `components/nav/ScreenTransition.tsx`)
 
@@ -667,7 +719,21 @@ Extracted single-card scroll-hint logic, shared by both `QuizCardDeck` and `Read
 ## 11. Types (`types/`)
 
 ### `quiz.ts`
-Unchanged from the prior audit — `role`-tagged `BaseQuestion`, the `QuizQuestion` union, `OptionChoice`, and the `SignCatalogEntry` interface (92 entries in `data/questions.sample.json`) are all still current. See that revision for the full field tables.
+Core data types:
+- **`CurriculumTrackDefinition`**: Dynamic track schema declared in curriculum JSON files:
+  ```typescript
+  export interface CurriculumTrackDefinition {
+    id: string;                    // Track ID (e.g., 'image-identification', 'pairs')
+    title: string;                 // Display label in learning style list & track detail
+    filterRole?: string;           // Filters questions by q.role
+    filterFormat?: string;         // Filters questions by format
+    kind?: 'quiz' | 'reading';     // Reading mode vs quiz card deck
+    image?: string;                // Optional custom asset identifier
+  }
+  ```
+- **`Track`**: `StandardTrack | (string & {})` — union of canonical standard tracks (`'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading'`) and arbitrary custom track strings.
+- **`BaseQuestion.role`**: Widened from strict 4-value union to `string` allowing custom roles (e.g., `"explainer"`, `"pair"`, `"name"`).
+- `QuizQuestion` union, `OptionChoice`, and `SignCatalogEntry` interface are all still current.
 
 ---
 
@@ -859,8 +925,8 @@ RootLayout
             │   │   └── RestoreAccountModal
             │   │       └── GoogleWebButton (.web.tsx on web)
             │   ├── LearningStyleScreen
-            │   │   └── ModeCard (×6, TRACK_OPTIONS)
-            │   ├── TrackDetailScreen
+            │   │   └── ModeCard (×N, detectAvailableTracks + trackOptions)
+            │   ├── TrackDetailScreen                       — single-track preview (getTrackOption + getAvailableTracks)
             │   ├── DownloadingScreen
             │   └── PlaySession
             │       ├── CardDeck (router)
@@ -874,7 +940,7 @@ RootLayout
             │       │       ├── ReadingCard, CheckButton ("GOT IT"), ScrollHintChevron
             │       │       └── QuitConfirmSheet
             │       ├── ModeSwitcherSheet ('switch' | 'trackComplete')
-            │       │   └── ModeCard (×6, highlighted/DONE per real completion data)
+            │       │   └── ModeCard (×N, dynamic tracks, highlighted/DONE per real completion data)
             │       └── SessionStateScreen (various kinds)
             │           ├── outOfKeys → scrollable proceed options, Toggle (reminders)
             │           │   └── RestoreAccountModal

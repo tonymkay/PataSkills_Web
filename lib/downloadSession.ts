@@ -65,7 +65,7 @@ export async function downloadSession(
     onProgress?.({ stage: 'hydrating', fraction: fractionUpTo('hydrating') });
     const hydrated = hydrateQuestionsList(remote.questions, assets, pairs);
     const signCatalog = hydrateSignCatalog(remote.signs, pairs);
-    const sessions = deriveTrack(hydrated, signCatalog, track);
+    const sessions = deriveTrack(hydrated, signCatalog, track, remote.tracks);
 
     onProgress?.({ stage: 'hydrating', fraction: 1 });
     return { sessions, signCatalog };

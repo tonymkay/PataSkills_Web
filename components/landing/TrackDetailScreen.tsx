@@ -4,11 +4,12 @@ import { ArrowLeft } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, BrandGradients } from '@/theme/tokens';
-import { getTrackOptionsForSkill } from '@/constants/trackOptions';
+import { getTrackOption } from '@/constants/trackOptions';
 import { LANDING_SKILLS } from '@/constants/skills';
 import { getLocalProgress } from '@/lib/progress';
-import { Track } from '@/lib/curriculum';
+import { Track, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
+import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { Button } from '@/components/ui/Button';
 
 // Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
@@ -41,16 +42,56 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: T
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [progress, setProgress] = useState({ completedTopics: 0, totalTopics: 46 });
+  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+
+  const [prevSkillId, setPrevSkillId] = useState(skillId);
+  const [availableTracks, setAvailableTracks] = useState<Track[]>(skill.tracks);
+  const [trackDefs, setTrackDefs] = useState<CurriculumTrackDefinition[] | undefined>();
+  const [isLoadingTracks, setIsLoadingTracks] = useState(true);
+
+  if (prevSkillId !== skillId) {
+    setPrevSkillId(skillId);
+    setAvailableTracks(skill.tracks);
+    setTrackDefs(undefined);
+    setIsLoadingTracks(true);
+  }
 
   useEffect(() => {
     getLocalProgress().then(setProgress).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    setIsLoadingTracks(true);
+    getAvailableTracks(skillId)
+      .then((tracks) => {
+        if (active) {
+          setAvailableTracks(tracks);
+          setIsLoadingTracks(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setIsLoadingTracks(false);
+        }
+      });
+    getCurriculumTrackDefs(skillId)
+      .then((defs) => {
+        if (active) setTrackDefs(defs);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [skillId]);
+
   if (!track) return null;
 
-  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
-  const trackOptions = getTrackOptionsForSkill(skill);
-  const option = trackOptions.find((o) => o.track === track) ?? trackOptions[0];
+  // Fallback to first available track if requested track is not supported for this skill
+  const effectiveTrack = !isLoadingTracks && !availableTracks.includes(track)
+    ? (availableTracks[0] ?? track)
+    : track;
+  const option = getTrackOption(skill, effectiveTrack, trackDefs);
   const skillSubtitle = skill.subtitle;
   const pct = progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
   const filledDots = Math.min(QUESTIONS_PER_SESSION, Math.round(pct * QUESTIONS_PER_SESSION));
@@ -106,12 +147,13 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: T
       <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
         <Button
           label="Start Practice"
-          onPress={() => onStartPractice(track)}
+          onPress={() => onStartPractice(effectiveTrack)}
           variant="gradient"
           gradientColors={BrandGradients.discovery.colors}
           gradientStart={{ x: 0, y: 0 }}
           gradientEnd={{ x: 1, y: 1 }}
           textColor="#FFFFFF"
+          loading={isLoadingTracks}
         />
       </View>
     </View>
