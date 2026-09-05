@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import Animated, {
   Easing,
@@ -14,6 +14,7 @@ import { Spacing, Radius } from '@/constants/spacing';
 import { getSheetGradient } from '@/constants/gradients';
 import { StaticColors } from '@/constants/colors';
 import { TRACK_OPTIONS } from '@/constants/trackOptions';
+import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 import { ModeCard } from './ModeCard';
 
@@ -21,13 +22,17 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export type ModeSwitcherHeading = 'switch' | 'trackComplete';
 
+// Shortened from the original "Here are more ways you can learn the same
+// topic." — the DONE badge + progress row on the current track's card now
+// carry that meaning, so the subtitle just needs to nudge toward the list
+// instead of re-explaining it.
 const HEADING_COPY: Record<ModeSwitcherHeading, { title: string; subtitle?: string }> = {
   switch: {
     title: 'Switch to a different learning style',
   },
   trackComplete: {
     title: "You've completed this track!",
-    subtitle: 'Here are more ways you can learn the same topic.',
+    subtitle: 'Pick another way to keep learning.',
   },
 };
 
@@ -62,6 +67,17 @@ export function ModeSwitcherSheet({
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(600);
   const backdropOpacity = useSharedValue(0);
+  // Shared/global progress (same source TrackDetailScreen's dots use) —
+  // there's no per-track progress tracked in storage, so this is the only
+  // real completion figure available for the current row. Other rows get
+  // 0%: no data exists for tracks the learner hasn't touched this session.
+  const [progress, setProgress] = useState({ completedTopics: 0, totalTopics: 46 });
+
+  useEffect(() => {
+    if (visible) {
+      getLocalProgress().then(setProgress).catch(() => {});
+    }
+  }, [visible]);
 
   useEffect(() => {
     translateY.value = withTiming(visible ? 0 : 600, {
@@ -135,12 +151,28 @@ export function ModeSwitcherSheet({
             >
               {ordered.map((option, i) => {
                 const isCurrent = option.track === currentTrack;
+                // Current row: trackComplete means we know for a fact this
+                // track's sessions are exhausted, so show it as fully done
+                // regardless of what the shared pct happens to compute to —
+                // a "you've completed this" screen showing a partial bar
+                // for the very card it's about would read as a bug. The
+                // 'switch' heading (mid-track, not finished) shows the real
+                // shared pct instead. Every other row has no data, so 0%.
+                const currentPct =
+                  progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
+                const rowProgress = isCurrent ? (heading === 'trackComplete' ? 1 : currentPct) : 0;
+                const rowStatus: 'current' | 'done' | undefined = isCurrent
+                  ? heading === 'trackComplete'
+                    ? 'done'
+                    : 'current'
+                  : undefined;
                 return (
                   <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
                     <ModeCard
                       image={option.image}
                       title={option.label}
-                      highlighted={isCurrent}
+                      status={rowStatus}
+                      progress={rowProgress}
                       onPress={() => onSelectTrack(option.track)}
                     />
                   </View>
