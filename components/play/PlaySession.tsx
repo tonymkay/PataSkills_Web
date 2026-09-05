@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import Animated, { SlideInRight, SlideOutLeft, SlideInLeft, SlideOutRight } from 'react-native-reanimated';
+import Animated, { SlideInRight, SlideInLeft, FadeOut } from 'react-native-reanimated';
 import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
@@ -64,9 +64,12 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
 
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [switcherHeading, setSwitcherHeading] = useState<ModeSwitcherHeading>('switch');
-  // Direction for the questions <-> topic-complete slide transition —
-  // forward on finishing a topic, backward when Redo Session sends the
-  // learner back into the questions.
+  // Direction for the questions <-> topic-complete entering slide — forward
+  // on finishing a topic, backward when Redo Session sends the learner back
+  // into the questions. Exiting is a plain fade regardless of direction: a
+  // directional slide-out reads the *previous* render's direction (stale by
+  // one transition whenever direction changes), which visibly looked like
+  // the wrong screen moving the wrong way.
   const [screenDirection, setScreenDirection] = useState<'forward' | 'backward'>('forward');
 
   // Resume from last completed topic index
@@ -283,7 +286,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
         key="topicComplete"
         style={styles.container}
         entering={screenDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
-        exiting={screenDirection === 'forward' ? SlideOutLeft.duration(220) : SlideOutRight.duration(220)}
+        exiting={FadeOut.duration(180)}
       >
         <SessionStateScreen
           kind="topicComplete"
@@ -324,7 +327,7 @@ export function PlaySession({ sessions, signCatalog, track, deepLinked = false, 
       key="playing"
       style={[styles.container, { backgroundColor: colors.background }]}
       entering={screenDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
-      exiting={screenDirection === 'forward' ? SlideOutLeft.duration(220) : SlideOutRight.duration(220)}
+      exiting={FadeOut.duration(180)}
     >
       {currentSession.kind === 'reading' ? (
         <CardDeck
