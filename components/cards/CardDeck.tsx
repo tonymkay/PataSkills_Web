@@ -27,7 +27,7 @@ import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
 import { FeedbackSheet, FeedbackSheetState } from '@/components/feedback/FeedbackSheet';
 import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
 
-const XP_PER_CORRECT = 10;
+const XP_PER_CORRECT = 5;
 
 const DECK_PAD = Spacing.marginMobile;
 const GAP = 16;
@@ -262,6 +262,14 @@ function QuizCardDeck({
   const [correctCount, setCorrectCount] = useState(0);
   const [totalCount] = useState(initialQuestions.length);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  // Questions ever answered wrong at least once. A question missed on its
+  // first attempt stays "missed" for scoring purposes even if the learner
+  // retries and gets it right afterward — Try Again lets them move on, but
+  // it no longer counts toward correctCount/XP for this session. Keyed by
+  // question.id (stable across the requeue-on-wrong path) rather than deck
+  // index, and a ref rather than state since nothing needs to re-render off
+  // of it — it's only consulted at scoring time.
+  const missedFirstAttemptRef = useRef<Set<string>>(new Set());
 
   // Continuous strip translation. NEVER RESETS.
   const stripX = useSharedValue(0);
@@ -275,8 +283,14 @@ function QuizCardDeck({
   // Called on JS thread exactly when native timing completes
   const handleTransitionEnd = useCallback((isCorrect: boolean, nextIdx: number) => {
     if (isCorrect) {
-      const updatedCorrect = correctCount + 1;
-      setCorrectCount(updatedCorrect);
+      // Only counts if this question was never missed before — a correct
+      // answer after a Try Again retry still advances the deck, just
+      // without adding to the score.
+      const everMissed = currentCard ? missedFirstAttemptRef.current.has(currentCard.id) : false;
+      const updatedCorrect = everMissed ? correctCount : correctCount + 1;
+      if (!everMissed) {
+        setCorrectCount(updatedCorrect);
+      }
       if (nextIdx >= deck.length) {
         const stats = { totalAnswered: totalCount, correctCount: updatedCorrect };
         onSessionComplete?.(stats);
@@ -343,6 +357,11 @@ function QuizCardDeck({
     if (selectedOption === null || !currentCard || isTransitioning) return;
 
     const isCorrect = selectedOption === currentCard.correctAnswer;
+    if (!isCorrect) {
+      // Permanently marks this question as missed for scoring, even though
+      // Try Again lets them keep attempting it.
+      missedFirstAttemptRef.current.add(currentCard.id);
+    }
     setFeedbackState(isCorrect ? 'correct' : 'incorrect');
     setEvaluatedResult(isCorrect ? 'right' : 'wrong');
     setFeedbackSheetState(isCorrect ? 'correct' : 'notquite');
@@ -582,7 +601,7 @@ function QuizCardDeck({
       {/* 5. Feedback Sheet: correct/not-quite pill + XP, flag, try again/continue */}
       <FeedbackSheet
         state={feedbackSheetState}
-        xp={XP_PER_CORRECT}
+        xp={missedFirstAttemptRef.current.has(currentCard.id) ? 0 : XP_PER_CORRECT}
         isFlagged={Boolean(flaggedIds[currentCard.id])}
         onToggleFlag={(flagged) => handleToggleFlag(currentCard.id, flagged)}
         onTryAgain={handleSheetTryAgain}

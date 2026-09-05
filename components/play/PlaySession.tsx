@@ -13,7 +13,7 @@ import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 
-const XP_PER_CORRECT = 10;
+const XP_PER_CORRECT = 5;
 
 type FlowState = 'playing' | 'topicComplete' | 'outOfKeys' | 'loadingTopic';
 
