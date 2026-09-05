@@ -15,7 +15,7 @@ import { getSheetGradient } from '@/constants/gradients';
 import { StaticColors } from '@/constants/colors';
 import { TRACK_OPTIONS } from '@/constants/trackOptions';
 import { getLocalProgress, getCompletedTracks } from '@/lib/progress';
-import { Track } from '@/lib/curriculum';
+import { Track, TrackTotals, getTrackTotals } from '@/lib/curriculum';
 import { ModeCard } from './ModeCard';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -79,11 +79,16 @@ export function ModeSwitcherSheet({
   // out of topics) — real source for both the header fraction and each
   // row's DONE state, refetched every time the sheet opens.
   const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
+  // Real per-track question counts (from getTrackTotals()) for the "N
+  // questions" label on each row. Undefined until the fetch resolves —
+  // ModeCard just hides the label rather than showing a placeholder.
+  const [trackTotals, setTrackTotals] = useState<Record<Track, TrackTotals> | null>(null);
 
   useEffect(() => {
     if (visible) {
       getLocalProgress().then(setProgress).catch(() => {});
       getCompletedTracks().then(setCompletedTracks).catch(() => {});
+      getTrackTotals().then(setTrackTotals).catch(() => {});
     }
   }, [visible]);
 
@@ -222,6 +227,7 @@ export function ModeSwitcherSheet({
                       status={rowStatus}
                       highlighted={isHighlighted}
                       progress={rowProgress}
+                      totalQuestions={trackTotals?.[option.track]?.totalQuestions}
                       onPress={() => onSelectTrack(option.track)}
                     />
                   </View>

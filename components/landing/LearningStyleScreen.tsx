@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { TRACK_OPTIONS } from '@/constants/trackOptions';
 import { getCompletedTracks } from '@/lib/progress';
-import { Track } from '@/lib/curriculum';
+import { Track, TrackTotals, getTrackTotals } from '@/lib/curriculum';
 import { ModeCard } from './ModeCard';
 
 // Matches LandingScreen's bottom-sheet-style width cap so this screen
@@ -31,9 +31,13 @@ interface LearningStyleScreenProps {
 export function LearningStyleScreen({ onPreviewTrack, onBack }: LearningStyleScreenProps) {
   const { colors } = useTheme();
   const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
+  // Real per-track question counts for the "N questions" label on each
+  // row — same source and shape as ModeSwitcherSheet uses.
+  const [trackTotals, setTrackTotals] = useState<Record<Track, TrackTotals> | null>(null);
 
   useEffect(() => {
     getCompletedTracks().then(setCompletedTracks).catch(() => {});
+    getTrackTotals().then(setTrackTotals).catch(() => {});
   }, []);
 
   const nextUpTrack = TRACK_OPTIONS.find((o) => !completedTracks.includes(o.track))?.track;
@@ -65,6 +69,7 @@ export function LearningStyleScreen({ onPreviewTrack, onBack }: LearningStyleScr
                   status={isDone ? 'done' : 'notStarted'}
                   highlighted={option.track === nextUpTrack}
                   progress={isDone ? 1 : 0}
+                  totalQuestions={trackTotals?.[option.track]?.totalQuestions}
                   onPress={() => onPreviewTrack(option.track)}
                 />
               </View>

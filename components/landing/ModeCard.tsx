@@ -28,6 +28,10 @@ interface ModeCardProps {
   /** 0–1 completion, rendered as filled/unfilled segments under the title.
    *  Omit to hide the progress row entirely. */
   progress?: number;
+  /** Real total question count for this track (from getTrackTotals()).
+   *  Shown as a small "N questions" label next to the status text.
+   *  Omit while the totals fetch hasn't resolved yet — no placeholder. */
+  totalQuestions?: number;
   onPress: () => void;
 }
 
@@ -39,7 +43,7 @@ interface ModeCardProps {
  * brand-teal border/tint to flag it as the next thing to do. The
  * illustration and label are otherwise identical to every other row.
  */
-export function ModeCard({ image, title, status, highlighted, progress, onPress }: ModeCardProps) {
+export function ModeCard({ image, title, status, highlighted, progress, totalQuestions, onPress }: ModeCardProps) {
   const { colors } = useTheme();
   const teal = colors.tealAccent || '#2BD9C4';
   const isDone = status === 'done';
@@ -78,6 +82,11 @@ export function ModeCard({ image, title, status, highlighted, progress, onPress 
           </Text>
           {statusLabel ? (
             <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+          ) : null}
+          {totalQuestions !== undefined ? (
+            <Text style={[styles.questionCountText, { color: colors.onSurfaceVariant }]}>
+              {totalQuestions} question{totalQuestions === 1 ? '' : 's'}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -134,6 +143,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  questionCountText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   progressRow: {
     flexDirection: 'row',
