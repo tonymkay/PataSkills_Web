@@ -13,6 +13,7 @@ import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
 import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 type Stage = 'landing' | 'learning-style' | 'track-detail' | 'downloading' | 'session';
 
@@ -156,6 +157,7 @@ export default function PlayEntry() {
   }, []);
 
   return (
+    <ScreenTransition>
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#14171C' }]}>
       <Animated.View
         key={stage}
@@ -187,6 +189,7 @@ export default function PlayEntry() {
       )}
       </Animated.View>
     </SafeAreaView>
+    </ScreenTransition>
   );
 }
 
