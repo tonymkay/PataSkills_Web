@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Dimensions, Platform, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
-import { consumeNavDirection } from '@/lib/navDirection';
+import { peekNavDirection, resetNavDirection } from '@/lib/navDirection';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -24,10 +24,13 @@ const screenWidth = Dimensions.get('window').width;
 // starts and stays at 0) and this renders children directly.
 export function ScreenTransition({ children }: { children: React.ReactNode }) {
   const isWeb = Platform.OS === 'web';
-  const [direction] = useState(() => consumeNavDirection());
+  const [direction] = useState(() => peekNavDirection());
   const translateX = useSharedValue(isWeb ? (direction === 'backward' ? -screenWidth : screenWidth) : 0);
 
   useEffect(() => {
+    // Clear the pending flag now that this screen has consumed it, so an
+    // unrelated later remount of this same screen doesn't reuse it.
+    resetNavDirection();
     if (!isWeb) return;
     translateX.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
     // Mount-only: this is the screen's one entrance, not a value that

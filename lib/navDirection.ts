@@ -10,14 +10,24 @@ import { Platform } from 'react-native';
 // `router.*` directly, so this flag is always accurate by construction.
 let pendingDirection: 'forward' | 'backward' = 'forward';
 
-// Consumed once per screen mount (ScreenTransition's useState initializer)
-// then reset to the common case, so a screen that happens to remount for
-// an unrelated reason doesn't inherit a stale direction.
-export function consumeNavDirection(): 'forward' | 'backward' {
+// Read once per screen mount, via ScreenTransition's useState initializer.
+// Deliberately non-destructive: React's dev-mode Strict Mode double-invokes
+// render (and lazy useState initializers) on mount, so a read-and-clear here
+// would have the first invocation correctly see 'backward' and clear it, then
+// the second invocation see the already-cleared 'forward' — silently
+// collapsing every back navigation to the forward animation. A pure read
+// means both invocations agree.
+export function peekNavDirection(): 'forward' | 'backward' {
   if (Platform.OS !== 'web') return 'forward';
-  const direction = pendingDirection;
+  return pendingDirection;
+}
+
+// Called once post-commit (ScreenTransition's mount effect) so a screen that
+// later remounts for an unrelated reason (Fast Refresh, etc.) doesn't inherit
+// a stale direction. Effects — unlike the render-phase initializer above —
+// settle after Strict Mode's double-invoke, so this is safe to call there.
+export function resetNavDirection() {
   pendingDirection = 'forward';
-  return direction;
 }
 
 type RouterLike = {
