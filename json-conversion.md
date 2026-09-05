@@ -118,14 +118,24 @@ Unlike earlier versions of the app where learning modes were hardcoded to drivin
    Add a top-level `"tracks"` array to the JSON. Each entry conforms to:
    ```typescript
    interface CurriculumTrackDefinition {
-     id: string;                // URL & state ID (e.g. "quick-quiz", "image-identification")
-     title: string;             // UI display label (e.g. "Quick Quiz")
-     filterRole?: string;       // Matches question.role
-     filterFormat?: string;     // Matches question.format (e.g. "textChoice")
-     kind?: 'quiz' | 'reading'; // 'quiz' (default) or 'reading' (chunked signs)
-     image?: string;            // Optional custom asset name
+     id: string;                          // URL & state ID (e.g. "quick-quiz", "image-identification")
+     title: string;                       // UI display label (e.g. "Quick Quiz")
+     filterRole?: string | string[];      // Matches question.role — pass an array to have one track
+                                           // absorb several role values (e.g. driving-theory's
+                                           // "identification" track: ["name","meaning","whereUsed"])
+     filterFormat?: string | string[];    // Matches question.format (e.g. "textChoice") — same array support
+     kind?: 'quiz' | 'reading' | 'full';  // 'quiz' (default, role/format-filtered), 'reading' (chunked
+                                           // signs), or 'full' (all questions, standard grouping)
+     image?: string;                      // Optional custom asset name
    }
    ```
+   Confirmed live today: `curricula/questions.sample.json` (driving-theory) ships
+   `differentiation` (`filterRole: "pair"`), `identification`
+   (`filterRole: ["name","meaning","whereUsed"]`), `reading` (`kind: "reading"`), and `full`
+   (`kind: "full"`); `curricula/world-facts.json` ships a single `full` track. Both were pushed
+   to the `play-assets` bucket via a one-off script after the array-filter support above was
+   added — see `scripts/upload-corrected-curriculum.mjs` for the upload pattern (bucket path +
+   `play_curricula.json_path` update).
 2. **Automatic Empty-Track Elimination**:
    If `"tracks"` is omitted, the app automatically runs dynamic track detection (`detectAvailableTracks()`), ensuring that skills without signs or without certain roles (e.g. `world-facts`) **only show tracks that have actual questions** (e.g. only `full` is displayed; driving-specific tracks like `pairs` or `meanings` are omitted automatically).
 3. **No App Code Changes**:

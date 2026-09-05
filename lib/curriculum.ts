@@ -1,7 +1,20 @@
 import { supabase } from './supabase';
 import { QuizQuestion, SignCatalogEntry, CurriculumTrackDefinition } from '@/types/quiz';
 import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, chunkByTopicBounded, PlaySession, QuizPlaySession } from '@/utils/groupSessions';
+import { deriveReadingEntriesFromQuestions } from '@/utils/hydrateQuestions';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
+
+/**
+ * Reading is a fixed track kind every skill can offer — real signs
+ * catalog if the skill has one (driving-theory), otherwise derived
+ * straight from its questions (world-facts and any future skill with no
+ * image-backed content). Never empty as long as there are questions, so
+ * a `{"kind":"reading"}` learning mode in a curriculum's JSON always has
+ * something to show without needing an app change.
+ */
+function resolveReadingEntries(questions: QuizQuestion[], signs: SignCatalogEntry[]): SignCatalogEntry[] {
+  return signs.length > 0 ? signs : deriveReadingEntriesFromQuestions(questions);
+}
 
 const DEFAULT_SLUG: CurriculumSlug = 'driving-theory';
 
@@ -29,6 +42,16 @@ const TRACK_LABEL: Record<FilterTrack, string> = {
 // of the UI. 'full' last, since every skill has it and it reads as the
 // "everything" option.
 const TRACK_ORDER: Track[] = ['pairs', 'names', 'meanings', 'whereUsed', 'reading', 'full'];
+
+/**
+ * Matches a question's role against a track's filterRole, which may be a
+ * single role string or an array of them (one track absorbing several
+ * role values, e.g. "Identify Signs" covering name+meaning+whereUsed).
+ */
+function roleMatches(questionRole: string | undefined, filterRole: string | string[]): boolean {
+  if (questionRole === undefined) return false;
+  return Array.isArray(filterRole) ? filterRole.includes(questionRole) : questionRole === filterRole;
+}
 
 /**
  * Shared 'full'-track dispatch, used by both deriveTrack() and
@@ -65,14 +88,14 @@ export function deriveTrack(
   const customDef = customTrackDefs?.find((d) => d.id === track);
   if (customDef) {
     if (customDef.kind === 'reading') {
-      return chunkSignsIntoSessions(signs, customDef.title || 'Reading');
+      return chunkSignsIntoSessions(resolveReadingEntries(questions, signs), customDef.title || 'Reading');
     }
     if (customDef.kind === 'full') {
       return deriveFullSessions(questions);
     }
     let filtered = questions;
     if (customDef.filterRole) {
-      filtered = filtered.filter((q) => q.role === customDef.filterRole);
+      filtered = filtered.filter((q) => roleMatches(q.role, customDef.filterRole!));
     }
     if (customDef.filterFormat) {
       const formats = Array.isArray(customDef.filterFormat) ? customDef.filterFormat : [customDef.filterFormat];
@@ -86,7 +109,7 @@ export function deriveTrack(
   }
 
   if (track === 'reading') {
-    return chunkSignsIntoSessions(signs, 'Reading');
+    return chunkSignsIntoSessions(resolveReadingEntries(questions, signs), 'Reading');
   }
 
   const role = TRACK_ROLE[track as FilterTrack] ?? track;
@@ -109,11 +132,14 @@ export function detectAvailableTracks(
     const available: Track[] = [];
     for (const def of customTrackDefs) {
       if (def.kind === 'reading') {
-        if (signs.length > 0) available.push(def.id);
+        // Always available given any questions — real signs catalog if
+        // present, otherwise derived from the questions themselves
+        // (see resolveReadingEntries()).
+        if (signs.length > 0 || questions.length > 0) available.push(def.id);
       } else if (def.kind === 'full') {
         if (questions.length > 0) available.push(def.id);
       } else if (def.filterRole) {
-        if (questions.some((q) => q.role === def.filterRole)) available.push(def.id);
+        if (questions.some((q) => roleMatches(q.role, def.filterRole!))) available.push(def.id);
       } else if (def.filterFormat) {
         const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
         if (questions.some((q) => formats.includes(q.format))) available.push(def.id);
@@ -125,7 +151,7 @@ export function detectAvailableTracks(
   }
 
   const available = new Set<Track>(['full']);
-  if (signs.length > 0) available.add('reading');
+  if (signs.length > 0 || questions.length > 0) available.add('reading');
   (Object.keys(TRACK_ROLE) as FilterTrack[]).forEach((t) => {
     if (questions.some((q) => q.role === TRACK_ROLE[t])) available.add(t);
   });
@@ -184,9 +210,10 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
         if (remote.tracks && remote.tracks.length > 0) {
           for (const def of remote.tracks) {
             if (def.kind === 'reading') {
+              const readingEntries = resolveReadingEntries(remote.questions, remote.signs);
               totals[def.id] = {
-                totalQuestions: remote.signs.length,
-                totalSessions: Math.max(1, Math.ceil(remote.signs.length / 7)),
+                totalQuestions: readingEntries.length,
+                totalSessions: Math.max(1, Math.ceil(readingEntries.length / 7)),
               };
             } else if (def.kind === 'full') {
               totals[def.id] = {
@@ -196,7 +223,7 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
             } else {
               let filtered = remote.questions;
               if (def.filterRole) {
-                filtered = filtered.filter((q) => q.role === def.filterRole);
+                filtered = filtered.filter((q) => roleMatches(q.role, def.filterRole!));
               }
               if (def.filterFormat) {
                 const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
@@ -225,9 +252,10 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
           };
         }
         if (!totals.reading) {
+          const readingEntries = resolveReadingEntries(remote.questions, remote.signs);
           totals.reading = {
-            totalQuestions: remote.signs.length,
-            totalSessions: Math.max(1, Math.ceil(remote.signs.length / 7)),
+            totalQuestions: readingEntries.length,
+            totalSessions: Math.max(1, Math.ceil(readingEntries.length / 7)),
           };
         }
 

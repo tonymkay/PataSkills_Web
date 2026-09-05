@@ -63,6 +63,44 @@ export function hydrateQuestionsList(
 }
 
 /**
+ * Builds Reading Mode content directly from questions for any skill with
+ * no real signs catalog (signs: [] — e.g. world-facts, which has no
+ * image-backed content). Reading is a fixed, app-understood track kind
+ * every skill should be able to offer (see the 2026-09-06 note atop
+ * docs/learning-tracks-and-reading-mode.md) — this is the fallback
+ * content source `lib/curriculum.ts` reaches for when a skill's real
+ * `signs` array is empty, so a JSON author never needs new app code just
+ * to add a `{"kind":"reading"}` learning mode to a text-only skill.
+ *
+ * One derived entry per question: `meaning` is the correct answer text,
+ * `explanation` is the question's own `explanation` field if it's been
+ * authored, otherwise a plain fact statement built from the question +
+ * correct answer (never blank, even for content like world-facts where
+ * every source `explanation` is currently `""`).
+ */
+export function deriveReadingEntriesFromQuestions(questions: QuizQuestion[]): SignCatalogEntry[] {
+  return questions.map((q) => {
+    const answers = q.answers ?? [];
+    const correctAnswer = answers[q.correctAnswer] ?? '';
+    const explanation =
+      q.explanation && q.explanation.trim().length > 0
+        ? q.explanation
+        : `${q.question} ${correctAnswer}`.trim();
+    return {
+      signId: q.id,
+      pairId: q.pairId ?? q.id,
+      signRef: 'A',
+      name: correctAnswer || q.question,
+      signType: 'informational',
+      meaning: correctAnswer,
+      whereUsed: q.section ?? '',
+      explanation,
+      image: null,
+    };
+  });
+}
+
+/**
  * Hydrates the signs catalog (used by Reading Mode / Learn More) with the
  * same real sign image URLs the quiz questions already get — via pairId +
  * signRef against play_sign_pairs, no separate image field needed.

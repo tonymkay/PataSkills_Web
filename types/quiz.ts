@@ -13,7 +13,18 @@ export type QuizImageSource = ImageSourcePropType | string | null | undefined;
 export interface CurriculumTrackDefinition {
   id: string;
   title: string;
-  filterRole?: string;
+  /**
+   * Matches question.role. A track is a JSON-declared, app-agnostic
+   * grouping of questions ("this is a differentiate-pairs track", "this
+   * is an identify-a-sign track") — role is just an internal per-question
+   * tag the curriculum author invents ("pair", "meaning", "whereUsed",
+   * anything). One track can absorb several role values (e.g. a single
+   * "Identify Signs" track covering role "name" + "meaning" + "whereUsed"),
+   * which is why this accepts an array, not just a single string. The app
+   * never hardcodes what any role value means — only the JSON's tracks
+   * array decides how roles roll up into named, user-facing tracks.
+   */
+  filterRole?: string | string[];
   filterFormat?: QuestionFormat | QuestionFormat[];
   kind?: 'quiz' | 'reading' | 'full';
   image?: string;

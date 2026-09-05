@@ -1,6 +1,8 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-05 (d) — this pass updates documentation to reflect the dynamic JSON-driven learning tracks system, multi-skill routing, and per-curriculum customization: **(1)** JSON-driven track definitions (`CurriculumTrackDefinition` in `types/quiz.ts`) allowing curricula to define arbitrary track IDs, custom titles, filtering rules (`filterRole`, `filterFormat`, `kind`), and custom icons directly in curriculum JSON without code changes; **(2)** Dynamic track detection (`detectAvailableTracks`/`getAvailableTracks`/`getCurriculumTrackDefs` in `lib/curriculum.ts`) supporting both custom JSON tracks and legacy question `role`/sign auto-detection with 100% backward compatibility; **(3)** Deduplicated cache (`loadCurriculumCached`) ensuring a single in-flight network promise shared across `getTrackTotals()`, `getAvailableTracks()`, and `getCurriculumTrackDefs()`; **(4)** `constants/trackOptions.ts` dynamic builders (`getTrackOptionsForSkill`, `getTrackOption`) prioritizing skill overrides → JSON `trackDef.title` → default labels; **(5)** `LearningStyleScreen`, `TrackDetailScreen`, and `ModeSwitcherSheet` updated to consume dynamic tracks and track definitions; **(6)** Multi-skill catalog in `constants/skills.ts` and deep linking in `app/index.tsx` supporting custom track IDs. · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — verified against active source code and `tsc` typecheck.
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (e) — `CurriculumTrackDefinition.filterRole`/`filterFormat` widened from a single string to `string | string[]` (`lib/curriculum.ts`'s `roleMatches()` now checks array membership), letting one JSON-declared track absorb several role values. Both live curricula in Supabase Storage now actually ship explicit `tracks` arrays using this: driving-theory (`differentiation`, `identification` [merges name+meaning+whereUsed], `reading`, `full`) and world-facts (`full`) — previously the bucket copies were stale flat/role-only JSON despite the local repo files and app code already supporting the JSON-driven format. See §11 and §18 for the corrected type and bucket contents.
+>
+> **Last updated**: 2026-09-05 (d) — this pass updates documentation to reflect the dynamic JSON-driven learning tracks system, multi-skill routing, and per-curriculum customization: **(1)** JSON-driven track definitions (`CurriculumTrackDefinition` in `types/quiz.ts`) allowing curricula to define arbitrary track IDs, custom titles, filtering rules (`filterRole`, `filterFormat`, `kind`), and custom icons directly in curriculum JSON without code changes; **(2)** Dynamic track detection (`detectAvailableTracks`/`getAvailableTracks`/`getCurriculumTrackDefs` in `lib/curriculum.ts`) supporting both custom JSON tracks and legacy question `role`/sign auto-detection with 100% backward compatibility; **(3)** Deduplicated cache (`loadCurriculumCached`) ensuring a single in-flight network promise shared across `getTrackTotals()`, `getAvailableTracks()`, and `getCurriculumTrackDefs()`; **(4)** `constants/trackOptions.ts` dynamic builders (`getTrackOptionsForSkill`, `getTrackOption`) prioritizing skill overrides → JSON `trackDef.title` → default labels; **(5)** `LearningStyleScreen`, `TrackDetailScreen`, and `ModeSwitcherSheet` updated to consume dynamic tracks and track definitions; **(6)** Multi-skill catalog in `constants/skills.ts` and deep linking in `app/index.tsx` supporting custom track IDs. · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — verified against active source code and `tsc` typecheck.
 
 ---
 
@@ -723,14 +725,15 @@ Core data types:
 - **`CurriculumTrackDefinition`**: Dynamic track schema declared in curriculum JSON files:
   ```typescript
   export interface CurriculumTrackDefinition {
-    id: string;                    // Track ID (e.g., 'image-identification', 'pairs')
-    title: string;                 // Display label in learning style list & track detail
-    filterRole?: string;           // Filters questions by q.role
-    filterFormat?: string;         // Filters questions by format
-    kind?: 'quiz' | 'reading';     // Reading mode vs quiz card deck
-    image?: string;                // Optional custom asset identifier
+    id: string;                          // Track ID (e.g., 'differentiation', 'identification')
+    title: string;                       // Display label in learning style list & track detail
+    filterRole?: string | string[];      // Filters questions by q.role — an array lets one track absorb several role values (e.g. driving-theory's 'identification' track covers name+meaning+whereUsed in a single JSON-declared track, no code change)
+    filterFormat?: string | string[];    // Filters questions by format — same array support
+    kind?: 'quiz' | 'reading' | 'full';  // 'quiz' (default, role/format-filtered), 'reading' (chunked signs catalog), or 'full' (all questions, standard session grouping)
+    image?: string;                      // Optional custom asset identifier
   }
   ```
+  Matching (`roleMatches()` in `lib/curriculum.ts`) checks array membership when `filterRole`/`filterFormat` is an array, or strict equality when it's a single string — so existing single-string track definitions keep working unchanged.
 - **`Track`**: `StandardTrack | (string & {})` — union of canonical standard tracks (`'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading'`) and arbitrary custom track strings.
 - **`BaseQuestion.role`**: Widened from strict 4-value union to `string` allowing custom roles (e.g., `"explainer"`, `"pair"`, `"name"`).
 - `QuizQuestion` union, `OptionChoice`, and `SignCatalogEntry` interface are all still current.
@@ -839,7 +842,12 @@ Claude Code project-level settings for this repo.
                                            completed_topics/total_topics, synced by lib/progress.ts)
 
 Storage Bucket: play-assets/
-├── curricula/  driving.webp, questions.json ({ questions: [...322, role-tagged], signs: [...92 SignCatalogEntry] })
+├── curricula/questions.sample.json  (driving-theory, json_path in play_curricula)
+│     { tracks: [differentiation (filterRole: "pair"), identification (filterRole:
+│       ["name","meaning","whereUsed"]), reading (kind: "reading"), full (kind: "full")],
+│       questions: [...322, role-tagged], signs: [...92 SignCatalogEntry] }
+├── curricula/world-facts.json  (world-facts, json_path in play_curricula)
+│     { tracks: [full (kind: "full")], questions: [...150, textChoice, no role], signs: [] }
 └── signs/      give_way.webp, stop.webp, ... (60+ sign images)
 ```
 

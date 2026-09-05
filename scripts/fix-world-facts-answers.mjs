@@ -90,7 +90,15 @@ console.log(`Generated ${seenTopicIds.size} unique topicIds across ${questions.l
 
 console.log(`Converted ${questions.length} single-answer questions (excluded ${excludedMulti} multi-select).`);
 
-const output = { questions, signs: [] };
+// Explicit tracks header (per json-conversion.md's "tracks are
+// JSON-declared, not code-declared" convention) so this curriculum is
+// self-documenting rather than relying on detectAvailableTracks()'s
+// legacy auto-detection fallback — world-facts has no role-tagged
+// questions today, but declaring 'full' explicitly means a future
+// re-run that adds a role (e.g. 'nature') just needs another entry
+// here, no app code change.
+const tracks = [{ id: 'full', title: 'All World Facts', kind: 'full' }];
+const output = { tracks, questions, signs: [] };
 const outPath = path.join(OUT_DIR, 'world-facts.corrected.json');
 writeFileSync(outPath, JSON.stringify(output, null, 2));
 console.log(`Wrote ${outPath}`);

@@ -5,9 +5,14 @@ import { useTheme, Spacing, Radius, Typography, BrandGradients, StaticColors } f
 
 // Fallback segment count for the rare case a row renders before
 // totalQuestions has resolved. Once totalQuestions is known, the bar
-// shows one segment per real question so the count on screen ("92
-// questions") matches the number of segments underneath it.
+// shows one segment per real question (capped at MAX_PROGRESS_SEGMENTS)
+// so the count on screen ("92 questions") roughly matches the number of
+// segments underneath it, without the row overflowing its card for
+// tracks with a lot of questions (e.g. world-facts' 150-question 'full'
+// track previously rendered 150 fixed-gap segments and spilled past the
+// card border).
 const FALLBACK_PROGRESS_SEGMENTS = 7;
+const MAX_PROGRESS_SEGMENTS = 30;
 
 interface ModeCardProps {
   /** Illustration from assets/driving/ (or a remote hero image for tracks
@@ -49,9 +54,14 @@ export function ModeCard({ image, title, status, highlighted, progress, totalQue
   const isDone = status === 'done';
   // One segment per real question once we know the total, so "92
   // questions" on screen means 92 segments underneath — not an
-  // arbitrary fixed count. Falls back to a generic bar only until
-  // totalQuestions resolves.
-  const segmentCount = totalQuestions && totalQuestions > 0 ? totalQuestions : FALLBACK_PROGRESS_SEGMENTS;
+  // arbitrary fixed count — capped at MAX_PROGRESS_SEGMENTS so a large
+  // track (e.g. 150 questions) doesn't force more segments than the card
+  // can fit at their minimum width. Falls back to a generic bar only
+  // until totalQuestions resolves.
+  const segmentCount =
+    totalQuestions && totalQuestions > 0
+      ? Math.min(totalQuestions, MAX_PROGRESS_SEGMENTS)
+      : FALLBACK_PROGRESS_SEGMENTS;
   const filledSegments = progress !== undefined
     ? Math.min(segmentCount, Math.round(progress * segmentCount))
     : 0;

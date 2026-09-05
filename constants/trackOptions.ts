@@ -17,11 +17,15 @@ export interface TrackOption {
   image: ImageSourcePropType;
 }
 
+// Keyed by the driving-theory curriculum's JSON-declared track ids
+// (data/questions.sample.json's "tracks" array) plus the two universal
+// tracks. If a curriculum declares a track id not listed here (or a
+// legacy pre-consolidation id like the old 'pairs'/'names'/'meanings'/
+// 'whereUsed'), trackImage() below falls back to the skill's remote
+// cover image — never a crash, just a less-distinct icon.
 const LOCAL_IMAGES: Partial<Record<Track, ImageSourcePropType>> = {
-  pairs: require('@/assets/driving/differenciate.webp'),
-  names: require('@/assets/driving/name.webp'),
-  meanings: require('@/assets/driving/meaning.webp'),
-  whereUsed: require('@/assets/driving/usage.webp'),
+  differentiation: require('@/assets/driving/differenciate.webp'),
+  identification: require('@/assets/driving/name.webp'),
   reading: require('@/assets/driving/reading.webp'),
 };
 
