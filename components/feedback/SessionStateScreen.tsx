@@ -222,16 +222,6 @@ export function SessionStateScreen({
     }
   };
 
-  const handleProceedContinue = () => {
-    if (selectedProceedOption === 'keys') {
-      handleBuyKeys();
-    } else if (selectedProceedOption === 'unlimited') {
-      handleSubscribe();
-    } else if (selectedProceedOption === 'trial') {
-      router.push('/how-free-mode-works');
-    }
-  };
-
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -280,7 +270,10 @@ export function SessionStateScreen({
           <View style={styles.proceedOptions}>
             {/* Option 1: Buy one time keys */}
             <Pressable
-              onPress={() => setSelectedProceedOption('keys')}
+              onPress={() => {
+                setSelectedProceedOption('keys');
+                handleBuyKeys();
+              }}
               style={({ pressed }) => [
                 styles.proceedCard,
                 {
@@ -300,7 +293,7 @@ export function SessionStateScreen({
                   />
                   <View style={styles.proceedCardTextWrap}>
                     <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                      Buy one-time keys
+                      Buy Temporary Access Keys
                     </Text>
                     <Text
                       style={[
@@ -321,7 +314,10 @@ export function SessionStateScreen({
 
             {/* Option 2: Subscribe for Unlimited (Green Highlight) */}
             <Pressable
-              onPress={() => setSelectedProceedOption('unlimited')}
+              onPress={() => {
+                setSelectedProceedOption('unlimited');
+                handleSubscribe();
+              }}
               style={({ pressed }) => [
                 styles.proceedCard,
                 {
@@ -362,7 +358,10 @@ export function SessionStateScreen({
 
             {/* Option 3: Use Free trial */}
             <Pressable
-              onPress={() => setSelectedProceedOption('trial')}
+              onPress={() => {
+                setSelectedProceedOption('trial');
+                router.push('/how-free-mode-works');
+              }}
               style={({ pressed }) => [
                 styles.proceedCard,
                 styles.trialCard,
@@ -422,32 +421,6 @@ export function SessionStateScreen({
             </Pressable>
           </View>
         </ScrollView>
-
-        {/* Bottom Single Continue Button (Like CheckButton) */}
-        <View style={styles.actions}>
-          <Pressable
-            disabled={!selectedProceedOption}
-            onPress={handleProceedContinue}
-            style={({ pressed }) => [
-              styles.continueCheckBtn,
-              selectedProceedOption
-                ? styles.continueCheckBtnActive
-                : styles.continueCheckBtnDisabled,
-              pressed && selectedProceedOption ? { opacity: 0.85, transform: [{ scale: 0.99 }] } : null,
-            ]}
-          >
-            <Text
-              style={[
-                styles.continueCheckBtnText,
-                selectedProceedOption
-                  ? styles.continueCheckBtnTextActive
-                  : styles.continueCheckBtnTextDisabled,
-              ]}
-            >
-              CONTINUE
-            </Text>
-          </Pressable>
-        </View>
 
         {/* Restore Account Modal */}
         <RestoreAccountModal
