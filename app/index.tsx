@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { SlideInRight, SlideInLeft, FadeOut } from 'react-native-reanimated';
 import { useTheme } from '@/theme/ThemeContext';
 import { PlaySession } from '@/components/play/PlaySession';
@@ -35,6 +35,7 @@ function parseTrack(value?: string): Track | null {
 
 export default function PlayEntry() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ resume?: string; track?: string }>();
   const urlTrack = parseTrack(params.track);
   const [stage, setStage] = useState<Stage>('landing');
@@ -156,9 +157,23 @@ export default function PlayEntry() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Plain View with a static inset instead of SafeAreaView: SafeAreaView
+  // re-derives/re-lays-out its own insets on web, and doing that inside a
+  // node that ScreenTransition is actively sliding with translateX caused
+  // the jank you saw on this screen (the confirm/plans screens never had
+  // this — they already just use a fixed insets.top padding number).
   return (
     <ScreenTransition>
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#14171C' }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background || '#14171C',
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        },
+      ]}
+    >
       <Animated.View
         key={stage}
         style={styles.stageContainer}
@@ -188,7 +203,7 @@ export default function PlayEntry() {
         <LandingScreen onStart={handleStart} onRestore={handlePreviewFromLanding} />
       )}
       </Animated.View>
-    </SafeAreaView>
+    </View>
     </ScreenTransition>
   );
 }
