@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { PLANS, planDisplay, type Plan } from '@/lib/premium';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 export default function SubscriptionPlansScreen() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function SubscriptionPlansScreen() {
   const insets = useSafeAreaInsets();
 
   return (
+    <ScreenTransition>
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
@@ -101,6 +103,7 @@ export default function SubscriptionPlansScreen() {
         </Pressable>
       </ScrollView>
     </View>
+    </ScreenTransition>
   );
 }
 

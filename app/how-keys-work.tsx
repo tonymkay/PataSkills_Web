@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Unlock, ShoppingBag, Snowflake, Crown } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 interface InfoItem {
   icon: React.ReactNode;
@@ -40,6 +41,7 @@ export default function HowKeysWorkScreen() {
   ];
 
   return (
+    <ScreenTransition>
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
@@ -92,6 +94,7 @@ export default function HowKeysWorkScreen() {
         </Pressable>
       </ScrollView>
     </View>
+    </ScreenTransition>
   );
 }
 

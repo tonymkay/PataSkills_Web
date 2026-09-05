@@ -9,6 +9,7 @@ import { keyPackById } from '@/lib/premium';
 import { formatUSDAmount, splitCurrencyAmount } from '@/lib/currency';
 import { purchaseKeyPack } from '@/lib/billing';
 import { sanitizeAndValidateEmail } from '@/lib/email';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 export default function KeysConfirmScreen() {
   const router = useRouter();
@@ -29,9 +30,11 @@ export default function KeysConfirmScreen() {
 
   if (!pack) {
     return (
+      <ScreenTransition>
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: colors.onSurface }}>Pack not found</Text>
       </View>
+      </ScreenTransition>
     );
   }
 
@@ -55,6 +58,7 @@ export default function KeysConfirmScreen() {
   };
 
   return (
+    <ScreenTransition>
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
@@ -156,6 +160,7 @@ export default function KeysConfirmScreen() {
         </Pressable>
       </View>
     </View>
+    </ScreenTransition>
   );
 }
 

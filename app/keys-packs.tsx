@@ -8,6 +8,7 @@ import { KEY_PACKS, type KeyPack } from '@/lib/premium';
 import { formatUSDAmount } from '@/lib/currency';
 import { getKeyBalance } from '@/lib/keys';
 import { ConnectionError } from '@/components/ui/ConnectionError';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 export default function KeysPacksScreen() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function KeysPacksScreen() {
   }, [loadBalance]);
 
   return (
+    <ScreenTransition>
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
@@ -111,6 +113,7 @@ export default function KeysPacksScreen() {
       </ScrollView>
       )}
     </View>
+    </ScreenTransition>
   );
 }
 

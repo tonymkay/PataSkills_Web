@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { grantBonusKey, setPremium } from '@/lib/keys';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 export default function PaymentCompleteScreen() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function PaymentCompleteScreen() {
   };
 
   return (
+    <ScreenTransition>
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.xl) }]}>
       <View style={styles.body}>
         <CheckCircle2 size={72} color={StaticColors.successLime} strokeWidth={2.2} />
@@ -103,6 +105,7 @@ export default function PaymentCompleteScreen() {
         </Pressable>
       </View>
     </View>
+    </ScreenTransition>
   );
 }
 

@@ -8,6 +8,7 @@ import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tok
 import { planById, planDisplay } from '@/lib/premium';
 import { purchasePlan } from '@/lib/billing';
 import { sanitizeAndValidateEmail } from '@/lib/email';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 export default function SubscriptionConfirmScreen() {
   const router = useRouter();
@@ -28,9 +29,11 @@ export default function SubscriptionConfirmScreen() {
 
   if (!plan) {
     return (
+      <ScreenTransition>
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: colors.onSurface }}>Plan not found</Text>
       </View>
+      </ScreenTransition>
     );
   }
 
@@ -53,6 +56,7 @@ export default function SubscriptionConfirmScreen() {
   };
 
   return (
+    <ScreenTransition>
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
@@ -170,6 +174,7 @@ export default function SubscriptionConfirmScreen() {
         </Pressable>
       </View>
     </View>
+    </ScreenTransition>
   );
 }
 

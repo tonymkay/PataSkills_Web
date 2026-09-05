@@ -42,7 +42,11 @@ function RootLayoutInner() {
       <Stack
         screenOptions={{
           headerShown: false,
-          animation: 'slide_from_right',
+          // react-native-screens doesn't animate native-stack transitions
+          // on web (screens just swap instantly), so this Stack-level
+          // animation only ever does anything on iOS/Android. Web screens
+          // animate themselves instead — see components/nav/ScreenTransition.
+          animation: Platform.OS === 'web' ? 'none' : 'slide_from_right',
           animationDuration: 280,
         }}
       />

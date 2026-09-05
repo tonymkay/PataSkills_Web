@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, RefreshCw, Clock, Tv, Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
 
 interface InfoItem {
   icon: React.ReactNode;
@@ -50,6 +51,7 @@ export default function HowFreeModeWorksScreen() {
   };
 
   return (
+    <ScreenTransition>
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
       {/* Header */}
       <View style={styles.header}>
@@ -99,6 +101,7 @@ export default function HowFreeModeWorksScreen() {
         </Pressable>
       </ScrollView>
     </View>
+    </ScreenTransition>
   );
 }
 
