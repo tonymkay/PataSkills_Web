@@ -5,7 +5,7 @@ import { ArrowLeft, RefreshCw, Clock, Tv, Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
-import { navBack, navReplace } from '@/lib/navDirection';
+import { navBack } from '@/lib/navDirection';
 import { Button } from '@/components/ui/Button';
 
 interface InfoItem {
@@ -49,7 +49,13 @@ export default function HowFreeModeWorksScreen() {
   ];
 
   const handleContinue = () => {
-    navReplace(router, '/', 'backward');
+    // navBack (pop), not navReplace — this screen was reached via navPush
+    // on top of the live session/outOfKeys screen, so popping back reuses
+    // that already-mounted '/' instance (session state, ?track= param,
+    // etc. all intact) and gets the same single ScreenTransition slide as
+    // every other back-nav. navReplace('/') was minting a brand-new '/'
+    // instance instead — dropping straight back to the landing stage.
+    navBack(router);
   };
 
   return (

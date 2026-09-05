@@ -38,7 +38,7 @@ export default function KeysPacksScreen() {
           <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.onSurface }]}>
-          Buy Temporary Access Keys
+          Access Keys
         </Text>
       </View>
 

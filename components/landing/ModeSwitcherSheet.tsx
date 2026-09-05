@@ -128,6 +128,15 @@ export function ModeSwitcherSheet({
   const rest = TRACK_OPTIONS.filter((o) => o.track !== currentTrack);
   const ordered = current ? [current, ...rest] : TRACK_OPTIONS;
 
+  // Only meaningful once the current track is done (trackComplete): the
+  // first not-yet-done track after it is the one we point the learner to
+  // next. Harmless to compute on the 'switch' heading too — it's simply
+  // never used for highlighting there, since the current row itself is
+  // still the highlighted one while it's in progress.
+  const nextUpTrack = ordered.find(
+    (o) => o.track !== currentTrack && !effectiveCompleted.includes(o.track),
+  )?.track;
+
   return (
     <Modal
       visible={visible}
@@ -177,34 +186,41 @@ export function ModeSwitcherSheet({
                 const isDone = !isCurrent && effectiveCompleted.includes(option.track);
                 // Current row: trackComplete means we know for a fact this
                 // track's sessions are exhausted, so show it as fully done
-                // regardless of what the shared pct happens to compute to —
-                // a "you've completed this" screen showing a partial bar
-                // for the very card it's about would read as a bug. The
-                // 'switch' heading (mid-track, not finished) shows the real
-                // shared pct instead. Other rows use the real persisted
-                // completedTracks set: full bar if done, empty if untouched.
+                // (green "Done", no highlight) regardless of what the shared
+                // pct happens to compute to. The 'switch' heading (mid-track,
+                // not finished) shows it as the in-progress row instead,
+                // using the real shared pct for its segment bar.
                 const currentPct =
                   progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
+                const currentIsDone = heading === 'trackComplete';
                 const rowProgress = isCurrent
-                  ? heading === 'trackComplete'
+                  ? currentIsDone
                     ? 1
                     : currentPct
                   : isDone
                     ? 1
                     : 0;
-                const rowStatus: 'current' | 'done' | undefined = isCurrent
-                  ? heading === 'trackComplete'
+                const rowStatus: 'done' | 'inProgress' | 'notStarted' = isCurrent
+                  ? currentIsDone
                     ? 'done'
-                    : 'current'
+                    : 'inProgress'
                   : isDone
                     ? 'done'
-                    : undefined;
+                    : 'notStarted';
+                // Teal highlight marks the one row to look at next: the
+                // current track while it's still in progress, or — once
+                // that track is finished — the next not-yet-done track
+                // after it in the list.
+                const isHighlighted = isCurrent
+                  ? !currentIsDone
+                  : currentIsDone && option.track === nextUpTrack;
                 return (
                   <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
                     <ModeCard
                       image={option.image}
                       title={option.label}
                       status={rowStatus}
+                      highlighted={isHighlighted}
                       progress={rowProgress}
                       onPress={() => onSelectTrack(option.track)}
                     />

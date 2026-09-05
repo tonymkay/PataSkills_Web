@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable, Image, type ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, Spacing, Radius, Typography, BrandGradients } from '@/theme/tokens';
+import { useTheme, Spacing, Radius, Typography, BrandGradients, StaticColors } from '@/theme/tokens';
 
 // Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
 // / chunkSignsIntoSessions both slice into groups of 7) — same segment count
@@ -15,9 +15,16 @@ interface ModeCardProps {
    *  swap for either status, just a border/tint change. */
   image: ImageSourcePropType;
   title: string;
-  /** 'current': teal border/tint + "CURRENT" badge (still in progress).
-   *  'done': muted border + "DONE" badge (this track is finished). */
-  status?: 'current' | 'done';
+  /** Plain coloured text, not a badge: 'done' → green "Done", 'inProgress'
+   *  → teal "In Progress", 'notStarted' → grey "Not started". Omit to hide
+   *  the label entirely. */
+  status?: 'done' | 'inProgress' | 'notStarted';
+  /** Teal border/tint marking the one row the learner should look at
+   *  next — the current track while still in progress, or (once that
+   *  track is finished) the next not-yet-done track in the list. Kept
+   *  separate from `status` so a completed track is never highlighted
+   *  just for sitting first in the list. */
+  highlighted?: boolean;
   /** 0–1 completion, rendered as filled/unfilled segments under the title.
    *  Omit to hide the progress row entirely. */
   progress?: number;
@@ -26,20 +33,24 @@ interface ModeCardProps {
 
 /**
  * One learning-mode row in ModeSwitcherSheet — illustration + title, no
- * chevron, plus an optional segmented progress row underneath. `status`
- * marks the current mode (always sorted first by the sheet): 'current'
- * keeps the brand-teal treatment for a track still in progress, 'done'
- * grays it out once every topic in it has been completed. The
+ * chevron, plus an optional segmented progress row underneath and a
+ * plain-text status label (done/in progress/not started). `highlighted`
+ * marks the row (always sorted first if it's the current track) with a
+ * brand-teal border/tint to flag it as the next thing to do. The
  * illustration and label are otherwise identical to every other row.
  */
-export function ModeCard({ image, title, status, progress, onPress }: ModeCardProps) {
+export function ModeCard({ image, title, status, highlighted, progress, onPress }: ModeCardProps) {
   const { colors } = useTheme();
   const teal = colors.tealAccent || '#2BD9C4';
   const isDone = status === 'done';
-  const isCurrent = status === 'current';
   const filledSegments = progress !== undefined
     ? Math.min(PROGRESS_SEGMENTS, Math.round(progress * PROGRESS_SEGMENTS))
     : 0;
+
+  const statusLabel =
+    status === 'done' ? 'Done' : status === 'inProgress' ? 'In Progress' : status === 'notStarted' ? 'Not started' : null;
+  const statusColor =
+    status === 'done' ? StaticColors.successLime : status === 'inProgress' ? teal : colors.onSurfaceVariant;
 
   return (
     <Pressable
@@ -47,8 +58,8 @@ export function ModeCard({ image, title, status, progress, onPress }: ModeCardPr
       style={({ pressed }) => [
         styles.card,
         {
-          borderColor: isCurrent ? teal : colors.outlineVariant,
-          backgroundColor: isCurrent
+          borderColor: highlighted ? teal : colors.outlineVariant,
+          backgroundColor: highlighted
             ? 'rgba(43,217,196,0.10)'
             : isDone
               ? colors.surfaceContainer
@@ -65,14 +76,8 @@ export function ModeCard({ image, title, status, progress, onPress }: ModeCardPr
           <Text style={[Typography.titleMedium, styles.title, { color: colors.onSurface }]}>
             {title}
           </Text>
-          {isCurrent ? (
-            <View style={[styles.badge, { backgroundColor: teal }]}>
-              <Text style={styles.badgeText}>CURRENT</Text>
-            </View>
-          ) : isDone ? (
-            <View style={[styles.badge, { backgroundColor: colors.outlineVariant }]}>
-              <Text style={[styles.badgeText, { color: colors.onSurfaceVariant }]}>✓ DONE</Text>
-            </View>
+          {statusLabel ? (
+            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
           ) : null}
         </View>
       </View>
@@ -125,16 +130,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
   },
-  badge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  badgeText: {
-    fontSize: 11,
+  statusText: {
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0.5,
-    color: '#0B3B31',
+    letterSpacing: 0.3,
   },
   progressRow: {
     flexDirection: 'row',

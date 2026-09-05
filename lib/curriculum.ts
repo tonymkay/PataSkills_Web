@@ -45,6 +45,55 @@ export function deriveTrack(
   return chunkIntoSessions(filtered, TRACK_LABEL[track]);
 }
 
+export interface TrackTotals {
+  /** Real question count for this track (signs count for 'reading') —
+   *  the actual number the progress bar should show one segment per,
+   *  not the generic 7-notch placeholder it used before. */
+  totalQuestions: number;
+  totalSessions: number;
+}
+
+// Module-level cache: the browse screens (LearningStyleScreen,
+// ModeSwitcherSheet) both need this, and it only takes one curriculum
+// fetch (no sign assets/pairs — those don't affect the counts) to compute
+// every track's totals at once. Shared across callers within the app
+// session; cleared on failure so a later call can retry.
+let cachedTrackTotals: Promise<Record<Track, TrackTotals>> | null = null;
+
+/**
+ * Real per-track totals for the progress bars on the browse screens —
+ * one lightweight curriculum fetch (JSON only, no sign images/pairs),
+ * filtered/grouped the same way deriveTrack does, just counted instead
+ * of hydrated into full sessions.
+ */
+export function getTrackTotals(): Promise<Record<Track, TrackTotals>> {
+  if (!cachedTrackTotals) {
+    cachedTrackTotals = loadRemoteCurriculum()
+      .then((remote) => {
+        const totals = {} as Record<Track, TrackTotals>;
+        (Object.keys(TRACK_ROLE) as FilterTrack[]).forEach((t) => {
+          const role = TRACK_ROLE[t];
+          const count = remote.questions.filter((q) => q.role === role).length;
+          totals[t] = { totalQuestions: count, totalSessions: Math.max(1, Math.ceil(count / 7)) };
+        });
+        totals.full = {
+          totalQuestions: remote.questions.length,
+          totalSessions: groupQuestionsBySession(remote.questions).length,
+        };
+        totals.reading = {
+          totalQuestions: remote.signs.length,
+          totalSessions: Math.max(1, Math.ceil(remote.signs.length / 7)),
+        };
+        return totals;
+      })
+      .catch((e) => {
+        cachedTrackTotals = null;
+        throw e;
+      });
+  }
+  return cachedTrackTotals;
+}
+
 interface CurriculumRow {
   slug: string;
   title: string;

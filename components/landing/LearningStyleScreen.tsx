@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { TRACK_OPTIONS } from '@/constants/trackOptions';
+import { getCompletedTracks } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 import { ModeCard } from './ModeCard';
 
@@ -20,12 +21,22 @@ interface LearningStyleScreenProps {
  * Full-page "Choose Learning Style" screen — reached by tapping a skill
  * card on LandingScreen. Lists every TRACK_OPTIONS entry as a ModeCard
  * row (same list ModeSwitcherSheet uses later on, just as a standalone
- * page instead of a bottom sheet, and with nothing pre-highlighted since
- * there's no "current" track yet). Tapping a card hands off to the parent
- * to open TrackDetailScreen — this screen owns no preview state itself.
+ * page instead of a bottom sheet). Same done/not-started treatment and
+ * next-up teal highlight as ModeSwitcherSheet — here there's no "current"
+ * track yet, so the highlight falls on the first not-yet-done track
+ * (Differentiate Pairs, for a learner who hasn't completed anything).
+ * Tapping a card hands off to the parent to open TrackDetailScreen — this
+ * screen owns no preview state itself.
  */
 export function LearningStyleScreen({ onPreviewTrack, onBack }: LearningStyleScreenProps) {
   const { colors } = useTheme();
+  const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
+
+  useEffect(() => {
+    getCompletedTracks().then(setCompletedTracks).catch(() => {});
+  }, []);
+
+  const nextUpTrack = TRACK_OPTIONS.find((o) => !completedTracks.includes(o.track))?.track;
 
   return (
     <View style={styles.screen}>
@@ -44,15 +55,21 @@ export function LearningStyleScreen({ onPreviewTrack, onBack }: LearningStyleScr
         </View>
 
         <View style={styles.list}>
-          {TRACK_OPTIONS.map((option, i) => (
-            <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
-              <ModeCard
-                image={option.image}
-                title={option.label}
-                onPress={() => onPreviewTrack(option.track)}
-              />
-            </View>
-          ))}
+          {TRACK_OPTIONS.map((option, i) => {
+            const isDone = completedTracks.includes(option.track);
+            return (
+              <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
+                <ModeCard
+                  image={option.image}
+                  title={option.label}
+                  status={isDone ? 'done' : 'notStarted'}
+                  highlighted={option.track === nextUpTrack}
+                  progress={isDone ? 1 : 0}
+                  onPress={() => onPreviewTrack(option.track)}
+                />
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
     </View>
