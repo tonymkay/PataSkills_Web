@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Image, ActivityIndicator, TextInput, Platform, ScrollView } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Image, TextInput, Platform, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Mail } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { purchaseKeyPack } from '@/lib/billing';
 import { sanitizeAndValidateEmail } from '@/lib/email';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navBack } from '@/lib/navDirection';
+import { Button } from '@/components/ui/Button';
 
 export default function KeysConfirmScreen() {
   const router = useRouter();
@@ -144,21 +145,14 @@ export default function KeysConfirmScreen() {
 
       {/* Footer Confirm CTA */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.lg) }]}>
-        <Pressable
+        <Button
+          label="Pay with Paystack"
           onPress={onConfirm}
           disabled={busy}
-          style={({ pressed }) => [
-            styles.confirmButton,
-            { backgroundColor: StaticColors.achievementAmber },
-            (pressed || busy) && { opacity: 0.8 },
-          ]}
-        >
-          {busy ? (
-            <ActivityIndicator color="#000" size="small" />
-          ) : (
-            <Text style={styles.confirmButtonText}>PAY WITH PAYSTACK</Text>
-          )}
-        </Pressable>
+          loading={busy}
+          backgroundColor={StaticColors.achievementAmber}
+          textColor="#000"
+        />
       </View>
     </View>
     </ScreenTransition>
@@ -272,17 +266,5 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.sm,
-  },
-  confirmButton: {
-    height: 54,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmButtonText: {
-    fontFamily: FontFamily.extraBold,
-    fontSize: 16,
-    color: '#000',
-    letterSpacing: 0.5,
   },
 });

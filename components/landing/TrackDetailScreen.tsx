@@ -8,6 +8,7 @@ import { TRACK_OPTIONS } from '@/constants/trackOptions';
 import { LANDING_SKILLS } from '@/constants/skills';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
+import { Button } from '@/components/ui/Button';
 
 // Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
 // / chunkSignsIntoSessions both slice into groups of 7) — the number of
@@ -97,16 +98,15 @@ export function TrackDetailScreen({ track, onStartPractice, onBack }: TrackDetai
       </ScrollView>
 
       <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
-        <Pressable onPress={() => onStartPractice(track)} style={styles.ctaWrapper}>
-          <LinearGradient
-            colors={BrandGradients.discovery.colors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.ctaGradient}
-          >
-            <Text style={styles.ctaText}>Start Practice</Text>
-          </LinearGradient>
-        </Pressable>
+        <Button
+          label="Start Practice"
+          onPress={() => onStartPractice(track)}
+          variant="gradient"
+          gradientColors={BrandGradients.discovery.colors}
+          gradientStart={{ x: 0, y: 0 }}
+          gradientEnd={{ x: 1, y: 1 }}
+          textColor="#FFFFFF"
+        />
       </View>
     </View>
   );
@@ -184,19 +184,5 @@ const styles = StyleSheet.create({
     maxWidth: CONTENT_MAX_WIDTH,
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.sm,
-  },
-  ctaWrapper: {
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
-  ctaGradient: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaText: {
-    fontFamily: FontFamily.extraBold,
-    fontSize: 16,
-    color: '#0B3B31',
   },
 });

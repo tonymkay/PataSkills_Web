@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
 import { Dimensions, Platform, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import { useFocusEffect } from '@react-navigation/native';
 import { peekNavDirection, resetNavDirection } from '@/lib/navDirection';
 
 const screenWidth = Dimensions.get('window').width;
@@ -20,23 +21,33 @@ const screenWidth = Dimensions.get('window').width;
 // primitive, so direction is guaranteed correct.
 //
 // Native is untouched: app/_layout.tsx's Stack already animates it
-// correctly there via native-stack, so hooks below are inert (translateX
-// starts and stays at 0) and this renders children directly.
+// correctly there via native-stack, so the effect below is inert on native
+// (translateX starts and stays at 0) and this renders children directly.
+//
+// Driven by FOCUS, not mount: expo-router's native-stack (react-navigation
+// under the hood) does not unmount a screen when you navigate away from it —
+// the previous screen stays alive underneath and just loses focus. So going
+// "back" to it is not a fresh mount, and a mount-only effect (useState
+// initializer / useEffect([])) never fires again for it — that was the bug:
+// forward always remounted a brand-new screen and animated correctly, back
+// silently animated nothing (or reused stale state), which read as "the same
+// as forward" / "back never changes". useFocusEffect fires on every focus,
+// mount or not, so both directions are driven identically and correctly.
 export function ScreenTransition({ children }: { children: React.ReactNode }) {
   const isWeb = Platform.OS === 'web';
-  const [direction] = useState(() => peekNavDirection());
-  const translateX = useSharedValue(isWeb ? (direction === 'backward' ? -screenWidth : screenWidth) : 0);
+  const translateX = useSharedValue(0);
 
-  useEffect(() => {
-    // Clear the pending flag now that this screen has consumed it, so an
-    // unrelated later remount of this same screen doesn't reuse it.
-    resetNavDirection();
-    if (!isWeb) return;
-    translateX.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
-    // Mount-only: this is the screen's one entrance, not a value that
-    // should re-run on prop changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isWeb) return;
+      const direction = peekNavDirection();
+      resetNavDirection();
+      translateX.value = direction === 'backward' ? -screenWidth : screenWidth;
+      translateX.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
+      // No cleanup needed: nothing to tear down between focus/blur here.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isWeb])
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -14,6 +13,7 @@ import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tok
 import { grantBonusKey, setPremium } from '@/lib/keys';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navReplace } from '@/lib/navDirection';
+import { Button } from '@/components/ui/Button';
 
 export default function PaymentCompleteScreen() {
   const router = useRouter();
@@ -94,16 +94,12 @@ export default function PaymentCompleteScreen() {
 
       {/* Footer CTA */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.lg) }]}>
-        <Pressable
+        <Button
+          label="Continue Playing"
           onPress={handleContinuePlaying}
-          style={({ pressed }) => [
-            styles.continueButton,
-            { backgroundColor: StaticColors.successLime },
-            pressed && { opacity: 0.8 },
-          ]}
-        >
-          <Text style={styles.continueButtonText}>CONTINUE PLAYING</Text>
-        </Pressable>
+          backgroundColor={StaticColors.successLime}
+          textColor="#000"
+        />
       </View>
     </View>
     </ScreenTransition>
@@ -169,17 +165,5 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.sm,
-  },
-  continueButton: {
-    height: 54,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  continueButtonText: {
-    fontFamily: FontFamily.extraBold,
-    fontSize: 16,
-    color: '#000',
-    letterSpacing: 0.5,
   },
 });

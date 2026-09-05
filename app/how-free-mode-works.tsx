@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navBack, navReplace } from '@/lib/navDirection';
+import { Button } from '@/components/ui/Button';
 
 interface InfoItem {
   icon: React.ReactNode;
@@ -91,15 +92,12 @@ export default function HowFreeModeWorksScreen() {
         </View>
 
         {/* Bottom CTA */}
-        <Pressable
+        <Button
+          label="Got It, Continue"
           onPress={handleContinue}
-          style={({ pressed }) => [
-            styles.ctaButton,
-            pressed && { opacity: 0.85 },
-          ]}
-        >
-          <Text style={styles.ctaButtonText}>GOT IT, CONTINUE</Text>
-        </Pressable>
+          backgroundColor="#FFFFFF"
+          textColor="#000"
+        />
       </ScrollView>
     </View>
     </ScreenTransition>
@@ -178,19 +176,5 @@ const styles = StyleSheet.create({
     height: 1,
     width: '100%',
     marginVertical: Spacing.md,
-  },
-  ctaButton: {
-    minHeight: 52,
-    borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  ctaButtonText: {
-    color: '#000',
-    fontFamily: FontFamily.extraBold,
-    fontSize: 15,
-    letterSpacing: 0.5,
   },
 });

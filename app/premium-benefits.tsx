@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navPush, navBack } from '@/lib/navDirection';
+import { Button } from '@/components/ui/Button';
 
 interface BenefitItem {
   feature: string;
@@ -105,16 +106,12 @@ export default function PremiumBenefitsScreen() {
         </View>
 
         {/* Bottom CTA */}
-        <Pressable
+        <Button
+          label="View Subscription Plans"
           onPress={() => navPush(router, '/subscription-plans')}
-          style={({ pressed }) => [
-            styles.ctaButton,
-            { backgroundColor: StaticColors.successLime },
-            pressed && { opacity: 0.8 },
-          ]}
-        >
-          <Text style={styles.ctaButtonText}>VIEW SUBSCRIPTION PLANS</Text>
-        </Pressable>
+          backgroundColor={StaticColors.successLime}
+          textColor="#000"
+        />
       </ScrollView>
     </View>
     </ScreenTransition>
@@ -196,18 +193,5 @@ const styles = StyleSheet.create({
   rowDivider: {
     height: 1,
     width: '100%',
-  },
-  ctaButton: {
-    minHeight: 52,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  ctaButtonText: {
-    color: '#000',
-    fontFamily: FontFamily.extraBold,
-    fontSize: 15,
-    letterSpacing: 0.5,
   },
 });

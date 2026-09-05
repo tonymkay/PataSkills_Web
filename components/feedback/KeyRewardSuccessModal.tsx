@@ -5,13 +5,13 @@ import {
   Text,
   View,
   Image,
-  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
+import { Button } from '@/components/ui/Button';
 
 interface KeyRewardSuccessModalProps {
   visible: boolean;
@@ -71,15 +71,12 @@ export function KeyRewardContent({
 
       {/* Bottom CTA */}
       <View style={styles.footer}>
-        <Pressable
+        <Button
+          label="Unlock Next Session"
           onPress={onUnlockNextSession}
-          style={({ pressed }) => [
-            styles.unlockButton,
-            pressed && { opacity: 0.88, transform: [{ scale: 0.99 }] },
-          ]}
-        >
-          <Text style={styles.unlockButtonText}>Unlock Next Session</Text>
-        </Pressable>
+          backgroundColor="#A3E899"
+          textColor="#10141A"
+        />
       </View>
     </View>
   );
@@ -159,24 +156,5 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     paddingHorizontal: Spacing.sm,
     marginTop: Spacing.xxl,
-  },
-  unlockButton: {
-    width: '100%',
-    height: 56,
-    borderRadius: Radius.full,
-    backgroundColor: '#A3E899',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#A3E899',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  unlockButtonText: {
-    color: '#10141A',
-    fontFamily: FontFamily.bold,
-    fontSize: 18,
-    letterSpacing: 0.2,
   },
 });
