@@ -21,7 +21,6 @@ import { shuffleAnswers } from '@/utils/shuffleAnswers';
 import { TwoImageCard } from '@/components/cards/TwoImageCard';
 import { ReadingCard } from '@/components/cards/ReadingCard';
 import { ScrollHintChevron } from '@/components/cards/ScrollHintChevron';
-import { useScrollHint } from '@/hooks/useScrollHint';
 import { CheckButton, FeedbackState } from '@/components/feedback/CheckButton';
 import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
 import { FeedbackSheet, FeedbackSheetState } from '@/components/feedback/FeedbackSheet';
@@ -57,6 +56,11 @@ export function CardDeck(props: CardDeckProps) {
 /**
  * Lightweight reading-mode branch: no answers, no Check/feedback flow —
  * just the same topbar/progress chrome with a "Next" advance per card.
+ * Shares QuizCardDeck's continuous horizontal-strip slide mechanics
+ * (measured viewport width, stripX shared value, pre-rendered adjacent
+ * slots) so Reading Mode's card-to-card transition looks and feels
+ * identical to every other track instead of the instant cut a plain
+ * setCurrentIndex()+key-swap produced before.
  */
 function ReadingCardDeck({
   signs,
@@ -69,15 +73,31 @@ function ReadingCardDeck({
   onExit,
 }: CardDeckProps & { signs: SignCatalogEntry[] }) {
   const { colors, mode } = useTheme();
+
+  // Card width measured from the actual rendered viewport — same approach
+  // QuizCardDeck uses, so the slide distance is correct regardless of web
+  // letterbox, resizes, or native screen size.
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const handleViewportLayout = useCallback((e: LayoutChangeEvent) => {
+    setViewportWidth(e.nativeEvent.layout.width);
+  }, []);
+  const cardWidth = viewportWidth;
+  const stride = cardWidth + GAP;
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [quitOpen, setQuitOpen] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const totalCount = signs.length;
   const currentSign = signs[currentIndex] || null;
   const isFinished = currentIndex >= signs.length;
 
+  // Continuous strip translation — identical mechanics to QuizCardDeck's
+  // stripX. Never resets; each Next just eases it one stride further left.
+  const stripX = useSharedValue(0);
+
   // Active-segment minimum fill, matching QuizCardDeck's segment bar: the
   // segment for the sign currently on screen always shows at least 10%
-  // filled, not just fully-completed segments. Resets per sign.
+  // filled, eased to 100% as the card slides away. Resets per sign.
   const activeFillAnim = useSharedValue(10);
   useEffect(() => {
     activeFillAnim.value = 10;
@@ -86,14 +106,47 @@ function ReadingCardDeck({
     width: `${activeFillAnim.value}%`,
   }));
 
-  // One hook instance is reused across cards (ReadingCardDeck only ever
-  // shows one at a time), so its internal height tracking is reset every
-  // time the current sign changes — otherwise the hint could briefly use
-  // stale measurements from the previous card.
-  const scrollHint = useScrollHint();
+  // Per-slot scroll-hint tracking — same pattern as QuizCardDeck, needed
+  // because adjacent signs now stay mounted through the slide instead of
+  // a single reused ScrollView.
+  const contentHeightsRef = useRef<Record<number, number>>({});
+  const viewportHeightsRef = useRef<Record<number, number>>({});
+  const scrollRefs = useRef<Record<number, ScrollView | null>>({});
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const hintBounce = useSharedValue(0);
+
+  const recomputeHint = useCallback((idx: number) => {
+    const contentH = contentHeightsRef.current[idx];
+    const viewportH = viewportHeightsRef.current[idx];
+    setShowScrollHint(Boolean(contentH && viewportH && contentH > viewportH + 4));
+  }, []);
+
   useEffect(() => {
-    scrollHint.resetForNewCard();
-  }, [currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+    recomputeHint(currentIndex);
+  }, [currentIndex, recomputeHint]);
+
+  useEffect(() => {
+    if (showScrollHint) {
+      hintBounce.value = withRepeat(
+        withTiming(8, { duration: 550, easing: Easing.inOut(Easing.quad) }),
+        -1,
+        true
+      );
+    } else {
+      cancelAnimation(hintBounce);
+      hintBounce.value = withTiming(0, { duration: 150 });
+    }
+  }, [showScrollHint, hintBounce]);
+
+  const hintStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: hintBounce.value }],
+  }));
+
+  const handleScrollHintPress = useCallback((idx: number) => {
+    const targetY = contentHeightsRef.current[idx] ?? 99999;
+    scrollRefs.current[idx]?.scrollTo({ y: targetY, animated: true });
+    setShowScrollHint(false);
+  }, []);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -103,15 +156,45 @@ function ReadingCardDeck({
     return () => sub.remove();
   }, []);
 
-  const handleNext = useCallback(() => {
-    const nextIndex = currentIndex + 1;
+  const handleTransitionEnd = useCallback((nextIndex: number) => {
     if (nextIndex >= signs.length) {
       const stats = { totalAnswered: totalCount, correctCount: totalCount };
       onSessionComplete?.(stats);
       onFinish?.(stats);
     }
     setCurrentIndex(nextIndex);
-  }, [currentIndex, signs.length, totalCount, onSessionComplete, onFinish]);
+    setIsTransitioning(false);
+    activeFillAnim.value = 10;
+  }, [signs.length, totalCount, onSessionComplete, onFinish, activeFillAnim]);
+
+  const handleNext = useCallback(() => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+
+    // Ease the active segment the rest of the way to full, timed to land
+    // right as the card finishes sliding out — same as QuizCardDeck.
+    activeFillAnim.value = withTiming(100, {
+      duration: DURATION,
+      easing: Easing.out(Easing.cubic),
+    });
+
+    const nextIndex = currentIndex + 1;
+    const targetX = -(nextIndex * stride);
+
+    stripX.value = withTiming(
+      targetX,
+      { duration: DURATION, easing: Easing.out(Easing.cubic) },
+      (finished) => {
+        if (finished) {
+          runOnJS(handleTransitionEnd)(nextIndex);
+        }
+      }
+    );
+  }, [currentIndex, isTransitioning, stride, stripX, activeFillAnim, handleTransitionEnd]);
+
+  const stripStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: stripX.value }],
+  }));
 
   if (isFinished || !currentSign) {
     return null;
@@ -168,26 +251,57 @@ function ReadingCardDeck({
         </View>
       </View>
 
-      <View style={styles.cardViewport}>
-        <ScrollView
-          ref={scrollHint.scrollRef}
-          style={styles.readingScroll}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.readingScrollContent}
-          bounces={false}
-          {...scrollHint.scrollViewProps}
-        >
-          <ReadingCard key={currentSign.signId} sign={currentSign} allSigns={signCatalog ?? signs} />
-        </ScrollView>
-        <ScrollHintChevron
-          visible={scrollHint.showHint}
-          onPress={scrollHint.scrollToBottom}
-          style={scrollHint.hintAnimatedStyle}
-        />
+      <View style={styles.cardViewport} onLayout={handleViewportLayout}>
+        {cardWidth > 0 && (
+          <Animated.View style={[styles.cardStrip, stripStyle]}>
+            {signs.map((sign, idx) => {
+              const isCurrent = idx === currentIndex;
+              const shouldRender = idx >= currentIndex - 1 && idx <= currentIndex + 2;
+              return (
+                <View
+                  key={sign.signId}
+                  style={[styles.cardSlot, { width: cardWidth, marginRight: GAP }]}
+                >
+                  {shouldRender ? (
+                    <>
+                      <ScrollView
+                        ref={(r) => { scrollRefs.current[idx] = r; }}
+                        style={styles.cardSlotScroll}
+                        contentContainerStyle={styles.cardSlotScrollContent}
+                        showsVerticalScrollIndicator={false}
+                        bounces={false}
+                        onLayout={(e) => {
+                          viewportHeightsRef.current[idx] = e.nativeEvent.layout.height;
+                          if (idx === currentIndex) recomputeHint(idx);
+                        }}
+                        onContentSizeChange={(_w, h) => {
+                          contentHeightsRef.current[idx] = h;
+                          if (idx === currentIndex) recomputeHint(idx);
+                        }}
+                        onScroll={(e) => {
+                          if (idx !== currentIndex) return;
+                          if (e.nativeEvent.contentOffset.y > 12) setShowScrollHint(false);
+                        }}
+                        scrollEventThrottle={32}
+                      >
+                        <ReadingCard sign={sign} allSigns={signCatalog ?? signs} />
+                      </ScrollView>
+                      <ScrollHintChevron
+                        visible={isCurrent && showScrollHint}
+                        onPress={() => handleScrollHintPress(idx)}
+                        style={hintStyle}
+                      />
+                    </>
+                  ) : null}
+                </View>
+              );
+            })}
+          </Animated.View>
+        )}
       </View>
 
       <View style={styles.controlsArea}>
-        <CheckButton enabled feedbackState="idle" label="NEXT" onPress={handleNext} />
+        <CheckButton enabled={!isTransitioning} feedbackState="idle" label="NEXT" onPress={handleNext} />
         <Text style={[Typography.bodySmall, styles.hintText, { color: colors.onSurfaceVariant }]}>
           {currentIndex + 1}/{totalCount} signs
         </Text>

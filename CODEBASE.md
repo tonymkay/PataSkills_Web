@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-05 (full re-audit against the actual repo — the previous update, dated 2026-09-02, had drifted badly: the landing flow, keys economy, and premium/billing stack had all been rebuilt since and were undocumented) · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — no inline comments taken on faith, no section carried over from the previous revision without re-reading the source.
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-05 (b) — this pass fixed drift the same-day "full re-audit" (2026-09-05, a) still missed or introduced: **(1)** `ModeCard.tsx`'s actual `status` shape (`'done' | 'inProgress' | 'notStarted'` plain-text labels + a separate `highlighted` border prop) had been documented as a stale `'current'`/`'done'` badge pair that doesn't exist in the source; **(2)** a whole undocumented web screen-transition system — `components/nav/ScreenTransition.tsx` + `lib/navDirection.ts` (`navPush`/`navBack`/`navReplace`), wrapping every standalone route in `app/`; **(3)** two undocumented shared UI components, `components/ui/Button.tsx` and `components/ui/ConnectionError.tsx`; **(4)** `app/+not-found.tsx` missing from the tree; **(5)** `ModeCard`/`ModeSwitcherSheet`/`LearningStyleScreen` gained a real per-track **question-count label**, wired through `lib/curriculum.ts`'s `getTrackTotals()` (that function itself predates this pass but was never called from the UI until now). · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — no inline comments taken on faith, no section carried over from a previous revision without re-reading the source.
 
 ---
 
@@ -85,6 +85,7 @@ play/
 │   ├── premium-benefits.tsx           # Free-vs-Premium comparison table
 │   ├── payment-complete.tsx           # Post-Paystack-checkout landing (grants keys/premium)
 │   ├── how-free-mode-works.tsx        # Explainer: free-trial keys/timer/ads/reminders
+│   ├── +not-found.tsx                 # Default Expo Router 404 screen (unmodified boilerplate)
 │   └── admin/
 │       └── signs.tsx                  # Admin tool: browse & swap sign images
 │
@@ -113,14 +114,18 @@ play/
 │   │   ├── LandingIllustration.tsx    # Remote cover image component
 │   │   ├── LandingScreen.tsx          # Entry screen — 2-column "Skills Corner" grid
 │   │   ├── LearningStyleScreen.tsx    # Full-page track/mode list (reuses ModeCard)
-│   │   ├── ModeCard.tsx               # One learning-mode row (illustration, title, CURRENT/DONE badge, progress bar)
+│   │   ├── ModeCard.tsx               # One learning-mode row (illustration, title, plain-text status label, progress bar, "N questions" count)
 │   │   ├── ModeSwitcherSheet.tsx      # Bottom sheet: switch track mid-flow, or "N/6 tracks complete" on trackComplete
 │   │   ├── SkillCard.tsx              # Bordered skill card w/ progress + CTA (currently unused — see LandingScreen note)
 │   │   ├── SkillGridCard.tsx          # Compact grid-cell skill card (used by LandingScreen)
 │   │   └── TrackDetailScreen.tsx      # Full-page single-track preview + "Start Practice" CTA
+│   ├── nav/
+│   │   └── ScreenTransition.tsx       # Web-only slide-in wrapper for standalone app/ routes (pairs with lib/navDirection.ts)
 │   ├── play/
 │   │   └── PlaySession.tsx            # Session orchestrator (keys, flow states, quiz-vs-reading branch, mode switcher)
 │   └── ui/
+│       ├── Button.tsx                 # Shared CTA pill button (solid/gradient/outline) — every full-width button in the app
+│       ├── ConnectionError.tsx        # "App can't connect" full-screen state + RELOAD button
 │       └── Toggle.tsx                 # Small animated switch (used by the reminders toggle)
 │
 ├── constants/
@@ -151,7 +156,8 @@ play/
 │   ├── ads.ts                         # Rewarded-ad bonus session (react-native-google-mobile-ads, optional; web fallback timer)
 │   ├── notifications.ts               # Browser Notification API reset-timer reminder (web only)
 │   ├── progress.ts                    # Local (+cloud-synced) topic progress AND per-track completion tracking
-│   └── signs.ts                       # Fetch sign assets & sign pairs from DB
+│   ├── signs.ts                       # Fetch sign assets & sign pairs from DB
+│   └── navDirection.ts                # Explicit web slide-direction flag (navPush/navBack/navReplace) for ScreenTransition
 │
 ├── hooks/
 │   ├── useKeys.ts                     # React hook wrapping lib/keys.ts (balance, isPremium, resetAt, isOutOfKeys)
@@ -434,13 +440,19 @@ A successful account restore (`onRestore(track)`) skips `LearningStyleScreen` en
 **`SkillCard.tsx` is currently unused** — a fuller bordered card (title, progress bar, illustration, RESUME/GET STARTED CTA) that appears to be what `LandingScreen` rendered before the grid redesign. Left in the tree; not imported anywhere as of this audit. `CarouselDots.tsx` is similarly currently unused (no pager exists to paginate) but kept for the same reason.
 
 #### `LearningStyleScreen.tsx` — full-page track list (new)
-Back-arrow header ("Choose Learning Style") + a scrollable list of every `TRACK_OPTIONS` entry as a `ModeCard` (no highlighting — nothing is "current" yet, since no track has been picked this flow). Tapping a card calls `onPreviewTrack(track)`, which the parent (`index.tsx`) wires to open `TrackDetailScreen`.
+Back-arrow header ("Choose Learning Style") + a scrollable list of every `TRACK_OPTIONS` entry as a `ModeCard`. `highlighted` falls on the first not-yet-done track (`nextUpTrack`, from `getCompletedTracks()`) since nothing is "current" yet on this screen; `status`/`progress` are boolean-only here (`done`/`1` or `notStarted`/`0` — no fractional in-progress state, since only the current track in `ModeSwitcherSheet` has one). Also fetches `getTrackTotals()` on mount to pass each row's real `totalQuestions`. Tapping a card calls `onPreviewTrack(track)`, which the parent (`index.tsx`) wires to open `TrackDetailScreen`.
 
 #### `TrackDetailScreen.tsx` — full-page single-track preview (new)
 Replaces what an inline comment calls a former `TrackDetailSheet` (bottom sheet) — moved to a full page so mobile-browser toolbar quirks can't clip the CTA the way a fixed-position sheet could. Shows the track's title + illustration (from `TRACK_OPTIONS`) inside a bordered card, a 7-dot progress row (reusing the same shared/global `getLocalProgress()` percentage every other progress indicator in the app uses — there's still no true per-track progress here, only the one global topic counter), and a gradient "Start Practice" CTA pinned at the bottom that calls `onStartPractice(track)`.
 
 #### `ModeCard.tsx` — shared learning-mode row
-Illustration + title, optional `status` (`'current'` teal border/"CURRENT" badge, or `'done'` muted border/"✓ DONE" badge), and an optional segmented progress bar (`PROGRESS_SEGMENTS = 7`, matching the session chunk size) rendered whenever a `progress` number (0–1) is passed — used by `LearningStyleScreen` (no status/progress), and `ModeSwitcherSheet` (full status + progress logic).
+Illustration + title, plus three independent optional pieces of state, not a single badge:
+- `status?: 'done' | 'inProgress' | 'notStarted'` — plain coloured **text** next to the title (green "Done" / teal "In Progress" / grey "Not started"), not a badge. Omit to hide it entirely.
+- `highlighted?: boolean` — a teal border/tint on the card itself, independent of `status`, marking the one row the learner should look at next (current track while in progress, or the next not-yet-done track once the current one finishes). Kept separate so a completed track is never highlighted just for sitting first in the list.
+- `progress?: number` (0–1) — renders the segmented bar (`PROGRESS_SEGMENTS = 7`, matching the session chunk size). Omitted entirely hides the progress row.
+- `totalQuestions?: number` — real per-track question count (from `getTrackTotals()`), rendered as a small "N questions" label next to the status text. Omitted (not just `0`) while the totals fetch hasn't resolved yet, so there's no "0 questions" flash.
+
+Used by both `LearningStyleScreen` and `ModeSwitcherSheet` — same component, same rendering, each caller just supplies different values for these four props.
 
 #### `ModeSwitcherSheet.tsx` — mid-flow track switcher (new)
 Bottom sheet with two heading states:
@@ -451,7 +463,8 @@ The current track is always reordered to the front of the list and highlighted. 
 - `lib/progress.ts`'s `getCompletedTracks()`/`markTrackCompleted()` (AsyncStorage-backed, idempotent) track which tracks have actually been exhausted, across all skills.
 - `PlaySession.tsx` calls `markTrackCompleted(track)` at the exact moment a track runs out of topics (`handleNextPress`'s `!hasMoreSessions` branch) — the one place that fact is known for certain.
 - The sheet unions the persisted set with the current track whenever `heading === 'trackComplete'` fires, so the just-finished track counts immediately even before its async AsyncStorage write has landed (avoids a "0/6" flash).
-- Every row (not just the current one) reflects this same completed set — a previously-finished track shows a real "DONE" badge and a full progress bar, not a hardcoded 0%.
+- Every row (not just the current one) reflects this same completed set — a previously-finished track shows a real "Done" status and a full progress bar, not a hardcoded 0%.
+- Also fetches `getTrackTotals()` alongside `getLocalProgress()`/`getCompletedTracks()` (same three-call pattern as `LearningStyleScreen`) to pass each row's real `totalQuestions` into `ModeCard`.
 
 #### `SkillGridCard.tsx` (new)
 Compact 2-column grid cell — centered title, remote cover illustration below, no progress/CTA (whole card is the tap target). Cover image resolved via `getPlayAssetPublicUrl(CurriculumCoverImagePaths[skill.id])`, same source as `LandingIllustration`/`SkillCard`.
@@ -464,7 +477,19 @@ Unchanged — driving-theory cover image from Supabase Storage, built at module-
 
 ---
 
-### 6.5 Play
+### 6.5 Nav (new section — previously undocumented)
+
+#### `ScreenTransition.tsx`
+Web-only slide-in wrapper. Every standalone route in `app/` (the monetization funnel screens, explainers, etc.) renders its content inside this component. On native it's a pass-through (`if (!isWeb) return <>{children}</>`) — `app/_layout.tsx`'s `Stack` already does `animation: 'slide_from_right'` there. On web, `react-native-screens` doesn't animate native-stack transitions at all (screens just swap instantly), so `_layout.tsx` sets the Stack's own `animation: 'none'` for web and this component supplies the real animation instead: on focus, it reads a direction flag via `peekNavDirection()` (from `lib/navDirection.ts`), snaps `translateX` to ±the current window width, then animates back to 0 over 280ms.
+
+Pairs with **`lib/navDirection.ts`** — an explicit, non-inferred direction flag:
+- `navPush(router, href)` / `navBack(router)` / `navReplace(router, href, direction?)` — thin wrappers around `expo-router`'s `router.push`/`back`/`replace` that set the pending direction (`'forward'`/`'backward'`) before navigating. Every screen that navigates uses these instead of calling `router.*` directly, specifically so this flag is always accurate.
+- Explicit-over-inferred is a deliberate choice, per an inline comment: the browser's `popstate` event doesn't fire reliably for `router.back()`, since expo-router doesn't guarantee it calls the real `history.back()` versus just updating navigation state.
+- `peekNavDirection()` is a **read-only** peek (not read-and-clear) specifically to survive React Strict Mode's double-invoked render — a destructive read-and-clear would have the first invocation see the real direction and the second see it already cleared, silently collapsing every back-navigation to the forward animation. `resetNavDirection()` (called from `ScreenTransition`'s focus effect, which settles after Strict Mode's double-invoke) resets it to `'forward'` post-commit so an unrelated remount doesn't inherit a stale direction.
+
+---
+
+### 6.6 Play
 
 #### `PlaySession.tsx` — Session Flow Orchestrator
 Core key-economy state machine is unchanged in shape from the prior audit (playing → topicComplete → advanceToNextSession → sessionUnlocked/outOfKeys → keysReset → sessionUnlocked), still branches its render on `currentSession.kind` for quiz vs. reading. What's new since the last audit:
@@ -474,9 +499,15 @@ Core key-economy state machine is unchanged in shape from the prior audit (playi
 
 ---
 
-### 6.6 UI
+### 6.7 UI
 
-#### `Toggle.tsx` (new)
+#### `Button.tsx` (previously undocumented)
+Single shared CTA pill button for the whole app — `variant: 'solid' | 'gradient' | 'outline'`, uppercase by default, `loading`/`disabled` states (spinner replaces label). An inline comment is explicit about why this exists: it's what let "Start Practice" drift out of sync with every other button's casing/color before this was extracted, so every full-width button in the app should render through this rather than a one-off `Pressable`+`Text`/`LinearGradient` combo. Used throughout `TrackDetailScreen` and the monetization routes (`subscription-confirm.tsx`, `premium-benefits.tsx`, etc.).
+
+#### `ConnectionError.tsx` (previously undocumented)
+Full-screen "App can't connect" state — icon ring (`WifiOff`), title, subtitle, and a RELOAD button that calls the caller-supplied `onReload`. Meant to be rendered inside any screen wherever a required network request fails (fetching packs, confirming a purchase, checking key balance).
+
+#### `Toggle.tsx`
 A small animated switch — 44×26 track, 20px thumb, slides on `withTiming`. Used exactly once currently: the "Get reminders when timer resets" toggle inside `SessionStateScreen`'s Out-of-Keys free-trial card.
 
 ---
@@ -523,8 +554,16 @@ Unchanged from the prior audit — `ThemeContext.tsx` (dark/light/auto, AsyncSto
 
 ## 9. Library / Data Layer (`lib/`)
 
-### `supabase.ts` / `curriculum.ts` / `downloadSession.ts` / `signs.ts`
-Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`deriveTrack`, `hydrateSignCatalog`, track-aware `downloadSession`) documented there is still current. See that revision for the full `deriveTrack`/`TRACK_ROLE`/`TRACK_LABEL` breakdown and the download pipeline's stage weights.
+### `supabase.ts` / `downloadSession.ts` / `signs.ts`
+Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`hydrateSignCatalog`, track-aware `downloadSession`) documented there is still current. See that revision for the download pipeline's stage weights.
+
+### `curriculum.ts` — `deriveTrack()` unchanged, `getTrackTotals()` now actually wired up
+`deriveTrack`/`TRACK_ROLE`/`TRACK_LABEL` are unchanged from the prior audit. **`getTrackTotals(): Promise<Record<Track, TrackTotals>>`** was already present in source but had never been called from any screen until this pass:
+- One lightweight `loadRemoteCurriculum()` fetch (JSON only — no sign images/pairs), memoized at module scope (`cachedTrackTotals`, cleared on failure so a later call can retry) since both `LearningStyleScreen` and `ModeSwitcherSheet` need it.
+- Filters/counts the same way `deriveTrack` does, just counting instead of hydrating into full sessions — `TrackTotals = { totalQuestions: number; totalSessions: number }` per track, `totalSessions = Math.ceil(totalQuestions / 7)` (matching the session chunk size), `full`/`reading` computed from `groupQuestionsBySession`/the signs count respectively.
+- Now consumed by `ModeCard`'s `totalQuestions` prop via both browse screens (see §6.4).
+
+### `navDirection.ts` (previously undocumented — see §6.5 for the full writeup, paired with `components/nav/ScreenTransition.tsx`)
 
 ### `keys.ts` — Keys Economy (rebuilt since the prior audit)
 
@@ -846,9 +885,28 @@ RootLayout
             └── payment-complete
 ```
 
+Every standalone route above (everything except the `PlayEntry` tree, which animates its own stages internally) renders its body inside `ScreenTransition` — web-only slide-in, paired with `navPush`/`navBack`/`navReplace` from `lib/navDirection.ts` (see §6.5).
+
 ### Track Derivation Summary
 
 Unchanged from the prior audit — see that revision's table (`pairs`/`names`/`meanings`/`whereUsed`/`full`/`reading`, their role filters, grouping functions, and session `kind`).
+
+---
+
+### Animation Patterns (three different mechanisms, all called "swipe" colloquially)
+
+The app has three genuinely different ways something slides across the screen. They're easy to conflate because they all look like a horizontal swipe, but the underlying mechanics — and what triggers them — are not the same.
+
+**1. Stage transitions (`index.tsx`) — mount/unmount slide, web-only outer wrapper**
+`LandingScreen` ↔ `LearningStyleScreen` ↔ `TrackDetailScreen` ↔ `DownloadingScreen` are separate components swapped via the `stage` state machine. Each non-`session` stage renders inside one shared `<Animated.View key={stage} entering={SlideInRight/SlideInLeft.duration(280)} exiting={FadeOut.duration(180)}>`. `stageDirection` ('forward'/'backward') decides which edge the new screen enters from. Because the `key` changes, React actually tears down the old component and mounts a new one — the slide is that new component's Reanimated *entrance* animation, playing once, unattended, no gesture involved. Separately, the whole `index.tsx` tree is also wrapped in `<ScreenTransition>` (`components/nav/ScreenTransition.tsx`) — a **web-only** page-level slide keyed to actual route focus (`useFocusEffect`), used for the standalone routes like `/subscription-plans` ↔ `/subscription-confirm`. It's a no-op on native. The two wrappers are independent; PlaySession is deliberately rendered *outside* the inner keyed `Animated.View` (see comment in `index.tsx`) so browser back-nav into `/` doesn't double-animate.
+
+**2. `PlaySession`'s own internal states — same mount/unmount pattern, but inconsistently applied**
+`flowState === 'topicComplete'` uses the identical pattern to #1: wrapped in its own `<Animated.View entering={SlideInRight/SlideInLeft} exiting={FadeOut}>`, direction driven by a local `screenDirection`. But `flowState === 'outOfKeys'` renders `<SessionStateScreen kind="outOfKeys" .../>` with **no Animated.View wrapper at all** — it's a hard, unanimated cut. This is the one state in the whole flow that never got an entrance animation (noted 2026-09-05; not fixed, just documented — the topicComplete slide was flagged as visually "cropped inside its view" on desktop vs. the stage-transition version, which needs a look before touching either).
+
+**3. `CardDeck.tsx` question-to-question advance — one continuous strip, not swap-based, not gesture-driven**
+Both `QuizCardDeck` and `ReadingCardDeck` keep every question/sign card pre-rendered side-by-side in one long horizontal strip (`stripX` shared value, `Animated.View` with `translateX`). Advancing (tapping Continue on the FeedbackSheet, or Next in reading mode) calls `triggerAdvance()`, which runs one scripted `withTiming(targetX, { duration: 320, easing: Easing.out(Easing.cubic) })` to shift the whole strip one card-width left. Nothing mounts or unmounts — the strip itself never resets — and there is **no drag/pan gesture anywhere in this file** despite it visually reading as a "swipe": the "swipe" is entirely the scripted animation firing off a button tap, same as #1/#2. It only ever goes one direction (left) since there's no going back through questions.
+
+**In short:** #1 and #2's `topicComplete` case are the same trick (component swap + Reanimated enter/exit), #2's `outOfKeys` case is a plain unanimated cut, and #3 is a single strip sliding via `withTiming` rather than any component being swapped or dragged.
 
 ---
 

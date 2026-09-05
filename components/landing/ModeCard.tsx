@@ -3,11 +3,11 @@ import { StyleSheet, View, Text, Pressable, Image, type ImageSourcePropType } fr
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, Spacing, Radius, Typography, BrandGradients, StaticColors } from '@/theme/tokens';
 
-// Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
-// / chunkSignsIntoSessions both slice into groups of 7) — same segment count
-// TrackDetailScreen's dots use, so the two progress indicators read the
-// same way wherever the learner sees them.
-const PROGRESS_SEGMENTS = 7;
+// Fallback segment count for the rare case a row renders before
+// totalQuestions has resolved. Once totalQuestions is known, the bar
+// shows one segment per real question so the count on screen ("92
+// questions") matches the number of segments underneath it.
+const FALLBACK_PROGRESS_SEGMENTS = 7;
 
 interface ModeCardProps {
   /** Illustration from assets/driving/ (or a remote hero image for tracks
@@ -47,8 +47,13 @@ export function ModeCard({ image, title, status, highlighted, progress, totalQue
   const { colors } = useTheme();
   const teal = colors.tealAccent || '#2BD9C4';
   const isDone = status === 'done';
+  // One segment per real question once we know the total, so "92
+  // questions" on screen means 92 segments underneath — not an
+  // arbitrary fixed count. Falls back to a generic bar only until
+  // totalQuestions resolves.
+  const segmentCount = totalQuestions && totalQuestions > 0 ? totalQuestions : FALLBACK_PROGRESS_SEGMENTS;
   const filledSegments = progress !== undefined
-    ? Math.min(PROGRESS_SEGMENTS, Math.round(progress * PROGRESS_SEGMENTS))
+    ? Math.min(segmentCount, Math.round(progress * segmentCount))
     : 0;
 
   const statusLabel =
@@ -80,20 +85,22 @@ export function ModeCard({ image, title, status, highlighted, progress, totalQue
           <Text style={[Typography.titleMedium, styles.title, { color: colors.onSurface }]}>
             {title}
           </Text>
-          {statusLabel ? (
-            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
-          ) : null}
-          {totalQuestions !== undefined ? (
-            <Text style={[styles.questionCountText, { color: colors.onSurfaceVariant }]}>
-              {totalQuestions} question{totalQuestions === 1 ? '' : 's'}
-            </Text>
-          ) : null}
+          <View style={styles.metaRow}>
+            {statusLabel ? (
+              <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+            ) : null}
+            {totalQuestions !== undefined ? (
+              <Text style={[styles.questionCountText, { color: colors.onSurfaceVariant }]}>
+                {totalQuestions} question{totalQuestions === 1 ? '' : 's'}
+              </Text>
+            ) : null}
+          </View>
         </View>
       </View>
 
       {progress !== undefined && (
         <View style={styles.progressRow}>
-          {Array.from({ length: PROGRESS_SEGMENTS }).map((_, i) =>
+          {Array.from({ length: segmentCount }).map((_, i) =>
             i < filledSegments ? (
               <LinearGradient
                 key={i}
@@ -131,6 +138,10 @@ const styles = StyleSheet.create({
   },
   titleRow: {
     flex: 1,
+    flexDirection: 'column',
+    gap: 2,
+  },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -151,12 +162,13 @@ const styles = StyleSheet.create({
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
     paddingBottom: Spacing.sm,
     paddingTop: Spacing.xs,
   },
   segment: {
     flex: 1,
+    minWidth: 1,
     height: 6,
     borderRadius: Radius.full,
   },

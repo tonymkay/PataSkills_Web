@@ -10,6 +10,12 @@
 // even tapped "Start Practice" (loadRemoteCurriculum only runs after that).
 export const CurriculumCoverImagePaths = {
   'driving-theory': 'curricula/driving.webp',
+  // No cover image uploaded yet for this skill — path is reserved so the
+  // slug type-checks; upload a webp to this bucket path (or update this
+  // path) before shipping, otherwise the landing card's cover preload
+  // silently 404s (LandingIllustration itself won't break, it just won't
+  // have a local-fallback style/no zero-latency cover).
+  'world-facts': 'curricula/world-facts.webp',
 } as const;
 
 export type CurriculumSlug = keyof typeof CurriculumCoverImagePaths;
