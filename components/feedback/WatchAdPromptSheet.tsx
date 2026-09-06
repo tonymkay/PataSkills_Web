@@ -6,6 +6,7 @@ import {
   View,
   Pressable,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Tv, Sparkles, X } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeContext';
@@ -15,6 +16,9 @@ import { StaticColors } from '@/constants/colors';
 import { showRewardedForSession } from '@/lib/ads';
 import { grantBonusKey } from '@/lib/keys';
 import { KeyRewardContent } from './KeyRewardSuccessModal';
+import { WatchingAdContent } from './WatchingAdContent';
+
+const WEB_REWARD_AD_SLOT_ID = process.env.EXPO_PUBLIC_ADSENSE_REWARD_SLOT_ID?.trim();
 
 interface WatchAdPromptSheetProps {
   visible: boolean;
@@ -31,12 +35,13 @@ export function WatchAdPromptSheet({
 }: WatchAdPromptSheetProps) {
   const { colors } = useTheme();
   const [loadingAd, setLoadingAd] = useState(false);
-  // 'prompt' = "watch an ad?" sheet, 'reward' = key reward screen.
-  // Both render inside the SAME <Modal> below — mounting two separate native
+  // 'prompt' = "watch an ad?" sheet, 'watching' = web-only real AdSense
+  // unit + mandatory countdown, 'reward' = key reward screen. All three
+  // render inside the SAME <Modal> below — mounting separate native
   // Modals and toggling them in the same tick is what caused the reward
   // screen to look squashed/stretched and to get dismissed automatically on
   // Android (the OS was closing both modal windows at once).
-  const [step, setStep] = useState<'prompt' | 'reward'>('prompt');
+  const [step, setStep] = useState<'prompt' | 'watching' | 'reward'>('prompt');
 
   // Reset back to the prompt step whenever the sheet is reopened.
   React.useEffect(() => {
@@ -44,6 +49,15 @@ export function WatchAdPromptSheet({
   }, [visible]);
 
   const handleWatchAd = async () => {
+    // Web has a real ad to show (the AdSense unit rendered by
+    // WatchingAdContent) rather than an AdMob SDK call, so it gets its own
+    // step with a visible ad + countdown instead of going through
+    // showRewardedForSession()'s native-only rewarded-ad flow.
+    if (Platform.OS === 'web') {
+      setStep('watching');
+      return;
+    }
+
     setLoadingAd(true);
     const outcome = await showRewardedForSession();
     setLoadingAd(false);
@@ -81,6 +95,8 @@ export function WatchAdPromptSheet({
     >
       {step === 'reward' ? (
         <KeyRewardContent onUnlockNextSession={handleUnlockNextSession} />
+      ) : step === 'watching' ? (
+        <WatchingAdContent slotId={WEB_REWARD_AD_SLOT_ID} onComplete={() => setStep('reward')} />
       ) : (
       <View style={styles.backdrop}>
         <View style={styles.sheetWrapper}>
