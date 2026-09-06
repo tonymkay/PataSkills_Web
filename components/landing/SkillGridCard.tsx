@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Pressable, Image } from 'react-native';
 import { useTheme, Spacing, Radius, Typography } from '@/theme/tokens';
 import { getPlayAssetPublicUrl } from '@/lib/supabase';
 import { CurriculumCoverImagePaths } from '@/constants/curriculumAssets';
+import { getCachedCoverImagePath } from '@/lib/curriculaCatalog';
 import type { LandingSkill } from '@/constants/skills';
 
 interface SkillGridCardProps {
@@ -14,13 +15,17 @@ interface SkillGridCardProps {
  * Compact 2-column grid card for the "Skills Corner"-style homepage
  * redesign — title centered up top, remote cover illustration centered
  * below. No progress bar, no CTA button: the whole card is the tap
- * target (mirrors how the reference design's cards work). Cover image is
- * fetched from Supabase Storage via curriculumAssets.ts, same source
- * SkillCard/LandingIllustration already use — nothing bundled locally.
+ * target (mirrors how the reference design's cards work). Cover image
+ * path comes from play_curricula.cover_image_path (lib/curriculaCatalog.ts)
+ * first — the live source of truth, and the only source for a skill added
+ * purely via a DB row — falling back to the static curriculumAssets.ts map
+ * for the instant before that cache is warm (same pattern
+ * constants/trackOptions.ts already uses for track images).
  */
 export function SkillGridCard({ skill, onPress }: SkillGridCardProps) {
   const { colors } = useTheme();
-  const coverImageUrl = getPlayAssetPublicUrl(CurriculumCoverImagePaths[skill.id]);
+  const coverPath = getCachedCoverImagePath(skill.id) ?? CurriculumCoverImagePaths[skill.id];
+  const coverImageUrl = getPlayAssetPublicUrl(coverPath);
 
   return (
     <Pressable

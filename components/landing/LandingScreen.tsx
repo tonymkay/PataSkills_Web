@@ -3,13 +3,13 @@ import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { SkillGridCard } from './SkillGridCard';
-import { LANDING_SKILLS } from '@/constants/skills';
+import { LANDING_SKILLS, getLandingSkill } from '@/constants/skills';
+import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
-import { supabase } from '@/lib/supabase';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 // Bottom-sheet-style width cap (matches FeedbackSheet/RestoreAccountModal/etc.)
@@ -36,21 +36,20 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
   const { colors } = useTheme();
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
-  // Card display name, keyed by slug — fetched from play_curricula.title
-  // so renaming/adding a skill's card label is a DB edit, not a code
-  // change. LANDING_SKILLS.subtitle is only the offline/pre-fetch
-  // fallback (renders instantly, before this resolves).
-  const [remoteTitles, setRemoteTitles] = useState<Record<string, string>>({});
+  // Which skills exist at all, and their display titles, both come from
+  // play_curricula (is_active=true) via lib/curriculaCatalog.ts — so
+  // shipping a new skill is a DB row + storage upload, not an app-code
+  // change/rebuild. LANDING_SKILLS is only the offline/pre-fetch fallback
+  // (renders instantly before this resolves) for skills known at build
+  // time; any catalog row with no LANDING_SKILLS entry is merged in once
+  // this resolves, using getLandingSkill()'s generic default for its
+  // tracks/illustration behavior.
+  const [catalogRows, setCatalogRows] = useState<{ slug: string; title: string }[]>([]);
 
   useEffect(() => {
-    supabase
-      .from('play_curricula')
-      .select('slug, title')
-      .eq('is_active', true)
-      .then(({ data, error }) => {
-        if (error || !data) return;
-        setRemoteTitles(Object.fromEntries(data.map((row) => [row.slug, row.title])));
-      });
+    getCurriculaCatalog()
+      .then((rows) => setCatalogRows(rows.map((r) => ({ slug: r.slug, title: r.title }))))
+      .catch(() => {});
   }, []);
 
   const refreshProgress = () => {
@@ -74,11 +73,20 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
     onRestore('full');
   };
 
-  const gridSkills = LANDING_SKILLS.map((skill) => ({
-    ...skill,
-    key: skill.id,
-    subtitle: remoteTitles[skill.id] ?? skill.subtitle,
-  }));
+  // Static LANDING_SKILLS entries first (in their declared order, title
+  // overridden from the catalog once it resolves), then any catalog row
+  // with no static entry at all — a skill that exists purely as a
+  // play_curricula insert. getLandingSkill() supplies its generic
+  // tracks/illustration fallback for those.
+  const staticIds = new Set(LANDING_SKILLS.map((s) => s.id));
+  const knownSkills = LANDING_SKILLS.map((skill) => {
+    const remoteTitle = catalogRows.find((r) => r.slug === skill.id)?.title;
+    return { ...skill, key: skill.id, subtitle: remoteTitle ?? skill.subtitle };
+  });
+  const dbOnlySkills = catalogRows
+    .filter((row) => !staticIds.has(row.slug))
+    .map((row) => ({ ...getLandingSkill(row.slug), key: row.slug, subtitle: row.title }));
+  const gridSkills = [...knownSkills, ...dbOnlySkills];
 
   return (
     <View style={styles.screen}>

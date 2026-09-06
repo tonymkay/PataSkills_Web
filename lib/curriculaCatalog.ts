@@ -43,3 +43,7 @@ export function getCachedCurricula(): CurriculumCatalogRow[] {
 export function getCachedCoverImagePath(slug: string): string | undefined {
   return cache?.find((c) => c.slug === slug)?.cover_image_path;
 }
+
+export function getCachedTitle(slug: string): string | undefined {
+  return cache?.find((c) => c.slug === slug)?.title;
+}

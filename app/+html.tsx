@@ -95,11 +95,25 @@ export default function Root({ children }: PropsWithChildren) {
           <link rel="preload" as="image" type="image/webp" href={drivingTheoryCoverImageUrl} />
         )}
         {ADSENSE_CLIENT_ID && (
-          <script
-            async
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
-            crossOrigin="anonymous"
-          />
+          <>
+            <script
+              async
+              src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
+              crossOrigin="anonymous"
+            />
+            {/* Ad Placement API globals (adBreak/adConfig) — the real
+                full-screen interstitial/rewarded ad mechanism, layered on
+                the same adsbygoogle.js tag above. lib/webRewardedAd.ts
+                calls window.adBreak() at request time; this just wires the
+                two global function names to the adsbygoogle queue, per
+                Google's documented setup snippet. */}
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `window.adsbygoogle = window.adsbygoogle || [];
+window.adBreak = window.adConfig = function(o) { window.adsbygoogle.push(o); };`,
+              }}
+            />
+          </>
         )}
         <style dangerouslySetInnerHTML={{ __html: fontFaceStyle }} />
         <style dangerouslySetInnerHTML={{ __html: webShellStyle }} />

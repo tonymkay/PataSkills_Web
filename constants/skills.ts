@@ -65,3 +65,27 @@ export const LANDING_SKILLS: LandingSkill[] = [
     tracks: ['reading', 'full'],
   },
 ];
+
+// Generic fallback for any skill that exists only as a play_curricula DB
+// row (no entry above) — every skill shipped so far only ever needs
+// 'reading' + 'full' (getAvailableTracks()/detectAvailableTracks() layers
+// in the four driving-theory role tracks on top of this when a curriculum
+// actually has role-tagged questions), so this default is safe for a
+// brand-new skill with zero code changes. title/subtitle are blank since
+// LandingScreen already overrides subtitle from play_curricula.title —
+// this default only exists for its `tracks` fallback and to give
+// LearningStyleScreen/ModeSwitcherSheet/TrackDetailScreen something to
+// resolve instead of wrongly falling back to LANDING_SKILLS[0]
+// (driving-theory)'s track config for a skill that isn't driving-theory.
+const DEFAULT_LANDING_SKILL_TRACKS: SimpleTrack[] = ['reading', 'full'];
+
+export function getLandingSkill(id: CurriculumSlug): LandingSkill {
+  return (
+    LANDING_SKILLS.find((s) => s.id === id) ?? {
+      id,
+      title: '',
+      subtitle: '',
+      tracks: DEFAULT_LANDING_SKILL_TRACKS,
+    }
+  );
+}

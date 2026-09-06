@@ -5,43 +5,70 @@ import { useTheme } from '@/theme/ThemeContext';
 import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
-import { AdSenseDisplayUnit } from '@/components/ads/AdSenseDisplayUnit';
+import { AdSenseDisplayUnit, type AdSenseStatus } from '@/components/ads/AdSenseDisplayUnit';
 
-const WATCH_SECONDS = 15;
+// Only used once an ad is confirmed filled — this is the minimum view
+// time for the reward to count, not a blind wait unrelated to ad state.
+const MIN_VIEW_SECONDS = 5;
+// If AdSense hasn't reported filled/unfilled by this long (script
+// blocked, slow network), stop waiting rather than hang indefinitely.
+const LOAD_TIMEOUT_MS = 6000;
+// Brief pause before completing on 'unfilled'/'error' so it doesn't read
+// as an instant, jarring skip.
+const NO_FILL_PAUSE_MS = 1200;
 
 interface WatchingAdContentProps {
-  /** AdSense ad-unit slot ID for this placement, from env — passed down
-   *  rather than read here so this component works the same whether the
-   *  slot is configured or not (falls back to a plain sponsor countdown). */
+  /** AdSense ad-unit slot ID for this placement, from env. */
   slotId?: string;
   onComplete: () => void;
 }
 
 /**
- * Bare content (no Modal wrapper) — the web equivalent of the native
- * AdMob rewarded-video wait, shown as WatchAdPromptSheet's 'watching'
- * step. A real AdSense unit renders above a mandatory countdown; the
- * reward only unlocks once the countdown finishes, same as a rewarded
- * video only paying out on completion. If no ad slot is configured yet
- * (EXPO_PUBLIC_ADSENSE_REWARD_SLOT_ID unset) or an ad blocker stops the
- * ad from rendering, the countdown still runs on its own — the learner
- * always reaches the reward, just without an ad filling the space.
+ * FALLBACK reward content — only reached when the real full-screen
+ * rewarded ad (lib/webRewardedAd.ts, Ad Placement API) reports
+ * 'unavailable' (see WatchAdPromptSheet.tsx). Renders a real AdSense
+ * display unit and reacts to whether it actually filled instead of
+ * running a fixed countdown regardless of ad state:
+ *   - 'filled'   -> ad is real, hold for MIN_VIEW_SECONDS, then reward.
+ *   - 'unfilled' -> no ad served this time, reward after a short pause
+ *                   rather than pretending to show one for 15s.
+ *   - timeout    -> AdSense never resolved (blocked/slow) — same short
+ *                   pause as unfilled.
  */
 export function WatchingAdContent({ slotId, onComplete }: WatchingAdContentProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [secondsLeft, setSecondsLeft] = useState(WATCH_SECONDS);
+  const [status, setStatus] = useState<AdSenseStatus | 'loading'>('loading');
+  const [secondsLeft, setSecondsLeft] = useState(MIN_VIEW_SECONDS);
+
+  const handleStatus = (s: AdSenseStatus) => setStatus((prev) => (prev === 'loading' ? s : prev));
 
   useEffect(() => {
+    const timeout = setTimeout(() => handleStatus('unfilled'), LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    if (status === 'loading') return;
+    if (status !== 'filled') {
+      const t = setTimeout(onComplete, NO_FILL_PAUSE_MS);
+      return () => clearTimeout(t);
+    }
     if (secondsLeft <= 0) {
       onComplete();
       return;
     }
     const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [secondsLeft, onComplete]);
+  }, [status, secondsLeft, onComplete]);
 
-  const progress = (WATCH_SECONDS - secondsLeft) / WATCH_SECONDS;
+  const progress = status === 'filled' ? (MIN_VIEW_SECONDS - secondsLeft) / MIN_VIEW_SECONDS : 0;
+  const subtitle =
+    status === 'loading'
+      ? 'Loading sponsor content…'
+      : status === 'filled'
+        ? `Your bonus session unlocks in ${secondsLeft}s`
+        : 'No sponsor available right now — unlocking your session…';
 
   return (
     <View
@@ -58,21 +85,23 @@ export function WatchingAdContent({ slotId, onComplete }: WatchingAdContentProps
         Sponsor break
       </Text>
       <Text style={[styles.subtitle, { color: colors.onSurfaceVariant || '#8B949E' }]}>
-        Your bonus session unlocks in {secondsLeft}s
+        {subtitle}
       </Text>
 
       <View style={styles.adSlot}>
-        <AdSenseDisplayUnit slotId={slotId} height={250} />
+        <AdSenseDisplayUnit slotId={slotId} height={250} onStatus={handleStatus} />
       </View>
 
-      <View style={[styles.progressTrack, { backgroundColor: colors.surfaceContainerHigh || '#2A2E38' }]}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: `${progress * 100}%`, backgroundColor: StaticColors.achievementAmber },
-          ]}
-        />
-      </View>
+      {status === 'filled' && (
+        <View style={[styles.progressTrack, { backgroundColor: colors.surfaceContainerHigh || '#2A2E38' }]}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${progress * 100}%`, backgroundColor: StaticColors.achievementAmber },
+            ]}
+          />
+        </View>
+      )}
     </View>
   );
 }

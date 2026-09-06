@@ -14,6 +14,7 @@ import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
 import { showRewardedForSession } from '@/lib/ads';
+import { showWebRewardedAd } from '@/lib/webRewardedAd';
 import { grantBonusKey } from '@/lib/keys';
 import { KeyRewardContent } from './KeyRewardSuccessModal';
 import { WatchingAdContent } from './WatchingAdContent';
@@ -49,12 +50,24 @@ export function WatchAdPromptSheet({
   }, [visible]);
 
   const handleWatchAd = async () => {
-    // Web has a real ad to show (the AdSense unit rendered by
-    // WatchingAdContent) rather than an AdMob SDK call, so it gets its own
-    // step with a visible ad + countdown instead of going through
-    // showRewardedForSession()'s native-only rewarded-ad flow.
     if (Platform.OS === 'web') {
-      setStep('watching');
+      // Primary path: a real full-screen rewarded ad via the Ad Placement
+      // API (window.adBreak — lib/webRewardedAd.ts). Must be called
+      // synchronously from this press handler (user-gesture requirement),
+      // so no `await` happens before this call.
+      setLoadingAd(true);
+      const outcome = await showWebRewardedAd('bonus_session');
+      setLoadingAd(false);
+      if (outcome === 'earned') {
+        setStep('reward');
+      } else if (outcome === 'skipped') {
+        onDismissToHome();
+      } else {
+        // 'unavailable' — no ad was offered (script blocked, or the
+        // account isn't enrolled for Ad Placement ads yet). Fall back to
+        // the plain AdSense display-unit + countdown step.
+        setStep('watching');
+      }
       return;
     }
 

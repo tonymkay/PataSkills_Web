@@ -5,7 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, BrandGradients } from '@/theme/tokens';
 import { getTrackOption } from '@/constants/trackOptions';
-import { LANDING_SKILLS } from '@/constants/skills';
+import { getLandingSkill } from '@/constants/skills';
+import { getCurriculaCatalog, getCachedTitle } from '@/lib/curriculaCatalog';
 import { getLocalProgress } from '@/lib/progress';
 import { Track, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
@@ -42,7 +43,12 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: T
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [progress, setProgress] = useState({ completedTopics: 0, totalTopics: 46 });
-  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+  const skill = getLandingSkill(skillId);
+  // DB-only skills (no constants/skills.ts entry) have a blank
+  // skill.subtitle by default — this fills it from play_curricula.title
+  // once the shared catalog cache resolves, same source LandingScreen's
+  // card titles use. No-op (instant) for skills already in LANDING_SKILLS.
+  const [catalogTitle, setCatalogTitle] = useState(() => getCachedTitle(skillId));
 
   const [prevSkillId, setPrevSkillId] = useState(skillId);
   const [availableTracks, setAvailableTracks] = useState<Track[]>(skill.tracks);
@@ -58,6 +64,10 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: T
 
   useEffect(() => {
     getLocalProgress(skillId).then(setProgress).catch(() => {});
+  }, [skillId]);
+
+  useEffect(() => {
+    getCurriculaCatalog().then(() => setCatalogTitle(getCachedTitle(skillId))).catch(() => {});
   }, [skillId]);
 
   useEffect(() => {
@@ -92,7 +102,7 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: T
     ? (availableTracks[0] ?? track)
     : track;
   const option = getTrackOption(skill, effectiveTrack, trackDefs);
-  const skillSubtitle = skill.subtitle;
+  const skillSubtitle = skill.subtitle || catalogTitle || '';
   const pct = progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
   const filledDots = Math.min(QUESTIONS_PER_SESSION, Math.round(pct * QUESTIONS_PER_SESSION));
 

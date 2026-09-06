@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { getTrackOptionsForSkill, groupTrackOptions } from '@/constants/trackOptions';
-import { LANDING_SKILLS } from '@/constants/skills';
+import { getLandingSkill } from '@/constants/skills';
 import { getCompletedTracks } from '@/lib/progress';
 import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
@@ -37,7 +37,7 @@ interface LearningStyleScreenProps {
  */
 export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: LearningStyleScreenProps) {
   const { colors } = useTheme();
-  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+  const skill = getLandingSkill(skillId);
   const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
   // Real per-track question counts for the "N questions" label on each
   // row — same source and shape as ModeSwitcherSheet uses.

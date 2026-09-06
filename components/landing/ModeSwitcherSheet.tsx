@@ -14,7 +14,7 @@ import { Spacing, Radius } from '@/constants/spacing';
 import { getSheetGradient } from '@/constants/gradients';
 import { StaticColors } from '@/constants/colors';
 import { getTrackOptionsForSkill, groupTrackOptions } from '@/constants/trackOptions';
-import { LANDING_SKILLS } from '@/constants/skills';
+import { getLandingSkill } from '@/constants/skills';
 import { getLocalProgress, getCompletedTracks } from '@/lib/progress';
 import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
@@ -92,7 +92,7 @@ export function ModeSwitcherSheet({
   const [trackTotals, setTrackTotals] = useState<Record<Track, TrackTotals> | null>(null);
   const [trackDefs, setTrackDefs] = useState<CurriculumTrackDefinition[] | undefined>();
 
-  const skill = LANDING_SKILLS.find((s) => s.id === skillId) ?? LANDING_SKILLS[0];
+  const skill = getLandingSkill(skillId);
   const [prevSkillId, setPrevSkillId] = useState(skillId);
   const [availableTracks, setAvailableTracks] = useState<Track[]>(() => {
     return skill.tracks.includes(currentTrack as any)

@@ -1,14 +1,9 @@
-// Landing-illustration cover images, keyed by curriculum slug. This app
-// currently ships a single skill (driving-theory), but the shape here
-// mirrors play_curricula's per-row `cover_image_path` column in Supabase
-// so adding a second skill later means adding an entry, not new plumbing.
-//
-// These are static paths (not fetched from the DB) specifically so the
-// resulting public URL is knowable at build time — that's what lets
-// app/+html.tsx <link rel="preload"> it for web, and what lets the landing
-// screen show it with zero network-roundtrip latency before the user has
-// even tapped "Start Practice" (loadRemoteCurriculum only runs after that).
-export const CurriculumCoverImagePaths = {
+// Landing-illustration cover images, keyed by curriculum slug. Static
+// fallback only — the live source of truth is play_curricula.cover_image_path
+// via lib/curriculaCatalog.ts, which lets a new skill (new DB row + storage
+// upload) show up with no app-code change. This map just covers the instant
+// before that fetch resolves, for skills known at build time.
+export const CurriculumCoverImagePaths: Record<string, string> = {
   'driving-theory': 'curricula/driving.webp',
   // No cover image uploaded yet for this skill — path is reserved so the
   // slug type-checks; upload a webp to this bucket path (or update this
@@ -18,6 +13,12 @@ export const CurriculumCoverImagePaths = {
   'true-false': 'curricula/true-false.webp',
   'bible-trivia': 'curricula/bible-trivia.webp',
   'world-facts': 'curricula/world-facts.webp',
-} as const;
+};
 
-export type CurriculumSlug = keyof typeof CurriculumCoverImagePaths;
+// Opaque skill identifier. Was a closed union (keyof typeof
+// CurriculumCoverImagePaths) before the DB-driven catalog (lib/
+// curriculaCatalog.ts) existed — widened to string so a skill added purely
+// via a play_curricula DB row (no entry in this file or constants/skills.ts)
+// still type-checks everywhere it's threaded through.
+export type CurriculumSlug = string;
+

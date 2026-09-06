@@ -6,6 +6,8 @@ declare global {
   }
 }
 
+export type AdSenseStatus = 'filled' | 'unfilled' | 'error';
+
 interface AdSenseDisplayUnitProps {
   /** The AdSense ad-unit slot ID (data-ad-slot) — created in the AdSense
    *  dashboard under Ads > By ad unit, not derivable from the client ID
@@ -14,6 +16,11 @@ interface AdSenseDisplayUnitProps {
   /** Minimum height of the ad container while it loads, so the layout
    *  around it doesn't jump once the ad fills in. */
   height?: number;
+  /** Reports whether the slot actually got a real ad. AdSense sets
+   *  data-ad-status="filled"|"unfilled" on the <ins> once it resolves the
+   *  request — observed here via MutationObserver rather than any push()
+   *  callback, since plain AdSense units don't expose one. */
+  onStatus?: (status: AdSenseStatus) => void;
 }
 
 /**
@@ -25,10 +32,15 @@ interface AdSenseDisplayUnitProps {
  * This is a real ad request, not an in-app "Auto ads" placement: Auto ads
  * place themselves wherever Google's algorithm picks and can't be
  * triggered on demand, which doesn't fit a "watch this to earn a reward"
- * flow (WatchAdPromptSheet) that needs an ad at a specific moment.
+ * flow that needs an ad at a specific moment.
+ *
+ * This is the FALLBACK reward path (see WatchingAdContent.tsx) — the
+ * primary path is the real full-screen rewarded ad in lib/webRewardedAd.ts.
+ * This only renders when that's unavailable.
  */
-export function AdSenseDisplayUnit({ slotId, height = 250 }: AdSenseDisplayUnitProps) {
+export function AdSenseDisplayUnit({ slotId, height = 250, onStatus }: AdSenseDisplayUnitProps) {
   const pushedRef = useRef(false);
+  const insRef = useRef<HTMLModElement>(null);
   const clientId = process.env.EXPO_PUBLIC_ADSENSE_CLIENT_ID?.trim();
 
   useEffect(() => {
@@ -37,16 +49,29 @@ export function AdSenseDisplayUnit({ slotId, height = 250 }: AdSenseDisplayUnitP
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch {
-      // Ad blockers / failed script load throw here — the countdown in
-      // WatchAdPromptSheet still runs regardless, so the reward flow
-      // isn't blocked by an ad that fails to render.
+      onStatus?.('error');
+      return;
     }
+
+    const el = insRef.current;
+    if (!el || !onStatus) return;
+    const observer = new MutationObserver(() => {
+      const status = el.getAttribute('data-ad-status');
+      if (status === 'filled' || status === 'unfilled') {
+        onStatus(status);
+        observer.disconnect();
+      }
+    });
+    observer.observe(el, { attributes: true, attributeFilter: ['data-ad-status'] });
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, slotId]);
 
   if (!clientId || !slotId) return null;
 
   return (
     <ins
+      ref={insRef}
       className="adsbygoogle"
       style={{ display: 'block', width: '100%', minHeight: height }}
       data-ad-client={clientId}
