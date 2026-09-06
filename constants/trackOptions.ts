@@ -1,5 +1,7 @@
 import type { ImageSourcePropType } from 'react-native';
 import { getPlayAssetPublicUrl } from '@/lib/supabase';
+import { getCachedTrackDefaultUrl } from '@/lib/trackDefaults';
+import { getCachedCoverImagePath } from '@/lib/curriculaCatalog';
 import { CurriculumCoverImagePaths } from '@/constants/curriculumAssets';
 import { LandingSkill } from '@/constants/skills';
 import { Track, StandardTrack } from '@/lib/curriculum';
@@ -57,17 +59,17 @@ export function groupTrackOptions(options: TrackOption[]): TrackOptionGroup[] {
   return groups.map((g) => (g.options.length > 1 ? g : { options: g.options }));
 }
 
-// Keyed by the driving-theory curriculum's JSON-declared track ids
-// (data/questions.sample.json's "tracks" array) plus the two universal
-// tracks. If a curriculum declares a track id not listed here (or a
-// legacy pre-consolidation id like the old 'pairs'/'names'/'meanings'/
-// 'whereUsed'), trackImage() below falls back to the skill's remote
-// cover image — never a crash, just a less-distinct icon.
-const LOCAL_IMAGES: Partial<Record<Track, ImageSourcePropType>> = {
-  differentiation: require('@/assets/driving/differenciate.webp'),
-  identification: require('@/assets/driving/name.webp'),
-  reading: require('@/assets/driving/reading.webp'),
-};
+// Instant-render fallback only, shown for the split second before a
+// curriculum's own JSON (tracks[].image) or play_track_defaults resolves
+// — same pattern as constants/skills.ts's `subtitle`. EMPTY right now:
+// the only local track webps that exist (assets/driving/*.webp) are
+// driving-theory's own art, wired as a per-curriculum override in its
+// JSON (see lib/curriculaCatalog.ts's sibling, the curriculum content
+// fetch) — they don't belong here, since this map is read for every
+// skill's track, and putting driving's images here would flash them on
+// e.g. true-false's 'reading' track before its JSON loads. Add an entry
+// only for art that's genuinely generic across skills.
+const LOCAL_IMAGES: Partial<Record<Track, ImageSourcePropType>> = {};
 
 // Shared default label per track. A skill can override any of these via
 // LandingSkill.trackLabels (constants/skills.ts) or directly inside
@@ -91,9 +93,17 @@ function trackImage(
       return { uri: customTrackDef.image };
     }
   }
+  const dbDefaultUrl = getCachedTrackDefaultUrl(track);
+  // Final fallback is the skill's own cover image — DB (play_curricula,
+  // via curriculaCatalog.ts) is the real source of truth here; the local
+  // CurriculumCoverImagePaths constant only covers the instant before
+  // that cache is warm (same reasoning as LOCAL_IMAGES above), never a
+  // permanent source.
+  const coverPath = getCachedCoverImagePath(skill.id) ?? CurriculumCoverImagePaths[skill.id];
   return (
     skill.trackImages?.[track] ??
-    LOCAL_IMAGES[track] ?? { uri: getPlayAssetPublicUrl(CurriculumCoverImagePaths[skill.id]) }
+    (dbDefaultUrl ? { uri: dbDefaultUrl } : undefined) ??
+    LOCAL_IMAGES[track] ?? { uri: getPlayAssetPublicUrl(coverPath) }
   );
 }
 

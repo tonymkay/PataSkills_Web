@@ -9,6 +9,7 @@ import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
 import { getLocalProgress } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
+import { supabase } from '@/lib/supabase';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 // Bottom-sheet-style width cap (matches FeedbackSheet/RestoreAccountModal/etc.)
@@ -35,6 +36,22 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
   const { colors } = useTheme();
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
+  // Card display name, keyed by slug — fetched from play_curricula.title
+  // so renaming/adding a skill's card label is a DB edit, not a code
+  // change. LANDING_SKILLS.subtitle is only the offline/pre-fetch
+  // fallback (renders instantly, before this resolves).
+  const [remoteTitles, setRemoteTitles] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    supabase
+      .from('play_curricula')
+      .select('slug, title')
+      .eq('is_active', true)
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        setRemoteTitles(Object.fromEntries(data.map((row) => [row.slug, row.title])));
+      });
+  }, []);
 
   const refreshProgress = () => {
     getLocalProgress().then(() => {
@@ -57,7 +74,11 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
     onRestore('full');
   };
 
-  const gridSkills = LANDING_SKILLS.map((skill) => ({ ...skill, key: skill.id }));
+  const gridSkills = LANDING_SKILLS.map((skill) => ({
+    ...skill,
+    key: skill.id,
+    subtitle: remoteTitles[skill.id] ?? skill.subtitle,
+  }));
 
   return (
     <View style={styles.screen}>

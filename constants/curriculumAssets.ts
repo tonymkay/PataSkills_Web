@@ -15,7 +15,8 @@ export const CurriculumCoverImagePaths = {
   // path) before shipping, otherwise the landing card's cover preload
   // silently 404s (LandingIllustration itself won't break, it just won't
   // have a local-fallback style/no zero-latency cover).
-  'world-facts': 'curricula/world-facts.webp',
+  'true-false': 'curricula/true-false.webp',
+  'bible-trivia': 'curricula/bible-trivia.webp',
 } as const;
 
 export type CurriculumSlug = keyof typeof CurriculumCoverImagePaths;

@@ -1,6 +1,27 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (f) — `full` and `reading` are now
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (g) — Per-track illustration
+> resolution made fully database/JSON-driven, closing the last two hardcoded-per-skill gaps.
+> **(1)** `constants/trackOptions.ts`'s `trackImage()` final fallback now reads the skill's cover
+> image from `lib/curriculaCatalog.ts` (DB, `play_curricula.cover_image_path`) instead of the
+> local `CurriculumCoverImagePaths` constant — that constant is now only the pre-fetch,
+> instant-render backup for the split second before the DB cache warms. **(2)** The five
+> `assets/driving/*.webp` illustrations (`differenciate`/`name`/`meaning`/`usage`/`reading`)
+> turned out to be driving-theory's own art, not generic/universal — they were uploaded to
+> `play-assets/track-icons/` (`scripts/upload-track-icons.mjs`, corrected to the real track ids
+> `pairs`/`names`/`meanings`/`whereUsed`/`reading` instead of a stale pre-consolidation
+> `differentiation`/`identification` naming) and wired as a per-curriculum override directly on
+> driving-theory's own JSON (`tracks[].image` in `curricula/questions.sample.json`) rather than
+> as a shared default. **(3)** `play_track_defaults` (new table, `lib/trackDefaults.ts`,
+> `supabase/play_track_defaults.sql`) is intentionally left **empty** — seeding it with driving's
+> art would have leaked those images onto every other skill's matching track id (e.g.
+> true-false's `reading` track), so it exists only as a place to add genuinely shared/universal
+> track art in the future; until then every skill's tracks correctly fall through to that skill's
+> *own* cover image. `constants/trackOptions.ts`'s `LOCAL_IMAGES` map was emptied for the same
+> reason — it was flash-rendering driving's art on any skill's matching track for the instant
+> before that skill's own JSON loaded. See §7, §9, and §14 for the corrected implementation.
+>
+> **Last updated**: 2026-09-06 (f) — `full` and `reading` are now
 > compulsory: `detectAvailableTracks()` guarantees both are always selectable even if a
 > curriculum's JSON `tracks` array omits them. Driving-theory's JSON un-merged
 > `identification`/`differentiation` back into four independently selectable standard tracks
@@ -18,7 +39,7 @@
 > `kind: 'reading'` track can also scope itself via its own `filterRole`/`filterTags`. See §9,
 > §11, and `json-conversion.md`'s "Defining Custom Learning Tracks in JSON" section.
 >
-> **Last updated**: 2026-09-06 (e) — `CurriculumTrackDefinition.filterRole`/`filterFormat` widened from a single string to `string | string[]` (`lib/curriculum.ts`'s `roleMatches()` now checks array membership), letting one JSON-declared track absorb several role values. Both live curricula in Supabase Storage now actually ship explicit `tracks` arrays using this: driving-theory (`differentiation`, `identification` [merges name+meaning+whereUsed], `reading`, `full`) and world-facts (`full`) — previously the bucket copies were stale flat/role-only JSON despite the local repo files and app code already supporting the JSON-driven format. See §11 and §18 for the corrected type and bucket contents.
+> **Last updated**: 2026-09-06 (e) — `CurriculumTrackDefinition.filterRole`/`filterFormat` widened from a single string to `string | string[]` (`lib/curriculum.ts`'s `roleMatches()` now checks array membership), letting one JSON-declared track absorb several role values. Both live curricula in Supabase Storage now actually ship explicit `tracks` arrays using this: driving-theory (`differentiation`, `identification` [merges name+meaning+whereUsed], `reading`, `full`) and true-false (`full`) — previously the bucket copies were stale flat/role-only JSON despite the local repo files and app code already supporting the JSON-driven format. See §11 and §18 for the corrected type and bucket contents.
 >
 > **Last updated**: 2026-09-05 (d) — this pass updates documentation to reflect the dynamic JSON-driven learning tracks system, multi-skill routing, and per-curriculum customization: **(1)** JSON-driven track definitions (`CurriculumTrackDefinition` in `types/quiz.ts`) allowing curricula to define arbitrary track IDs, custom titles, filtering rules (`filterRole`, `filterFormat`, `kind`), and custom icons directly in curriculum JSON without code changes; **(2)** Dynamic track detection (`detectAvailableTracks`/`getAvailableTracks`/`getCurriculumTrackDefs` in `lib/curriculum.ts`) supporting both custom JSON tracks and legacy question `role`/sign auto-detection with 100% backward compatibility; **(3)** Deduplicated cache (`loadCurriculumCached`) ensuring a single in-flight network promise shared across `getTrackTotals()`, `getAvailableTracks()`, and `getCurriculumTrackDefs()`; **(4)** `constants/trackOptions.ts` dynamic builders (`getTrackOptionsForSkill`, `getTrackOption`) prioritizing skill overrides → JSON `trackDef.title` → default labels; **(5)** `LearningStyleScreen`, `TrackDetailScreen`, and `ModeSwitcherSheet` updated to consume dynamic tracks and track definitions; **(6)** Multi-skill catalog in `constants/skills.ts` and deep linking in `app/index.tsx` supporting custom track IDs. · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — verified against active source code and `tsc` typecheck.
 
@@ -451,7 +472,7 @@ Unchanged from the prior audit.
 The single `LandingScreen` "skill pager + mode picker" described in the prior audit **no longer exists in that shape**. The flow is now three separate screens plus a bottom sheet, each a standalone file:
 
 #### `LandingScreen.tsx` — "Skills Corner" grid
-A 2-column grid of `SkillGridCard`s (compact — title + remote cover image, no progress bar, no CTA button; the whole card is the tap target) below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS` (`driving-theory`, `world-facts`), plus a bottom "Existing user, login" link that opens `RestoreAccountModal`. Tapping any card calls `onStart(skill.id)` passing the selected `CurriculumSlug` so the parent advances to `LearningStyleScreen` with that skill's context.
+A 2-column grid of `SkillGridCard`s (compact — title + remote cover image, no progress bar, no CTA button; the whole card is the tap target) below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS` (`driving-theory`, `true-false`), plus a bottom "Existing user, login" link that opens `RestoreAccountModal`. Tapping any card calls `onStart(skill.id)` passing the selected `CurriculumSlug` so the parent advances to `LearningStyleScreen` with that skill's context.
 
 A successful account restore (`onRestore(track)`) skips `LearningStyleScreen` entirely and opens `TrackDetailScreen` directly with `'full'` (the restoring learner already picked a track on whichever device they started on).
 
@@ -469,7 +490,7 @@ Back-arrow header ("Choose Learning Style") + a scrollable list of detected lear
 Full-page single-track preview card + "Start Practice" CTA:
 - Receives `skillId: CurriculumSlug` and `track: Track | null`.
 - Concurrently fetches `getAvailableTracks(skillId)` and `getCurriculumTrackDefs(skillId)`. Looks up track visual and copy via `getTrackOption(skill, effectiveTrack, trackDefs)` (from `constants/trackOptions.ts`), honoring JSON titles/images and skill overrides.
-- If a deep link specifies a track unsupported by the current curriculum (e.g. `pairs` for `world-facts`), it gracefully falls back to `availableTracks[0]`.
+- If a deep link specifies a track unsupported by the current curriculum (e.g. `pairs` for `true-false`), it gracefully falls back to `availableTracks[0]`.
 - Start Practice CTA `Button` shows a loading spinner (`loading={isLoadingTracks}`) until track availability is confirmed, preventing race conditions.
 - Displays the 7-dot session progress row based on `getLocalProgress()`.
 
@@ -569,10 +590,10 @@ export const LANDING_SKILLS: LandingSkill[] = [
     tracks: ['reading', 'full'],
   },
   {
-    id: 'world-facts',
-    title: 'Test yourself with\n150 true or false\nworld facts',
-    subtitle: 'World facts',
-    tracks: ['full'],
+    id: 'true-false',
+    title: 'Test yourself with\n150 true or false\nquestions',
+    subtitle: 'True/False',
+    tracks: ['reading', 'full'],
   },
 ];
 ```
@@ -604,7 +625,7 @@ export function getTrackOption(
   2. `customTrackDef?.title` (dynamic JSON-defined custom track title)
   3. `DEFAULT_TRACK_LABELS[track]` (standard built-in titles)
   4. Formatted fallback string
-- **Default visuals**: `LOCAL_IMAGES` maps the 5 driving-theory tracks (`differenciate.webp`, `name.webp`, `meaning.webp`, `usage.webp`, `reading.webp`), while `full` reuses the skill's remote cover image (`CurriculumCoverImagePaths[skill.id]`). Supports custom JSON image references (`customTrackDef.image`).
+- **Default visuals**: `LOCAL_IMAGES` is intentionally **empty** — the only local track webps that exist (`assets/driving/*.webp`) are driving-theory's own art, not universal, and now live as a per-curriculum override on driving-theory's own JSON instead (see §14). `trackImage()`'s resolution order is: (1) `customTrackDef.image` (curriculum-JSON per-track override, e.g. driving-theory's), (2) `skill.trackImages?.[track]` (code-level per-skill override), (3) `play_track_defaults` DB row for that track id (`lib/trackDefaults.ts`, `getCachedTrackDefaultUrl()`) — currently empty, reserved for genuinely shared/universal art, (4) `LOCAL_IMAGES[track]` — currently empty, instant-render backup only, (5) the skill's own cover image, itself DB-first: `lib/curriculaCatalog.ts`'s cached `play_curricula.cover_image_path` if warm, else the local `CurriculumCoverImagePaths` constant as a pre-fetch backup. `full` has no dedicated icon by design and always resolves via step (5).
 - **Dynamic builder**: `getTrackOptionsForSkill(skill, tracks, customTrackDefs)` maps whichever tracks the caller provides, decorating them with titles and icons from custom definitions or defaults.
 - **Fast lookup**: `getTrackOption(skill, track, customTrackDefs)` provides synchronous-like lookup with fallback defaults.
 
@@ -620,6 +641,12 @@ Unchanged from the prior audit — `ThemeContext.tsx` (dark/light/auto, AsyncSto
 
 ### `supabase.ts` / `downloadSession.ts` / `signs.ts`
 Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`hydrateSignCatalog`, track-aware `downloadSession`) documented there is still current. `downloadSession` extracts optional `remote.tracks` and forwards them to `deriveTrack(hydrated, signCatalog, track, remote.tracks)`.
+
+### `curriculaCatalog.ts` (new, previously undocumented) — DB-driven skill catalog
+Module-level cache (shared in-flight promise, same shape as `trackDefaults.ts` below) over `play_curricula`. `getCurriculaCatalog()` fetches `{ slug, title, cover_image_path }` for every active row, once per app session. `getCachedCurricula()` is a synchronous read of whatever's resolved so far (`[]` before the first fetch lands). `getCachedCoverImagePath(slug)` is what `constants/trackOptions.ts`'s `trackImage()` calls for its final fallback (see §7) — every skill's existence, display name, and cover image now genuinely lives in this table, not in a local constants file; adding or renaming a skill is a DB edit only. `LandingScreen` kicks off the fetch first in the normal user flow, but any screen that might render before it (a `?track=` deep link landing straight on `TrackDetailScreen`) also calls `getCurriculaCatalog()` itself — the shared in-flight promise means this is still only one network round trip.
+
+### `trackDefaults.ts` (new, previously undocumented) — DB-driven universal track icons
+Same shared-promise cache pattern as `curriculaCatalog.ts`, over the new `play_track_defaults` table (see §14). `getTrackDefaultsCatalog()` fetches `{ track_id, image_path }` for every row and resolves each to a public URL; `getCachedTrackDefaultUrl(trackId)` is the synchronous read `trackImage()` calls. The fetch is kicked off at module-import time (`getTrackDefaultsCatalog()` called at the bottom of the file) rather than waiting for a screen to trigger it, so it's usually warm before `LearningStyleScreen`/`ModeSwitcherSheet` first render. **Currently always resolves to `{}`** — the table is intentionally seeded empty (see §14) — so this rung of `trackImage()`'s fallback chain is a no-op today, present for when genuinely universal track art exists.
 
 ### `curriculum.ts` — Dynamic Track Detection, Cached Fetching, and Session Derivation
 Core curriculum orchestration layer:
@@ -780,6 +807,9 @@ One-off Node.js (`.mjs`) data-pipeline / DB-setup scripts, run from `play/`. Bey
 ### `play_sign_pairs.sql`
 Unchanged from the prior audit — `play_sign_pairs` table + 23 seeded pairs (groups A–E) for the DB-level image-resolution layer used by `lib/signs.ts`. See that revision for the full seed breakdown and the note distinguishing this from the curriculum JSON's own 46-pair/92-entry signs catalog.
 
+### `play_track_defaults.sql` (new) — universal per-track fallback icons
+Defines `play_track_defaults (track_id TEXT PRIMARY KEY, image_path TEXT, updated_at TIMESTAMPTZ)`, anon-select-only RLS, read by `lib/trackDefaults.ts` (see §9). **Table is intentionally seeded empty.** It went through a wrong-then-corrected-then-emptied sequence worth recording: first seeded with `differentiation`/`identification`/`reading` (a stale pre-consolidation naming that no curriculum ever actually emits), corrected to the real track ids (`pairs`/`names`/`meanings`/`whereUsed`/`reading`), then emptied entirely once it became clear the only art available (`assets/driving/*.webp`) was driving-theory's own, not universal — seeding it would leak that art onto every other skill's matching track id (e.g. true-false's `reading` track would render driving's reading icon). The file's own `delete from ... where track_id in (...)` statement cleans up either prior seed if re-run against an already-migrated DB. `play_curricula`-style comment documents how to add a genuinely shared icon later. Uploaded via `scripts/upload-track-icons.mjs` to `play-assets/track-icons/` regardless of whether the DB table references them — driving-theory's own curriculum JSON references the uploaded files directly (see §18's storage bucket listing).
+
 ### `play_accounts.sql` (new)
 Defines the `play_accounts` table — the durable, email-keyed source of truth for the keys/premium economy once a device has ever linked an email:
 ```sql
@@ -817,7 +847,7 @@ Unchanged categories from the prior audit (`fonts/`, `images/`, `homepage/`) plu
 | `crown.webp` | Crown icon — Unlimited Pass / premium UI throughout |
 
 ### `driving/` (new)
-Learning-mode illustrations referenced by `constants/trackOptions.ts`: `differenciate.webp`, `name.webp`, `meaning.webp`, `usage.webp`, `reading.webp` (the `full` track reuses the remote curriculum cover image instead of a local asset).
+Source files for driving-theory's own track illustrations: `differenciate.webp`, `name.webp`, `meaning.webp`, `usage.webp`, `reading.webp`. **Not referenced directly by app code** (`constants/trackOptions.ts`'s `LOCAL_IMAGES` is empty — see §7) — these are the originals `scripts/upload-track-icons.mjs` uploads to `play-assets/track-icons/`, which driving-theory's own curriculum JSON then links to via `tracks[].image` (see §14, §18). Kept here as the source-of-truth files for re-uploading, not as a runtime `require()` target. `full` reuses the remote curriculum cover image instead of a dedicated icon, by design.
 
 ---
 
@@ -861,11 +891,21 @@ Claude Code project-level settings for this repo.
 
 Storage Bucket: play-assets/
 ├── curricula/questions.sample.json  (driving-theory, json_path in play_curricula)
-│     { tracks: [differentiation (filterRole: "pair"), identification (filterRole:
-│       ["name","meaning","whereUsed"]), reading (kind: "reading"), full (kind: "full")],
+│     { tracks: [pairs (filterRole: "pair", image: .../track-icons/pairs.webp), names
+│       (filterRole: "name", image: .../track-icons/names.webp), meanings (filterRole:
+│       "meaning", image: .../track-icons/meanings.webp), whereUsed (filterRole: "whereUsed",
+│       image: .../track-icons/whereUsed.webp), reading (kind: "reading", image:
+│       .../track-icons/reading.webp), full (kind: "full", no image — reuses cover_image_path)],
 │       questions: [...322, role-tagged], signs: [...92 SignCatalogEntry] }
-├── curricula/world-facts.json  (world-facts, json_path in play_curricula)
-│     { tracks: [full (kind: "full")], questions: [...150, textChoice, no role], signs: [] }
+├── curricula/true-false.json  (true-false, json_path in play_curricula)
+│     { tracks: [full (kind: "full"), reading (kind: "reading")], questions: [...150,
+│       true/false, no role], signs: [] }
+├── track-icons/  (new) pairs.webp, names.webp, meanings.webp, whereUsed.webp, reading.webp
+│     — driving-theory's own per-track art (assets/driving/*.webp source files, uploaded by
+│     scripts/upload-track-icons.mjs). Referenced directly from driving-theory's JSON above,
+│     NOT from play_track_defaults (that table is intentionally empty — see §14) — these files
+│     existing in storage doesn't by itself make them "universal", only driving-theory's JSON
+│     linking to them does.
 └── signs/      give_way.webp, stop.webp, ... (60+ sign images)
 ```
 

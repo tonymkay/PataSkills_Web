@@ -39,7 +39,7 @@ function fractionUpTo(stage: DownloadStage): number {
  * one skill (`skillId`) and one learning-style track. Always fetches the
  * skill's curriculum JSON first; only fetches sign image URLs + sign
  * pairs when that curriculum actually carries a signs catalog (driving-
- * theory does, world-facts doesn't — see json-conversion.md). Skills with
+ * theory does, true-false doesn't — see json-conversion.md). Skills with
  * no signs catalog hydrate against empty asset/pair maps, which is a
  * no-op for plain-text questions that carry no image/pairId refs, so no
  * separate code path is needed downstream. DB-only — no local fallback of

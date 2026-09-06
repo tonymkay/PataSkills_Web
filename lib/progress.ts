@@ -6,9 +6,9 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 const EMAIL_STORAGE_KEY = '@play/user_email';
 
 // Both storage keys below are scoped per skill. Track ids like 'full' and
-// 'reading' are reused across every skill's curriculum (world-facts and
+// 'reading' are reused across every skill's curriculum (true-false and
 // driving-theory both declare a 'full' track, for instance), so a single
-// shared key meant finishing world-facts' 'full' track marked
+// shared key meant finishing true-false's 'full' track marked
 // driving-theory's completely different 'full' track as done too, and
 // PlaySession's session-resume effect jumped a learner mid-way into one
 // skill's sessions using a completedTopics count earned in another skill

@@ -7,7 +7,7 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 /**
  * Reading is a fixed track kind every skill can offer — real signs
  * catalog if the skill has one (driving-theory), otherwise derived
- * straight from its questions (world-facts and any future skill with no
+ * straight from its questions (true-false and any future skill with no
  * image-backed content). Never empty as long as there are questions, so
  * a `{"kind":"reading"}` learning mode in a curriculum's JSON always has
  * something to show without needing an app change.
@@ -90,7 +90,7 @@ function tagsMatch(questionTags: string[] | undefined, filterTags: string | stri
  * the session count shown on the progress bar can never disagree.
  *
  * pairId-grouped skills (driving-theory) take priority since that's an
- * intentional multi-question bundle; topicId-grouped skills (world-facts
+ * intentional multi-question bundle; topicId-grouped skills (true-false
  * and similar, §A.4/§C of the multi-skill architecture doc) come next;
  * skills with neither signal fall back to plain 7-question chunking.
  */

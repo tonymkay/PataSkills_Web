@@ -18,7 +18,7 @@ export interface LandingSkill {
   subtitle: string;
   /** Fallback list shown before getAvailableTracks() resolves, and the
    *  full list for skills with no role-tagged questions to detect (e.g.
-   *  world-facts). The real, authoritative list is always the live
+   *  true-false). The real, authoritative list is always the live
    *  per-curriculum detection — this never needs the four role tracks
    *  added manually for driving-theory. */
   tracks: SimpleTrack[];
@@ -39,9 +39,9 @@ export const LANDING_SKILLS: LandingSkill[] = [
     tracks: ['reading', 'full'],
   },
   {
-    id: 'world-facts',
-    title: 'Test yourself with\n150 true or false\nworld facts',
-    subtitle: 'World facts',
+    id: 'true-false',
+    title: 'Test yourself with\n150 true or false\nquestions',
+    subtitle: 'True/False',
     // 'reading' belongs here same as driving-theory's list above: it's
     // unconditionally available for any skill with questions (see
     // detectAvailableTracks() in lib/curriculum.ts), so there's nothing
@@ -49,7 +49,13 @@ export const LANDING_SKILLS: LandingSkill[] = [
     // was just missing from this static list, which is what made
     // "Reading Only" visibly pop in on LearningStyleScreen after the
     // network round-trip resolved instead of rendering immediately like
-    // "All World Facts" does.
+    // "All True/False" does.
+    tracks: ['reading', 'full'],
+  },
+  {
+    id: 'bible-trivia',
+    title: 'Test yourself with\n237 Bible trivia\nquestions',
+    subtitle: 'Bible Trivia',
     tracks: ['reading', 'full'],
   },
 ];

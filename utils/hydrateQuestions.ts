@@ -64,7 +64,7 @@ export function hydrateQuestionsList(
 
 /**
  * Builds Reading Mode content directly from questions for any skill with
- * no real signs catalog (signs: [] — e.g. world-facts, which has no
+ * no real signs catalog (signs: [] — e.g. true-false, which has no
  * image-backed content). Reading is a fixed, app-understood track kind
  * every skill should be able to offer (see the 2026-09-06 note atop
  * docs/learning-tracks-and-reading-mode.md) — this is the fallback
@@ -84,7 +84,7 @@ const IMAGE_BACKED_FORMATS = new Set(['imageChoice', 'twoImageChoice', 'imageTex
 
 /**
  * Question-shape-aware reading derivation, used for any skill with no
- * real signs catalog (signs: [] — world-facts and future text-only
+ * real signs catalog (signs: [] — true-false and future text-only
  * skills). One derived entry per question, built entirely from what that
  * specific question actually has, not a fixed schema every question is
  * forced into:
@@ -99,7 +99,7 @@ const IMAGE_BACKED_FORMATS = new Set(['imageChoice', 'twoImageChoice', 'imageTex
  *    LearnMoreSheet already surfaces for this question.
  *  - `image`: only set when this question's format actually carries a
  *    hydratable image (IMAGE_BACKED_FORMATS) and it resolved to a real
- *    URL/source — a text-only question (world-facts) gets no image slot,
+ *    URL/source — a text-only question (true-false) gets no image slot,
  *    rather than a blank one the card would otherwise render space for.
  *  - `relatedSignIds`: only populated when this question shares a real
  *    `pairId` with another question in the same list (a genuine sibling,

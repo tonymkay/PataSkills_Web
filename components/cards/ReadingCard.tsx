@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { BookOpen } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeContext';
 import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing } from '@/constants/spacing';
@@ -24,9 +25,19 @@ const TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   mandatory: 'arrow-forward-circle-outline',
 };
 
+// Renders the sign-type icon, using a lucide reading icon for
+// 'informational' (was Ionicons' "i"-in-a-circle, which read as a UI
+// hint rather than content) and falling back to the Ionicons glyph map
+// for the other sign-type categories.
+function TypeIcon({ signType, size, color }: { signType: string; size: number; color: string }) {
+  if (signType === 'informational') {
+    return <BookOpen size={size} color={color} />;
+  }
+  return <Ionicons name={TYPE_ICON[signType] ?? 'information-circle-outline'} size={size} color={color} />;
+}
+
 export function ReadingCard({ sign, allSigns, onSelectRelated }: ReadingCardProps) {
   const { colors, mode } = useTheme();
-  const icon = TYPE_ICON[sign.signType] ?? 'information-circle-outline';
 
   // "Similar signs" — any sign that shares at least one pair with this one,
   // resolved from relatedSignIds against the passed-in catalog. Excludes
@@ -60,13 +71,10 @@ export function ReadingCard({ sign, allSigns, onSelectRelated }: ReadingCardProp
               contentFit="contain"
             />
           ) : (
-            <Ionicons name={icon} size={72} color="#092C23" />
+            <TypeIcon signType={sign.signType} size={72} color="#092C23" />
           )}
         </View>
         <Text style={[Typography.titleLarge, styles.nameText]}>{sign.name}</Text>
-        <View style={styles.typeBadge}>
-          <Text style={styles.typeBadgeText}>{sign.signType.toUpperCase()}</Text>
-        </View>
       </LinearGradient>
 
       <View style={styles.cardBody}>
@@ -124,7 +132,6 @@ export function ReadingCard({ sign, allSigns, onSelectRelated }: ReadingCardProp
             </Text>
             <View style={styles.similarGrid}>
               {relatedSigns.map((related) => {
-                const relatedIcon = TYPE_ICON[related.signType] ?? 'information-circle-outline';
                 const CardWrapper = onSelectRelated ? Pressable : View;
                 return (
                   <CardWrapper
@@ -146,7 +153,7 @@ export function ReadingCard({ sign, allSigns, onSelectRelated }: ReadingCardProp
                           contentFit="contain"
                         />
                       ) : (
-                        <Ionicons name={relatedIcon} size={36} color={colors.onSurfaceVariant} />
+                        <TypeIcon signType={related.signType} size={36} color={colors.onSurfaceVariant} />
                       )}
                     </View>
                     <Text
@@ -203,19 +210,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 26,
     marginTop: Spacing.xs,
-  },
-  typeBadge: {
-    marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(9, 44, 35, 0.14)',
-  },
-  typeBadgeText: {
-    fontFamily: FontFamily.bold,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    color: '#092C23',
   },
   cardBody: {
     padding: Spacing.md,
