@@ -121,25 +121,56 @@ Unlike earlier versions of the app where learning modes were hardcoded to drivin
      id: string;                          // URL & state ID (e.g. "quick-quiz", "image-identification")
      title: string;                       // UI display label (e.g. "Quick Quiz")
      filterRole?: string | string[];      // Matches question.role — pass an array to have one track
-                                           // absorb several role values (e.g. driving-theory's
-                                           // "identification" track: ["name","meaning","whereUsed"])
+                                           // absorb several role values
      filterFormat?: string | string[];    // Matches question.format (e.g. "textChoice") — same array support
-     kind?: 'quiz' | 'reading' | 'full';  // 'quiz' (default, role/format-filtered), 'reading' (chunked
-                                           // signs), or 'full' (all questions, standard grouping)
+     filterTags?: string | string[];      // Matches question.tags — AND-matched (every listed tag must be
+                                           // present). The generic filter primitive: use this for any
+                                           // learning-mode split that isn't naturally a "role" or "format"
+                                           // (difficulty, category, a named learning-mode tag you invent).
+                                           // Can combine with filterRole/filterFormat on the same track —
+                                           // all present filters must match.
+     kind?: 'quiz' | 'reading' | 'full';  // 'quiz' (default, role/format/tags-filtered), 'reading' (see
+                                           // below), or 'full' (all questions, standard grouping)
+     groupId?: string;                    // Clusters this track with sibling tracks under one shared
+                                           // heading in the Learning Style list / mode switcher. Each
+                                           // track stays independently addressable regardless.
+     groupTitle?: string;                 // Heading shown above a groupId's tracks. Set it on the first
+                                           // track in the group; later members can omit it.
      image?: string;                      // Optional custom asset name
    }
    ```
-   Confirmed live today: `curricula/questions.sample.json` (driving-theory) ships
-   `differentiation` (`filterRole: "pair"`), `identification`
-   (`filterRole: ["name","meaning","whereUsed"]`), `reading` (`kind: "reading"`), and `full`
-   (`kind: "full"`); `curricula/world-facts.json` ships a single `full` track. Both were pushed
-   to the `play-assets` bucket via a one-off script after the array-filter support above was
-   added — see `scripts/upload-corrected-curriculum.mjs` for the upload pattern (bucket path +
-   `play_curricula.json_path` update).
-2. **Automatic Empty-Track Elimination**:
-   If `"tracks"` is omitted, the app automatically runs dynamic track detection (`detectAvailableTracks()`), ensuring that skills without signs or without certain roles (e.g. `world-facts`) **only show tracks that have actual questions** (e.g. only `full` is displayed; driving-specific tracks like `pairs` or `meanings` are omitted automatically).
+   Confirmed live today: `curricula/questions.sample.json` (driving-theory) ships six explicit
+   tracks — `pairs` (`filterRole: "pair"`), `names` (`filterRole: "name"`), `meanings`
+   (`filterRole: "meaning"`), `whereUsed` (`filterRole: "whereUsed"`), `reading`
+   (`kind: "reading"`), and `full` (`kind: "full"`) — each an independently selectable learning
+   style, not merged; `curricula/world-facts.json` ships `full` (`reading` is added
+   automatically — see point 2 below). Pushed to the `play-assets` bucket via a one-off script
+   — see `scripts/upload-corrected-curriculum.mjs` / `scripts/split-identification-track.mjs`
+   for the upload pattern (bucket path + `play_curricula.json_path`, or an in-place overwrite of
+   the same path).
+2. **`full` and `reading` Are Compulsory**:
+   `detectAvailableTracks()` always guarantees a `full` and a `reading` track exist, even if a
+   curriculum's `"tracks"` array omits one or both — no author can accidentally ship a skill
+   missing either. If omitted, the app synthesizes the default id (falling back to the standard
+   `DEFAULT_TRACK_LABELS` title/image in `constants/trackOptions.ts` unless the skill overrides
+   it via `trackLabels`/`trackImages`). Every other declared track is otherwise **automatic
+   empty-track elimination**: a track only shows up if there's actually a matching question (or,
+   for `kind: "reading"`, a matching entry — see point 4).
 3. **No App Code Changes**:
-   Adding, renaming, or reordering tracks in the `"tracks"` array will immediately reflect in the Learning Style list (`LearningStyleScreen`), Track Detail preview (`TrackDetailScreen`), and mid-session Switcher (`ModeSwitcherSheet`) without needing a new app build.
+   Adding, renaming, reordering, or grouping tracks in the `"tracks"` array reflects immediately
+   in the Learning Style list (`LearningStyleScreen`), Track Detail preview
+   (`TrackDetailScreen`), and mid-session Switcher (`ModeSwitcherSheet`) without a new app build.
+4. **Reading Mode Is Question-Shape-Aware, and Can Be Scoped**:
+   When a skill has no real, hand-authored `signs` catalog (world-facts and any future
+   text-only skill), Reading is derived directly from questions
+   (`deriveReadingEntriesFromQuestions()` in `utils/hydrateQuestions.ts`) — per question, not a
+   fixed schema every question is forced into: an image slot only appears if that question's
+   `format` actually carries a hydratable image; a "similar items" section only appears if the
+   question shares a real `pairId` with another question; the question's own `explanation`
+   merges in below the answer (matching what `LearnMoreSheet` already shows for that question)
+   instead of being discarded. A `kind: "reading"` track can declare its own
+   `filterRole`/`filterTags` to scope itself to a subset of questions — e.g. a reading mode for
+   just one category — purely as a JSON entry, same as any quiz track's filter.
 
 ## What conversion does *not* cover
 

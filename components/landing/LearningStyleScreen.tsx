@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
-import { getTrackOptionsForSkill } from '@/constants/trackOptions';
+import { getTrackOptionsForSkill, groupTrackOptions } from '@/constants/trackOptions';
 import { LANDING_SKILLS } from '@/constants/skills';
 import { getCompletedTracks } from '@/lib/progress';
 import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
@@ -86,22 +86,29 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
         </View>
 
         <View style={styles.list}>
-          {trackOptions.map((option, i) => {
-            const isDone = completedTracks.includes(option.track);
-            return (
-              <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
-                <ModeCard
-                  image={option.image}
-                  title={option.label}
-                  status={isDone ? 'done' : 'notStarted'}
-                  highlighted={option.track === nextUpTrack}
-                  progress={isDone ? 1 : 0}
-                  totalQuestions={trackTotals?.[option.track]?.totalQuestions}
-                  onPress={() => onPreviewTrack(option.track)}
-                />
-              </View>
-            );
-          })}
+          {groupTrackOptions(trackOptions).map((group, groupIdx) => (
+            <View key={group.groupTitle ?? `g${groupIdx}`} style={groupIdx > 0 ? styles.groupSpacing : undefined}>
+              {group.groupTitle ? (
+                <Text style={[styles.groupHeading, { color: colors.onSurfaceVariant }]}>{group.groupTitle}</Text>
+              ) : null}
+              {group.options.map((option, i) => {
+                const isDone = completedTracks.includes(option.track);
+                return (
+                  <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
+                    <ModeCard
+                      image={option.image}
+                      title={option.label}
+                      status={isDone ? 'done' : 'notStarted'}
+                      highlighted={option.track === nextUpTrack}
+                      progress={isDone ? 1 : 0}
+                      totalQuestions={trackTotals?.[option.track]?.totalQuestions}
+                      onPress={() => onPreviewTrack(option.track)}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          ))}
         </View>
       </ScrollView>
     </View>
@@ -146,5 +153,15 @@ const styles = StyleSheet.create({
   },
   rowSpacing: {
     marginTop: Spacing.sm,
+  },
+  groupSpacing: {
+    marginTop: Spacing.lg,
+  },
+  groupHeading: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.sm,
   },
 });

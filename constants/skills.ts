@@ -42,6 +42,14 @@ export const LANDING_SKILLS: LandingSkill[] = [
     id: 'world-facts',
     title: 'Test yourself with\n150 true or false\nworld facts',
     subtitle: 'World facts',
-    tracks: ['full'],
+    // 'reading' belongs here same as driving-theory's list above: it's
+    // unconditionally available for any skill with questions (see
+    // detectAvailableTracks() in lib/curriculum.ts), so there's nothing
+    // for the live per-curriculum fetch to actually determine here — it
+    // was just missing from this static list, which is what made
+    // "Reading Only" visibly pop in on LearningStyleScreen after the
+    // network round-trip resolved instead of rendering immediately like
+    // "All World Facts" does.
+    tracks: ['reading', 'full'],
   },
 ];

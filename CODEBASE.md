@@ -1,6 +1,24 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (e) — `CurriculumTrackDefinition.filterRole`/`filterFormat` widened from a single string to `string | string[]` (`lib/curriculum.ts`'s `roleMatches()` now checks array membership), letting one JSON-declared track absorb several role values. Both live curricula in Supabase Storage now actually ship explicit `tracks` arrays using this: driving-theory (`differentiation`, `identification` [merges name+meaning+whereUsed], `reading`, `full`) and world-facts (`full`) — previously the bucket copies were stale flat/role-only JSON despite the local repo files and app code already supporting the JSON-driven format. See §11 and §18 for the corrected type and bucket contents.
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (f) — `full` and `reading` are now
+> compulsory: `detectAvailableTracks()` guarantees both are always selectable even if a
+> curriculum's JSON `tracks` array omits them. Driving-theory's JSON un-merged
+> `identification`/`differentiation` back into four independently selectable standard tracks
+> (`pairs`/`names`/`meanings`/`whereUsed`) — the brief two-track merge from pass (e) below was
+> reverted, since it collapsed three genuinely distinct learning styles into one. Added a
+> generic `filterTags`/`question.tags` filter primitive (AND-matched) alongside
+> `filterRole`/`filterFormat`, and `groupId`/`groupTitle` for visually clustering related tracks
+> under one heading in `LearningStyleScreen`/`ModeSwitcherSheet` without changing how each is
+> addressed (`constants/trackOptions.ts`'s `groupTrackOptions()`). Reading Mode's
+> question-derived path (`deriveReadingEntriesFromQuestions()` in `utils/hydrateQuestions.ts`,
+> used whenever a skill has no real `signs` catalog) is now question-shape-aware — image and
+> "similar items" sections only appear when the source question's format/pairId actually
+> supports them, and the question's own `explanation` merges in below the answer instead of
+> being discarded (`ReadingCard.tsx` updated to match, guarding empty sections). A
+> `kind: 'reading'` track can also scope itself via its own `filterRole`/`filterTags`. See §9,
+> §11, and `json-conversion.md`'s "Defining Custom Learning Tracks in JSON" section.
+>
+> **Last updated**: 2026-09-06 (e) — `CurriculumTrackDefinition.filterRole`/`filterFormat` widened from a single string to `string | string[]` (`lib/curriculum.ts`'s `roleMatches()` now checks array membership), letting one JSON-declared track absorb several role values. Both live curricula in Supabase Storage now actually ship explicit `tracks` arrays using this: driving-theory (`differentiation`, `identification` [merges name+meaning+whereUsed], `reading`, `full`) and world-facts (`full`) — previously the bucket copies were stale flat/role-only JSON despite the local repo files and app code already supporting the JSON-driven format. See §11 and §18 for the corrected type and bucket contents.
 >
 > **Last updated**: 2026-09-05 (d) — this pass updates documentation to reflect the dynamic JSON-driven learning tracks system, multi-skill routing, and per-curriculum customization: **(1)** JSON-driven track definitions (`CurriculumTrackDefinition` in `types/quiz.ts`) allowing curricula to define arbitrary track IDs, custom titles, filtering rules (`filterRole`, `filterFormat`, `kind`), and custom icons directly in curriculum JSON without code changes; **(2)** Dynamic track detection (`detectAvailableTracks`/`getAvailableTracks`/`getCurriculumTrackDefs` in `lib/curriculum.ts`) supporting both custom JSON tracks and legacy question `role`/sign auto-detection with 100% backward compatibility; **(3)** Deduplicated cache (`loadCurriculumCached`) ensuring a single in-flight network promise shared across `getTrackTotals()`, `getAvailableTracks()`, and `getCurriculumTrackDefs()`; **(4)** `constants/trackOptions.ts` dynamic builders (`getTrackOptionsForSkill`, `getTrackOption`) prioritizing skill overrides → JSON `trackDef.title` → default labels; **(5)** `LearningStyleScreen`, `TrackDetailScreen`, and `ModeSwitcherSheet` updated to consume dynamic tracks and track definitions; **(6)** Multi-skill catalog in `constants/skills.ts` and deep linking in `app/index.tsx` supporting custom track IDs. · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — verified against active source code and `tsc` typecheck.
 

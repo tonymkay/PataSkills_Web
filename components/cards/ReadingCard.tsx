@@ -70,19 +70,43 @@ export function ReadingCard({ sign, allSigns, onSelectRelated }: ReadingCardProp
       </LinearGradient>
 
       <View style={styles.cardBody}>
-        <Text style={[Typography.labelSmall, styles.sectionHeading, { color: colors.onSurfaceVariant }]}>
-          WHAT IT MEANS
-        </Text>
-        <Text style={[Typography.bodyMedium, styles.bodyText, { color: colors.onSurface }]}>
-          {sign.meaning}
-        </Text>
+        {sign.meaning ? (
+          <>
+            <Text style={[Typography.labelSmall, styles.sectionHeading, { color: colors.onSurfaceVariant }]}>
+              WHAT IT MEANS
+            </Text>
+            <Text style={[Typography.bodyMedium, styles.bodyText, { color: colors.onSurface }]}>
+              {sign.meaning}
+            </Text>
+          </>
+        ) : null}
 
-        <Text style={[Typography.labelSmall, styles.sectionHeading, { color: colors.onSurfaceVariant }]}>
-          WHERE YOU'LL SEE IT
-        </Text>
-        <Text style={[Typography.bodyMedium, styles.bodyText, { color: colors.onSurface }]}>
-          {sign.whereUsed}
-        </Text>
+        {sign.whereUsed ? (
+          <>
+            <Text style={[Typography.labelSmall, styles.sectionHeading, { color: colors.onSurfaceVariant }]}>
+              WHERE YOU'LL SEE IT
+            </Text>
+            <Text style={[Typography.bodyMedium, styles.bodyText, { color: colors.onSurface }]}>
+              {sign.whereUsed}
+            </Text>
+          </>
+        ) : null}
+
+        {/* The Learn More explainer, merged in directly below the
+            answer/meaning above — only shown when it actually adds
+            something beyond what's already displayed (derivation skips
+            setting this when the explanation would just repeat the fact
+            verbatim; see deriveReadingEntriesFromQuestions()). */}
+        {sign.explanation && sign.explanation !== sign.meaning && sign.explanation !== sign.whereUsed ? (
+          <>
+            <Text style={[Typography.labelSmall, styles.sectionHeading, { color: colors.onSurfaceVariant }]}>
+              MORE DETAIL
+            </Text>
+            <Text style={[Typography.bodyMedium, styles.bodyText, { color: colors.onSurface }]}>
+              {sign.explanation}
+            </Text>
+          </>
+        ) : null}
 
         {sign.memoryTip ? (
           <View style={styles.tipRow}>

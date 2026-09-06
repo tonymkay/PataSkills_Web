@@ -3,17 +3,30 @@
 Status: **implemented — superseded in part, see note below.**
 Scope: PataSkills Play (`pataproducts/play`).
 
-> **2026-09-06 note:** Everything in this doc shipped, but the mechanism ended up more
-> general than the plan below describes. Tracks are **not** the hardcoded
-> `pairs`/`names`/`meanings`/`whereUsed`/`full` set from §1/§5 — they're declared per-curriculum
-> in a JSON `"tracks"` array (`CurriculumTrackDefinition` in `types/quiz.ts`), with
-> `filterRole`/`filterFormat` accepting a single string or an array (so one track can merge
-> several role values — e.g. driving-theory ships `differentiation` (`pair`) and
-> `identification` (`name`+`meaning`+`whereUsed` combined) instead of three separate role
-> tracks). Reading Mode and the signs catalog (§3.2/§4.2) also shipped as described. This also
-> now spans more than one curriculum: `world-facts` (a second skill, non-driving-theory,
-> textChoice-only, no signs) uses the same system with just a `full` track. **For current,
-> accurate behavior see `CODEBASE.md` §9 (`lib/curriculum.ts`) and §11 (`types/quiz.ts`), and
+> **2026-09-06 note (superseded — see the follow-on note below):** Everything in this doc
+> shipped, but the mechanism ended up more general than the plan below describes. Tracks are
+> **not** the hardcoded `pairs`/`names`/`meanings`/`whereUsed`/`full` set from §1/§5 — they're
+> declared per-curriculum in a JSON `"tracks"` array (`CurriculumTrackDefinition` in
+> `types/quiz.ts`), with `filterRole`/`filterFormat` accepting a single string or an array.
+>
+> **2026-09-06 follow-on note (current):** Driving-theory's JSON un-merged
+> `identification`/`differentiation` back into the four independently selectable standard
+> tracks (`pairs`/`names`/`meanings`/`whereUsed`) — see §1's original design, which turned out
+> to be exactly right; the brief merge into two tracks was reverted. `full` and `reading` are
+> now **compulsory**: `detectAvailableTracks()` guarantees both are always selectable even if a
+> curriculum's JSON `tracks` array omits them entirely — no author can accidentally ship a
+> skill missing either. Filtering also gained a generic `filterTags`/`question.tags` primitive
+> alongside `filterRole`/`filterFormat` (AND-matched, for any future axis a role/format can't
+> express), and tracks can carry `groupId`/`groupTitle` to visually cluster related learning
+> modes under one heading without changing how each is addressed. Reading Mode's
+> question-derived path (used whenever a skill has no real signs catalog — world-facts and any
+> future text-only skill) is now question-shape-aware rather than a fixed schema: it only shows
+> an image when the source question format actually carries one, only shows a "similar items"
+> section when the question has a real sibling via `pairId`, and merges the question's own
+> `explanation` in below the answer rather than discarding it. A `kind:'reading'` track can also
+> scope itself to a subset of questions via its own `filterRole`/`filterTags` (e.g. a reading
+> mode for just one sign category), purely as a JSON declaration. **For current, accurate
+> behavior see `CODEBASE.md` §9 (`lib/curriculum.ts`) and §11 (`types/quiz.ts`), and
 > `json-conversion.md`'s "Defining Custom Learning Tracks in JSON" section** — the rest of this
 > file is kept for the original problem statement/rationale, not as an accurate spec of track
 > names or the JSON shape.

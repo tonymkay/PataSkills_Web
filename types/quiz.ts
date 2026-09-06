@@ -26,7 +26,29 @@ export interface CurriculumTrackDefinition {
    */
   filterRole?: string | string[];
   filterFormat?: QuestionFormat | QuestionFormat[];
+  /**
+   * Matches question.tags — the generic, forward-looking filter
+   * primitive. Unlike filterRole (a single dimension, "what role does
+   * this question play"), filterTags is AND-matched against an
+   * arbitrary, curriculum-author-invented set of tags per question, so
+   * a future skill can declare a learning-mode split along any axis
+   * (difficulty, category, a specific learning-mode name) without the
+   * app needing a new filter dimension for it. A track can combine this
+   * with filterRole/filterFormat — all present filters must match.
+   */
+  filterTags?: string | string[];
   kind?: 'quiz' | 'reading' | 'full';
+  /**
+   * Groups this track with sibling tracks under one shared heading in
+   * the Learning Style list / mode switcher (see groupTitle). Purely a
+   * rendering cluster — each track stays independently addressable
+   * (own id, URL, totals, sessions) whether grouped or not.
+   */
+  groupId?: string;
+  /** Heading shown above tracks sharing this track's groupId. Only the
+   *  first track in a group needs to set it; if multiple do, the first
+   *  one encountered wins. */
+  groupTitle?: string;
   image?: string;
 }
 
@@ -38,6 +60,11 @@ export interface BaseQuestion {
   difficulty?: 'easy' | 'medium' | 'hard' | string;
   sequence?: number;
   role?: 'pair' | 'name' | 'meaning' | 'whereUsed' | string;
+  /** Generic, author-invented tags for filterTags matching (see
+   *  CurriculumTrackDefinition.filterTags) — orthogonal to role, so a
+   *  question can be tagged along any axis a future track needs to
+   *  filter on without a new dedicated field. */
+  tags?: string[];
   format: QuestionFormat;
   question: string;
   correctAnswer: number; // 0-indexed

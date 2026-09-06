@@ -71,16 +71,52 @@ export function hydrateQuestionsList(
  * content source `lib/curriculum.ts` reaches for when a skill's real
  * `signs` array is empty, so a JSON author never needs new app code just
  * to add a `{"kind":"reading"}` learning mode to a text-only skill.
- *
- * One derived entry per question: `meaning` is a true statement about the
- * topic — the correct-answer text for "which is true" questions, or one of
- * the other options for "which is false" questions (see the false-flip
- * below). `explanation` is the question's own `explanation` field if it's
- * been authored, otherwise falls back to that same fact statement (never
- * blank, even for content like world-facts where every source
- * `explanation` is currently `""`).
+ */
+
+/**
+ * Question formats that carry a real, hydratable image — anything else
+ * (textChoice, and any future text-only format) gets no image slot at
+ * all in its derived reading entry, rather than a blank one. Kept in
+ * sync with the formats hydrateQuestion() actually resolves an image
+ * for above.
+ */
+const IMAGE_BACKED_FORMATS = new Set(['imageChoice', 'twoImageChoice', 'imageTextChoice', 'singleImageChoice']);
+
+/**
+ * Question-shape-aware reading derivation, used for any skill with no
+ * real signs catalog (signs: [] — world-facts and future text-only
+ * skills). One derived entry per question, built entirely from what that
+ * specific question actually has, not a fixed schema every question is
+ * forced into:
+ *  - `name`: the question itself — "question on top" (see
+ *    docs/learning-tracks-and-reading-mode.md's reading-mode spec).
+ *  - `meaning`: a true statement about the topic (the correct-answer
+ *    text, or one of the other options for "which is FALSE" questions —
+ *    see the false-flip note below).
+ *  - `explanation`: the question's own authored `explanation` merged
+ *    with the fact, so the reading card can show "answer + Learn More
+ *    content" as one combined block below the question, same content
+ *    LearnMoreSheet already surfaces for this question.
+ *  - `image`: only set when this question's format actually carries a
+ *    hydratable image (IMAGE_BACKED_FORMATS) and it resolved to a real
+ *    URL/source — a text-only question (world-facts) gets no image slot,
+ *    rather than a blank one the card would otherwise render space for.
+ *  - `relatedSignIds`: only populated when this question shares a real
+ *    `pairId` with another question in the same list (a genuine sibling,
+ *    not a synthetic per-question id) — "similar items" is structural,
+ *    derived from the data, not hand-authored per entry.
  */
 export function deriveReadingEntriesFromQuestions(questions: QuizQuestion[]): SignCatalogEntry[] {
+  // Real pairId groups only — a question with no pairId falls back to
+  // its own id (see the id-fallback below), which by construction can
+  // never have a sibling, so it's naturally excluded from this map.
+  const byPairId = new Map<string, QuizQuestion[]>();
+  for (const q of questions) {
+    if (!q.pairId) continue;
+    if (!byPairId.has(q.pairId)) byPairId.set(q.pairId, []);
+    byPairId.get(q.pairId)!.push(q);
+  }
+
   return questions.map((q) => {
     const answers = q.answers ?? [];
     // "Which statement is FALSE about X?" flips which option is the real
@@ -100,17 +136,29 @@ export function deriveReadingEntriesFromQuestions(questions: QuizQuestion[]): Si
         : q.correctAnswer;
     const fact = answers[factIndex] ?? '';
     const explanation =
-      q.explanation && q.explanation.trim().length > 0 ? q.explanation : fact || q.question;
+      q.explanation && q.explanation.trim().length > 0 && q.explanation.trim() !== fact.trim()
+        ? q.explanation
+        : '';
+
+    const hasHydratedImage =
+      IMAGE_BACKED_FORMATS.has(q.format) &&
+      ((typeof q.image === 'string' && q.image.length > 0) ||
+        (Array.isArray(q.images) && q.images.some((img) => typeof img === 'string' && img.length > 0)));
+
+    const siblings = q.pairId ? byPairId.get(q.pairId) ?? [] : [];
+    const relatedSignIds = siblings.filter((s) => s.id !== q.id).map((s) => s.id);
+
     return {
       signId: q.id,
       pairId: q.pairId ?? q.id,
       signRef: 'A',
-      name: fact || q.question,
+      name: q.question,
       signType: 'informational',
       meaning: fact,
-      whereUsed: q.section ?? '',
+      whereUsed: '',
       explanation,
-      image: null,
+      relatedSignIds: relatedSignIds.length > 0 ? relatedSignIds : undefined,
+      image: hasHydratedImage ? (typeof q.image === 'string' ? q.image : q.images?.find((img) => typeof img === 'string')) : null,
     };
   });
 }

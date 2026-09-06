@@ -15,6 +15,46 @@ export interface TrackOption {
    *  dedicated local illustration and this keeps working for any future
    *  skill without a new asset. */
   image: ImageSourcePropType;
+  /** JSON-declared clustering — see CurriculumTrackDefinition.groupId. */
+  groupId?: string;
+  groupTitle?: string;
+}
+
+/** One heading + its tracks, for rendering a grouped list. Groups with
+ *  only one member render with no heading (groupTitle omitted) so a
+ *  lone track never gets a redundant header above it. */
+export interface TrackOptionGroup {
+  groupTitle?: string;
+  options: TrackOption[];
+}
+
+/**
+ * Clusters a flat TrackOption list by groupId, preserving first-seen
+ * order for both groups and options within them — ungrouped options each
+ * become their own singleton group (no heading). Pure list-rendering
+ * concern: doesn't touch addressing, totals, or session derivation.
+ */
+export function groupTrackOptions(options: TrackOption[]): TrackOptionGroup[] {
+  const groups: TrackOptionGroup[] = [];
+  const groupIndex = new Map<string, number>();
+
+  for (const option of options) {
+    if (!option.groupId) {
+      groups.push({ options: [option] });
+      continue;
+    }
+    const existingIndex = groupIndex.get(option.groupId);
+    if (existingIndex === undefined) {
+      groupIndex.set(option.groupId, groups.length);
+      groups.push({ groupTitle: option.groupTitle, options: [option] });
+    } else {
+      groups[existingIndex].options.push(option);
+    }
+  }
+
+  // A group with only one member after all is said and done doesn't need
+  // a heading — it reads the same as an ungrouped row.
+  return groups.map((g) => (g.options.length > 1 ? g : { options: g.options }));
 }
 
 // Keyed by the driving-theory curriculum's JSON-declared track ids
@@ -88,6 +128,8 @@ export function getTrackOptionsForSkill(
       track,
       label: trackLabel(skill, track, customDef),
       image: trackImage(skill, track, customDef),
+      groupId: customDef?.groupId,
+      groupTitle: customDef?.groupTitle,
     };
   });
 }

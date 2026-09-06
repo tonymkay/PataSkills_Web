@@ -12,8 +12,26 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
  * a `{"kind":"reading"}` learning mode in a curriculum's JSON always has
  * something to show without needing an app change.
  */
-function resolveReadingEntries(questions: QuizQuestion[], signs: SignCatalogEntry[]): SignCatalogEntry[] {
-  return signs.length > 0 ? signs : deriveReadingEntriesFromQuestions(questions);
+function resolveReadingEntries(
+  questions: QuizQuestion[],
+  signs: SignCatalogEntry[],
+  readingDef?: CurriculumTrackDefinition,
+): SignCatalogEntry[] {
+  if (signs.length > 0) return signs;
+  // A reading-kind track can scope itself to a subset of questions via
+  // its own filterRole/filterTags (e.g. "Reading — Give Way Signs Only")
+  // — purely a JSON declaration, no app change needed to add a scoped
+  // reading mode. Only applies to the derived-from-questions path; a
+  // skill with a real signs catalog ignores this (its catalog is
+  // hand-authored as a whole, not filterable by question role).
+  let scoped = questions;
+  if (readingDef?.filterRole) {
+    scoped = scoped.filter((q) => roleMatches(q.role, readingDef.filterRole!));
+  }
+  if (readingDef?.filterTags) {
+    scoped = scoped.filter((q) => tagsMatch(q.tags, readingDef.filterTags!));
+  }
+  return deriveReadingEntriesFromQuestions(scoped);
 }
 
 const DEFAULT_SLUG: CurriculumSlug = 'driving-theory';
@@ -54,6 +72,19 @@ function roleMatches(questionRole: string | undefined, filterRole: string | stri
 }
 
 /**
+ * AND-matches a track's filterTags against a question's tags — every
+ * listed tag must be present on the question, not just one. This is the
+ * generic filter primitive (see CurriculumTrackDefinition.filterTags):
+ * unlike roleMatches (one dimension, one of several allowed values),
+ * this lets a track require several independent tags at once.
+ */
+function tagsMatch(questionTags: string[] | undefined, filterTags: string | string[]): boolean {
+  if (!questionTags || questionTags.length === 0) return false;
+  const required = Array.isArray(filterTags) ? filterTags : [filterTags];
+  return required.every((t) => questionTags.includes(t));
+}
+
+/**
  * Shared 'full'-track dispatch, used by both deriveTrack() and
  * getTrackTotals() so the sessions a learner actually plays through and
  * the session count shown on the progress bar can never disagree.
@@ -88,7 +119,7 @@ export function deriveTrack(
   const customDef = customTrackDefs?.find((d) => d.id === track);
   if (customDef) {
     if (customDef.kind === 'reading') {
-      return chunkSignsIntoSessions(resolveReadingEntries(questions, signs), customDef.title || 'Reading');
+      return chunkSignsIntoSessions(resolveReadingEntries(questions, signs, customDef), customDef.title || 'Reading');
     }
     if (customDef.kind === 'full') {
       return deriveFullSessions(questions);
@@ -100,6 +131,9 @@ export function deriveTrack(
     if (customDef.filterFormat) {
       const formats = Array.isArray(customDef.filterFormat) ? customDef.filterFormat : [customDef.filterFormat];
       filtered = filtered.filter((q) => formats.includes(q.format));
+    }
+    if (customDef.filterTags) {
+      filtered = filtered.filter((q) => tagsMatch(q.tags, customDef.filterTags!));
     }
     return chunkIntoSessions(filtered, customDef.title || 'Practice');
   }
@@ -132,21 +166,40 @@ export function detectAvailableTracks(
     const available: Track[] = [];
     for (const def of customTrackDefs) {
       if (def.kind === 'reading') {
-        // Always available given any questions — real signs catalog if
-        // present, otherwise derived from the questions themselves
-        // (see resolveReadingEntries()).
-        if (signs.length > 0 || questions.length > 0) available.push(def.id);
+        // Available if there's a real catalog, or if the (optionally
+        // filterRole/filterTags-scoped) question subset is non-empty —
+        // see resolveReadingEntries(). A scoped reading track with no
+        // matching questions correctly doesn't show up at all.
+        const hasContent =
+          signs.length > 0 || resolveReadingEntries(questions, signs, def).length > 0;
+        if (hasContent) available.push(def.id);
       } else if (def.kind === 'full') {
         if (questions.length > 0) available.push(def.id);
-      } else if (def.filterRole) {
-        if (questions.some((q) => roleMatches(q.role, def.filterRole!))) available.push(def.id);
-      } else if (def.filterFormat) {
-        const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
-        if (questions.some((q) => formats.includes(q.format))) available.push(def.id);
+      } else if (def.filterRole || def.filterFormat || def.filterTags) {
+        const matches = questions.some((q) => {
+          if (def.filterRole && !roleMatches(q.role, def.filterRole)) return false;
+          if (def.filterFormat) {
+            const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
+            if (!formats.includes(q.format)) return false;
+          }
+          if (def.filterTags && !tagsMatch(q.tags, def.filterTags)) return false;
+          return true;
+        });
+        if (matches) available.push(def.id);
       } else {
         if (questions.length > 0) available.push(def.id);
       }
     }
+    // 'full' and 'reading' are compulsory for every skill regardless of
+    // what the JSON's tracks array declares — a curriculum author should
+    // never be able to accidentally ship a skill missing either. If the
+    // JSON omitted one (or both), synthesize its presence here; deriveTrack()
+    // and getTrackTotals() already handle 'full'/'reading' by id even with
+    // no matching customTrackDefs entry (see their fallback branches), so
+    // just ensuring the id shows up in this list is enough to make it
+    // selectable end-to-end with no further wiring.
+    if (!available.includes('full') && questions.length > 0) available.push('full');
+    if (!available.includes('reading') && (signs.length > 0 || questions.length > 0)) available.push('reading');
     return available;
   }
 
@@ -210,7 +263,7 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
         if (remote.tracks && remote.tracks.length > 0) {
           for (const def of remote.tracks) {
             if (def.kind === 'reading') {
-              const readingEntries = resolveReadingEntries(remote.questions, remote.signs);
+              const readingEntries = resolveReadingEntries(remote.questions, remote.signs, def);
               totals[def.id] = {
                 totalQuestions: readingEntries.length,
                 totalSessions: Math.max(1, Math.ceil(readingEntries.length / 7)),
@@ -228,6 +281,9 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
               if (def.filterFormat) {
                 const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
                 filtered = filtered.filter((q) => formats.includes(q.format));
+              }
+              if (def.filterTags) {
+                filtered = filtered.filter((q) => tagsMatch(q.tags, def.filterTags!));
               }
               totals[def.id] = {
                 totalQuestions: filtered.length,

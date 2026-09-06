@@ -13,7 +13,7 @@ import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing, Radius } from '@/constants/spacing';
 import { getSheetGradient } from '@/constants/gradients';
 import { StaticColors } from '@/constants/colors';
-import { getTrackOptionsForSkill } from '@/constants/trackOptions';
+import { getTrackOptionsForSkill, groupTrackOptions } from '@/constants/trackOptions';
 import { LANDING_SKILLS } from '@/constants/skills';
 import { getLocalProgress, getCompletedTracks } from '@/lib/progress';
 import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
@@ -223,53 +223,60 @@ export function ModeSwitcherSheet({
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
             >
-              {ordered.map((option, i) => {
-                const isCurrent = option.track === currentTrack;
-                const isDone = !isCurrent && effectiveCompleted.includes(option.track);
-                // Current row: trackComplete means we know for a fact this
-                // track's sessions are exhausted, so show it as fully done
-                // (green "Done", no highlight) regardless of what the shared
-                // pct happens to compute to. The 'switch' heading (mid-track,
-                // not finished) shows it as the in-progress row instead,
-                // using the real shared pct for its segment bar.
-                const currentPct =
-                  progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
-                const currentIsDone = heading === 'trackComplete';
-                const rowProgress = isCurrent
-                  ? currentIsDone
-                    ? 1
-                    : currentPct
-                  : isDone
-                    ? 1
-                    : 0;
-                const rowStatus: 'done' | 'inProgress' | 'notStarted' = isCurrent
-                  ? currentIsDone
-                    ? 'done'
-                    : 'inProgress'
-                  : isDone
-                    ? 'done'
-                    : 'notStarted';
-                // Teal highlight marks the one row to look at next: the
-                // current track while it's still in progress, or — once
-                // that track is finished — the next not-yet-done track
-                // after it in the list.
-                const isHighlighted = isCurrent
-                  ? !currentIsDone
-                  : currentIsDone && option.track === nextUpTrack;
-                return (
-                  <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
-                    <ModeCard
-                      image={option.image}
-                      title={option.label}
-                      status={rowStatus}
-                      highlighted={isHighlighted}
-                      progress={rowProgress}
-                      totalQuestions={trackTotals?.[option.track]?.totalQuestions}
-                      onPress={() => onSelectTrack(option.track)}
-                    />
-                  </View>
-                );
-              })}
+              {groupTrackOptions(ordered).map((group, groupIdx) => (
+                <View key={group.groupTitle ?? `g${groupIdx}`} style={groupIdx > 0 ? styles.groupSpacing : undefined}>
+                  {group.groupTitle ? (
+                    <Text style={[styles.groupHeading, { color: colors.onSurfaceVariant }]}>{group.groupTitle}</Text>
+                  ) : null}
+                  {group.options.map((option, i) => {
+                    const isCurrent = option.track === currentTrack;
+                    const isDone = !isCurrent && effectiveCompleted.includes(option.track);
+                    // Current row: trackComplete means we know for a fact this
+                    // track's sessions are exhausted, so show it as fully done
+                    // (green "Done", no highlight) regardless of what the shared
+                    // pct happens to compute to. The 'switch' heading (mid-track,
+                    // not finished) shows it as the in-progress row instead,
+                    // using the real shared pct for its segment bar.
+                    const currentPct =
+                      progress.totalTopics > 0 ? progress.completedTopics / progress.totalTopics : 0;
+                    const currentIsDone = heading === 'trackComplete';
+                    const rowProgress = isCurrent
+                      ? currentIsDone
+                        ? 1
+                        : currentPct
+                      : isDone
+                        ? 1
+                        : 0;
+                    const rowStatus: 'done' | 'inProgress' | 'notStarted' = isCurrent
+                      ? currentIsDone
+                        ? 'done'
+                        : 'inProgress'
+                      : isDone
+                        ? 'done'
+                        : 'notStarted';
+                    // Teal highlight marks the one row to look at next: the
+                    // current track while it's still in progress, or — once
+                    // that track is finished — the next not-yet-done track
+                    // after it in the list.
+                    const isHighlighted = isCurrent
+                      ? !currentIsDone
+                      : currentIsDone && option.track === nextUpTrack;
+                    return (
+                      <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
+                        <ModeCard
+                          image={option.image}
+                          title={option.label}
+                          status={rowStatus}
+                          highlighted={isHighlighted}
+                          progress={rowProgress}
+                          totalQuestions={trackTotals?.[option.track]?.totalQuestions}
+                          onPress={() => onSelectTrack(option.track)}
+                        />
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
             </ScrollView>
           </LinearGradient>
         </Animated.View>
@@ -336,5 +343,15 @@ const styles = StyleSheet.create({
   },
   rowSpacing: {
     marginTop: Spacing.sm,
+  },
+  groupSpacing: {
+    marginTop: Spacing.lg,
+  },
+  groupHeading: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.sm,
   },
 });
