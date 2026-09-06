@@ -151,9 +151,11 @@ Unlike earlier versions of the app where learning modes were hardcoded to drivin
 2. **`full` and `reading` Are Compulsory**:
    `detectAvailableTracks()` always guarantees a `full` and a `reading` track exist, even if a
    curriculum's `"tracks"` array omits one or both — no author can accidentally ship a skill
-   missing either. If omitted, the app synthesizes the default id (falling back to the standard
-   `DEFAULT_TRACK_LABELS` title/image in `constants/trackOptions.ts` unless the skill overrides
-   it via `trackLabels`/`trackImages`). Every other declared track is otherwise **automatic
+   missing either. If omitted, the app synthesizes the default id, resolving its title from
+   `play_track_defaults.label` (Supabase, e.g. `full` → `"Learn Full Skill"` as of 2026-09-06)
+   before falling back to the hardcoded `DEFAULT_TRACK_LABELS` in `constants/trackOptions.ts` —
+   and its image the equivalent DB-then-local chain — unless the skill overrides either via
+   `trackLabels`/`trackImages`. Every other declared track is otherwise **automatic
    empty-track elimination**: a track only shows up if there's actually a matching question (or,
    for `kind: "reading"`, a matching entry — see point 4).
 3. **No App Code Changes**:
@@ -186,3 +188,66 @@ Getting `world-facts.json` (or any converted curriculum) playable end-to-end als
    is typed against that file's keys).
 3. **Local Track Fallbacks (optional)**:
    In `constants/skills.ts`, `skill.tracks` provides the synchronous fallback list before runtime network detection resolves (e.g. `tracks: ['full']` for single-track skills). Optional title and illustration overrides can also be specified via `skill.trackLabels` or `skill.trackImages` if needed.
+
+## Bible Trivia (second conversion, 2026-09-06)
+
+A third skill, converted from `Bible_Trivia_1_0_0.json` into `bible-trivia.json` using the
+same target shape and field mapping as World Facts above — this section only records what was
+*different*, not a full re-explanation of shared rules.
+
+### Source shape differs by one more nesting level and a third question type
+
+```
+{
+  levels: [
+    { id, name, chapters: [
+      { id, title, topics: [
+        { id, title, questions: [
+          { id, rule, type: "single"|"multi"|"matching", question, explanation,
+            options: [ { id, text, correct: boolean }, ... ] }
+        ]}
+      ]}
+    ]}
+  ],
+  appMeta, country, imageMap, engineRules, learningModes, schemaVersion
+}
+```
+
+395 questions total, nested `level → chapter → topic → question` (one level deeper than World
+Facts' `chapter → topic → question` — `topicId` generation therefore uses
+`` `${level.id}-${chapter.id}-${topic.id}` ``, same pattern, one more segment).
+
+### The exclusion rule extends to a new type: `matching`
+
+World Facts only had to exclude `multi` (100 of 250 questions). Bible Trivia's source
+introduces a third type, `matching` (pair-the-items, no single `correctAnswer` index at all —
+not just multiple correct options like `multi`, but a fundamentally different answer shape),
+alongside the same `multi` type:
+
+| Source type | Count | Kept? | Why |
+|---|---|---|---|
+| `single` | 237 | ✅ | Maps directly to `BaseQuestion.correctAnswer: number` |
+| `multi` | 79 | ❌ | Same reason as World Facts' exclusion — no multi-select mechanic in the app |
+| `matching` | 79 | ❌ | No matching-question UI exists anywhere in the app (`CardDeck.tsx` has no matching-pairs rendering path) — this is a new incompatibility, not a repeat of the `multi` one, but excluded for the same root cause: the app's quiz flow assumes exactly one `correctAnswer` index per question |
+
+**237 of 395 source questions were kept** — same "no lossless single-answer conversion exists"
+reasoning as World Facts, just against two excluded types instead of one. If either `multi` or
+`matching` questions need to ship later, that's an app change (new answer-evaluation paths in
+`CheckButton`/`FeedbackSheet`), not another JSON conversion pass — same conclusion World Facts
+already reached.
+
+### An extra constraint World Facts didn't need: no topic goes empty
+
+Because dropping two whole question types out of a topic-nested source risks leaving some
+topics with zero (or very few) surviving `single` questions, the conversion verified every one
+of the 79 source topics still had **at least 3** kept questions after filtering — none went to
+zero. This wasn't a concern for World Facts since only one type (`multi`) was excluded there
+and its topics were shallower/less densely populated with multi-type questions.
+
+### No custom `tracks` header — same as World Facts
+
+`bible-trivia.json` ships with no `tracks` array (`{ questions: [...237], signs: [] }`, same
+minimal shape as `true-false.json`) — it relies entirely on `full`/`reading` being compulsory
+(see the "`full` and `reading` Are Compulsory" section above). If bible-trivia's 79 topics
+later warrant their own filterable tracks (e.g. by testament, by book), that's a `tracks` array
+addition to the existing JSON, not a re-conversion from source.

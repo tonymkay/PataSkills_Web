@@ -1,6 +1,36 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (g) — Per-track illustration
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (h) — Third skill (**Bible
+> Trivia**) shipped, and the `full` track's label moved from a hardcoded string to a DB-driven
+> universal default, closing the gap `play_track_defaults` was reserved for. **(1)**
+> `constants/skills.ts` gained a `bible-trivia` `LANDING_SKILLS` entry and
+> `constants/curriculumAssets.ts` a matching `bible-trivia.webp` cover path — same shape as
+> `true-false`, converted from a nested `levels/chapters/topics` source schema per
+> `json-conversion.md`'s new "Bible Trivia" section (237 of 395 source questions kept; the
+> `matching` question type, new in this source, was excluded for the same single-answer-engine
+> reason `multi` already was). **(2)** `play_track_defaults` (§14) is no longer permanently
+> empty by design — it gained a `label` column (nullable, alongside `image_path` which is now
+> also nullable so a row can carry a label with no image) and a seeded `full` → `"Learn Full
+> Skill"` row, replacing `constants/trackOptions.ts`'s old hardcoded
+> `DEFAULT_TRACK_LABELS.full` string as the real source of truth. `lib/trackDefaults.ts`
+> (§9) now caches `{ images, labels }` instead of a flat image map, exposing both
+> `getCachedTrackDefaultUrl()` and a new `getCachedTrackDefaultLabel()`; its fetch was also
+> rewritten from a raw `.then()` chain to an `async` IIFE to fix a pre-existing `tsc` error
+> (`PromiseLike` assigned where a real `Promise` was declared) that this same pass ran into
+> again in the still-outstanding `lib/curriculaCatalog.ts` (untouched — see that section's
+> note). `constants/trackOptions.ts`'s `trackLabel()` now checks
+> `getCachedTrackDefaultLabel(track)` between the JSON's own `customTrackDef?.title` and the
+> hardcoded default, mirroring `trackImage()`'s existing DB-then-local fallback chain. **(3)**
+> Storage bucket gained `curricula/bible-trivia.json` and `curricula/bible-trivia.webp`; a
+> `play_curricula` row (`slug: 'bible-trivia'`) was handed to the user as SQL to run manually
+> (anon key can't write that table). **Known pre-existing gap, unrelated to this pass**: a
+> `world-facts` skill's JSON/cover image already exist in Storage and are documented in
+> `json-conversion.md`, but `constants/skills.ts`/`curriculumAssets.ts` still only list
+> `driving-theory`, `true-false`, and now `bible-trivia` — `world-facts` was left out of both
+> files by whatever WIP produced `lib/curriculaCatalog.ts` (uncommitted at the time of this
+> pass), not by this one. See §7, §9, §13, §14, and §18 for the corrected implementation.
+>
+> **Last updated**: 2026-09-06 (g) — Per-track illustration
 > resolution made fully database/JSON-driven, closing the last two hardcoded-per-skill gaps.
 > **(1)** `constants/trackOptions.ts`'s `trackImage()` final fallback now reads the skill's cover
 > image from `lib/curriculaCatalog.ts` (DB, `play_curricula.cover_image_path`) instead of the
@@ -70,7 +100,7 @@
 
 ## 1. Project Overview
 
-**PataSkills Play** is a mobile-first quiz application built with **Expo** (React Native) targeting iOS, Android, and web. Its curriculum is **Driving Theory** — practicing highway-code questions about road-sign identification. Curriculum and sign images are fetched from a **Supabase** backend at runtime; questions are presented in a swipeable card deck; continued play is gated behind a consumable **"keys"** system.
+**PataSkills Play** is a mobile-first quiz application built with **Expo** (React Native) targeting iOS, Android, and web. It originated as a single **Driving Theory** curriculum (practicing highway-code questions about road-sign identification) and has since grown into a multi-skill catalog — `driving-theory`, `true-false`, and `bible-trivia` are all currently live (see `constants/skills.ts`'s `LANDING_SKILLS`). Curriculum and sign images are fetched from a **Supabase** backend at runtime; questions are presented in a swipeable card deck; continued play is gated behind a consumable **"keys"** system.
 
 Since the previous documentation pass, three large areas were built out that this update captures for the first time:
 
@@ -472,7 +502,7 @@ Unchanged from the prior audit.
 The single `LandingScreen` "skill pager + mode picker" described in the prior audit **no longer exists in that shape**. The flow is now three separate screens plus a bottom sheet, each a standalone file:
 
 #### `LandingScreen.tsx` — "Skills Corner" grid
-A 2-column grid of `SkillGridCard`s (compact — title + remote cover image, no progress bar, no CTA button; the whole card is the tap target) below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS` (`driving-theory`, `true-false`), plus a bottom "Existing user, login" link that opens `RestoreAccountModal`. Tapping any card calls `onStart(skill.id)` passing the selected `CurriculumSlug` so the parent advances to `LearningStyleScreen` with that skill's context.
+A 2-column grid of `SkillGridCard`s (compact — title + remote cover image, no progress bar, no CTA button; the whole card is the tap target) below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS` (`driving-theory`, `true-false`, `bible-trivia` as of 2026-09-06 (h)), plus a bottom "Existing user, login" link that opens `RestoreAccountModal`. Tapping any card calls `onStart(skill.id)` passing the selected `CurriculumSlug` so the parent advances to `LearningStyleScreen` with that skill's context.
 
 A successful account restore (`onRestore(track)`) skips `LearningStyleScreen` entirely and opens `TrackDetailScreen` directly with `'full'` (the restoring learner already picked a track on whichever device they started on).
 
@@ -595,9 +625,15 @@ export const LANDING_SKILLS: LandingSkill[] = [
     subtitle: 'True/False',
     tracks: ['reading', 'full'],
   },
+  {
+    id: 'bible-trivia',
+    title: 'Test yourself with\n237 Bible trivia\nquestions',
+    subtitle: 'Bible Trivia',
+    tracks: ['reading', 'full'],
+  },
 ];
 ```
-Defines each skill card shown on the homepage grid. `tracks` provides the synchronous fallback list before runtime detection resolves; `trackLabels` and `trackImages` allow individual curricula to override default track copy and illustration assets without modifying component logic.
+Defines each skill card shown on the homepage grid. `tracks` provides the synchronous fallback list before runtime detection resolves; `trackLabels` and `trackImages` allow individual curricula to override default track copy and illustration assets without modifying component logic. **`bible-trivia` (new, 2026-09-06)** — converted from a nested `levels/chapters/topics` source export via `json-conversion.md`'s "Bible Trivia" section; 237 of 395 source questions kept (`single`-type only — `multi` and the new `matching` type excluded, same single-answer-engine reasoning as `true-false`'s own conversion). No custom `tracks` declared in its JSON, same as `true-false` — it relies entirely on the compulsory `full`/`reading` synthesis in `detectAvailableTracks()` (§9).
 
 ### `trackOptions.ts` (updated)
 Single source of truth for the learning-mode list and illustrations shown across `LearningStyleScreen`, `ModeSwitcherSheet`, and `TrackDetailScreen`:
@@ -620,11 +656,16 @@ export function getTrackOption(
   customTrackDefs?: CurriculumTrackDefinition[]
 ): TrackOption;
 ```
-- **Title resolution priority**:
+- **Title resolution priority** (mirrors `trackImage()`'s DB-then-local chain below, added
+  2026-09-06 (h)):
   1. `skill.trackLabels?.[track]` (hardcoded app override)
   2. `customTrackDef?.title` (dynamic JSON-defined custom track title)
-  3. `DEFAULT_TRACK_LABELS[track]` (standard built-in titles)
-  4. Formatted fallback string
+  3. `getCachedTrackDefaultLabel(track)` — `play_track_defaults.label` (§14), e.g. `full` →
+     `"Learn Full Skill"`. Real source of truth for any label shared across every skill; a DB
+     edit changes it everywhere with no redeploy.
+  4. `DEFAULT_TRACK_LABELS[track]` (hardcoded last-resort — only fires for the instant before
+     step 3's fetch resolves, or if a track has no DB row at all)
+  5. Formatted fallback string
 - **Default visuals**: `LOCAL_IMAGES` is intentionally **empty** — the only local track webps that exist (`assets/driving/*.webp`) are driving-theory's own art, not universal, and now live as a per-curriculum override on driving-theory's own JSON instead (see §14). `trackImage()`'s resolution order is: (1) `customTrackDef.image` (curriculum-JSON per-track override, e.g. driving-theory's), (2) `skill.trackImages?.[track]` (code-level per-skill override), (3) `play_track_defaults` DB row for that track id (`lib/trackDefaults.ts`, `getCachedTrackDefaultUrl()`) — currently empty, reserved for genuinely shared/universal art, (4) `LOCAL_IMAGES[track]` — currently empty, instant-render backup only, (5) the skill's own cover image, itself DB-first: `lib/curriculaCatalog.ts`'s cached `play_curricula.cover_image_path` if warm, else the local `CurriculumCoverImagePaths` constant as a pre-fetch backup. `full` has no dedicated icon by design and always resolves via step (5).
 - **Dynamic builder**: `getTrackOptionsForSkill(skill, tracks, customTrackDefs)` maps whichever tracks the caller provides, decorating them with titles and icons from custom definitions or defaults.
 - **Fast lookup**: `getTrackOption(skill, track, customTrackDefs)` provides synchronous-like lookup with fallback defaults.
@@ -645,8 +686,12 @@ Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`hyd
 ### `curriculaCatalog.ts` (new, previously undocumented) — DB-driven skill catalog
 Module-level cache (shared in-flight promise, same shape as `trackDefaults.ts` below) over `play_curricula`. `getCurriculaCatalog()` fetches `{ slug, title, cover_image_path }` for every active row, once per app session. `getCachedCurricula()` is a synchronous read of whatever's resolved so far (`[]` before the first fetch lands). `getCachedCoverImagePath(slug)` is what `constants/trackOptions.ts`'s `trackImage()` calls for its final fallback (see §7) — every skill's existence, display name, and cover image now genuinely lives in this table, not in a local constants file; adding or renaming a skill is a DB edit only. `LandingScreen` kicks off the fetch first in the normal user flow, but any screen that might render before it (a `?track=` deep link landing straight on `TrackDetailScreen`) also calls `getCurriculaCatalog()` itself — the shared in-flight promise means this is still only one network round trip.
 
-### `trackDefaults.ts` (new, previously undocumented) — DB-driven universal track icons
-Same shared-promise cache pattern as `curriculaCatalog.ts`, over the new `play_track_defaults` table (see §14). `getTrackDefaultsCatalog()` fetches `{ track_id, image_path }` for every row and resolves each to a public URL; `getCachedTrackDefaultUrl(trackId)` is the synchronous read `trackImage()` calls. The fetch is kicked off at module-import time (`getTrackDefaultsCatalog()` called at the bottom of the file) rather than waiting for a screen to trigger it, so it's usually warm before `LearningStyleScreen`/`ModeSwitcherSheet` first render. **Currently always resolves to `{}`** — the table is intentionally seeded empty (see §14) — so this rung of `trackImage()`'s fallback chain is a no-op today, present for when genuinely universal track art exists.
+### `trackDefaults.ts` (updated 2026-09-06 (h)) — DB-driven universal track icons AND labels
+Same shared-promise cache pattern as `curriculaCatalog.ts`, over `play_track_defaults` (see §14), now selecting `{ track_id, image_path, label }` instead of image-only. The cache shape changed from a flat `Record<string, string>` to `{ images: Record<string, string>, labels: Record<string, string> }`, with two synchronous readers: `getCachedTrackDefaultUrl(trackId)` (unchanged signature, still what `trackImage()` calls) and the new `getCachedTrackDefaultLabel(trackId)` (what `trackLabel()` now calls — see §7). A row with no `image_path` simply doesn't populate `images` for that track id; same for a row with no `label`. The fetch is still kicked off at module-import time so it's usually warm before first render.
+
+**Fixed a pre-existing `tsc` error in the same pass**: the fetch used to assign a raw `supabase.from(...).select(...).then(...)` chain directly to the `Promise<T>`-typed `inflight` variable, which doesn't type-check — `supabase-js`'s query builder is only a `PromiseLike`, not a real `Promise` (missing `.catch`/`.finally`/`Symbol.toStringTag`). Rewritten as an `async` IIFE (`inflight = (async () => { ... })()`) so the assignment is a genuine `Promise<TrackDefaultsCache>`. The exact same bug pattern still exists in `lib/curriculaCatalog.ts` (untouched this pass — out of scope, that file belongs to separate uncommitted WIP) and shows up as the only remaining `tsc --noEmit` error after this change.
+
+**No longer permanently empty**: `image_path` and `label` are independently nullable, so a row can carry either alone. As of this pass there's exactly one seeded row — `full` → `label: 'Learn Full Skill'`, no `image_path` — see §14 for the seed SQL and the reasoning for why images stay unseeded while labels don't.
 
 ### `curriculum.ts` — Dynamic Track Detection, Cached Fetching, and Session Derivation
 Core curriculum orchestration layer:
@@ -798,6 +843,8 @@ One-off Node.js (`.mjs`) data-pipeline / DB-setup scripts, run from `play/`. Bey
 
 `add-role.mjs`, `apply-sign-corrections.mjs`, `dl-by-image-path.mjs`, `fix-bump-image-path.mjs`, `list-low-confidence-images.mjs`, `list-orphaned-signs.mjs`, `populate-pairs.mjs`, `rename-orphaned-signs.mjs`, `rename-used-signs-descriptive.mjs`, `upload-corrected-curriculum.mjs`, `_check_bump.mjs`, `_dl_preview3.ps1`, plus a `.gitignore` scoped to this folder.
 
+**`upload-bible-trivia.mjs` (new, 2026-09-06)** — one-off uploader for the Bible Trivia conversion: uploads `scripts/_bible-trivia-payload.json` to `play-assets/curricula/bible-trivia.json` (`upsert: true`) and lists `play-assets/curricula/` afterward so a run confirms both the JSON and the (separately, manually uploaded) `bible-trivia.webp` cover landed. Does not touch `play_curricula` — same anon-key RLS restriction as `upload-corrected-curriculum.mjs`, so the insert SQL is handed to the user to run manually instead. `_bible-trivia-payload.json` itself (237 questions, `signs: []`) is the converted output — see `json-conversion.md`'s "Bible Trivia" section for the source schema and conversion rules.
+
 `output/` now also contains `pairs-to-insert.json`, `questions.corrected.json`, `sign-corrections.json`, and two preview subfolders (`preview/`, `preview2/`) alongside the previously-documented artifacts.
 
 ---
@@ -807,8 +854,20 @@ One-off Node.js (`.mjs`) data-pipeline / DB-setup scripts, run from `play/`. Bey
 ### `play_sign_pairs.sql`
 Unchanged from the prior audit — `play_sign_pairs` table + 23 seeded pairs (groups A–E) for the DB-level image-resolution layer used by `lib/signs.ts`. See that revision for the full seed breakdown and the note distinguishing this from the curriculum JSON's own 46-pair/92-entry signs catalog.
 
-### `play_track_defaults.sql` (new) — universal per-track fallback icons
-Defines `play_track_defaults (track_id TEXT PRIMARY KEY, image_path TEXT, updated_at TIMESTAMPTZ)`, anon-select-only RLS, read by `lib/trackDefaults.ts` (see §9). **Table is intentionally seeded empty.** It went through a wrong-then-corrected-then-emptied sequence worth recording: first seeded with `differentiation`/`identification`/`reading` (a stale pre-consolidation naming that no curriculum ever actually emits), corrected to the real track ids (`pairs`/`names`/`meanings`/`whereUsed`/`reading`), then emptied entirely once it became clear the only art available (`assets/driving/*.webp`) was driving-theory's own, not universal — seeding it would leak that art onto every other skill's matching track id (e.g. true-false's `reading` track would render driving's reading icon). The file's own `delete from ... where track_id in (...)` statement cleans up either prior seed if re-run against an already-migrated DB. `play_curricula`-style comment documents how to add a genuinely shared icon later. Uploaded via `scripts/upload-track-icons.mjs` to `play-assets/track-icons/` regardless of whether the DB table references them — driving-theory's own curriculum JSON references the uploaded files directly (see §18's storage bucket listing).
+### `play_track_defaults.sql` (updated 2026-09-06 (h)) — universal per-track fallback icons AND labels
+Defines `play_track_defaults (track_id TEXT PRIMARY KEY, image_path TEXT, label TEXT, updated_at TIMESTAMPTZ)`, anon-select-only RLS, read by `lib/trackDefaults.ts` (see §9). **Both `image_path` and `label` are nullable** — a row can carry either alone, so a label-only default (no universal art to go with it) doesn't force a fake image row. The file is idempotent against a DB that already ran an earlier version: `alter table ... add column if not exists label`, `alter table ... alter column image_path drop not null`.
+
+**Images stay unseeded, for the same reason as before**: it went through a wrong-then-corrected-then-emptied sequence worth recording: first seeded with `differentiation`/`identification`/`reading` (a stale pre-consolidation naming that no curriculum ever actually emits), corrected to the real track ids (`pairs`/`names`/`meanings`/`whereUsed`/`reading`), then emptied entirely once it became clear the only art available (`assets/driving/*.webp`) was driving-theory's own, not universal — seeding it would leak that art onto every other skill's matching track id (e.g. true-false's `reading` track would render driving's reading icon). The file's own `delete from ... where track_id in (...)` statement still cleans up either prior image seed if re-run against an already-migrated DB.
+
+**Labels have no such restriction, and are now seeded**: unlike per-skill art, a label like `full` → `"Learn Full Skill"` means the same thing for every skill by construction — there's no equivalent "leaking driving-theory's label onto true-false" risk, since the id itself (`full`, `reading`) already only exists as a universal concept. One seeded row as of this pass:
+```sql
+insert into play_track_defaults (track_id, label) values
+  ('full', 'Learn Full Skill')
+on conflict (track_id) do update set label = excluded.label, updated_at = now();
+```
+This replaces `constants/trackOptions.ts`'s old hardcoded `DEFAULT_TRACK_LABELS.full` string as the real source of truth (see §7/§9) — changing it going forward is `update play_track_defaults set label = '...' where track_id = 'full';`, no code change or redeploy.
+
+Uploaded via `scripts/upload-track-icons.mjs` to `play-assets/track-icons/` regardless of whether the DB table references them — driving-theory's own curriculum JSON references the uploaded files directly (see §18's storage bucket listing).
 
 ### `play_accounts.sql` (new)
 Defines the `play_accounts` table — the durable, email-keyed source of truth for the keys/premium economy once a device has ever linked an email:
@@ -900,12 +959,19 @@ Storage Bucket: play-assets/
 ├── curricula/true-false.json  (true-false, json_path in play_curricula)
 │     { tracks: [full (kind: "full"), reading (kind: "reading")], questions: [...150,
 │       true/false, no role], signs: [] }
+├── curricula/bible-trivia.json  (new, 2026-09-06 — bible-trivia, json_path in play_curricula
+│     once the handed-off insert SQL is run)
+│     { questions: [...237, textChoice, no role, no tracks header — relies on compulsory
+│       full/reading synthesis], signs: [] }
+├── curricula/bible-trivia.webp  (new, 2026-09-06 — cover image, uploaded directly by the user,
+│     not via a script)
 ├── track-icons/  (new) pairs.webp, names.webp, meanings.webp, whereUsed.webp, reading.webp
 │     — driving-theory's own per-track art (assets/driving/*.webp source files, uploaded by
 │     scripts/upload-track-icons.mjs). Referenced directly from driving-theory's JSON above,
-│     NOT from play_track_defaults (that table is intentionally empty — see §14) — these files
-│     existing in storage doesn't by itself make them "universal", only driving-theory's JSON
-│     linking to them does.
+│     NOT from play_track_defaults (that table's image_path column is intentionally still
+│     empty for every row, even though it now has a labels-only 'full' row — see §14) — these
+│     files existing in storage doesn't by itself make them "universal", only driving-theory's
+│     JSON linking to them does.
 └── signs/      give_way.webp, stop.webp, ... (60+ sign images)
 ```
 

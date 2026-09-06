@@ -1,6 +1,6 @@
 import type { ImageSourcePropType } from 'react-native';
 import { getPlayAssetPublicUrl } from '@/lib/supabase';
-import { getCachedTrackDefaultUrl } from '@/lib/trackDefaults';
+import { getCachedTrackDefaultUrl, getCachedTrackDefaultLabel } from '@/lib/trackDefaults';
 import { getCachedCoverImagePath } from '@/lib/curriculaCatalog';
 import { CurriculumCoverImagePaths } from '@/constants/curriculumAssets';
 import { LandingSkill } from '@/constants/skills';
@@ -71,16 +71,22 @@ export function groupTrackOptions(options: TrackOption[]): TrackOptionGroup[] {
 // only for art that's genuinely generic across skills.
 const LOCAL_IMAGES: Partial<Record<Track, ImageSourcePropType>> = {};
 
-// Shared default label per track. A skill can override any of these via
-// LandingSkill.trackLabels (constants/skills.ts) or directly inside
-// the curriculum JSON without forking this file or any component.
+// Last-resort default label per track, used only for the instant before
+// play_track_defaults' fetch resolves (or if that track has no DB row at
+// all). The real source of truth for universal labels is now the DB —
+// see lib/trackDefaults.ts's getCachedTrackDefaultLabel() and
+// supabase/play_track_defaults.sql's seed insert — so changing a shared
+// label going forward is a DB edit, not a code change. A skill can still
+// override any of these via LandingSkill.trackLabels (constants/skills.ts)
+// or directly inside the curriculum JSON, both of which rank above the
+// DB default (see trackLabel() below).
 const DEFAULT_TRACK_LABELS: Record<StandardTrack, string> = {
   pairs: 'Differentiate Pairs',
   names: 'Name a Sign',
   meanings: 'Meaning of Signs',
   whereUsed: 'Where Signs Are Used',
   reading: 'Reading Only',
-  full: 'Questions & Answers',
+  full: 'Learn Full Skill',
 };
 
 function trackImage(
@@ -115,6 +121,7 @@ function trackLabel(
   return (
     skill.trackLabels?.[track] ??
     customTrackDef?.title ??
+    getCachedTrackDefaultLabel(track) ??
     DEFAULT_TRACK_LABELS[track as StandardTrack] ??
     (typeof track === 'string' ? track : 'Practice')
   );
