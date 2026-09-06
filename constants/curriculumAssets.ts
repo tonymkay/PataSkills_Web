@@ -17,6 +17,7 @@ export const CurriculumCoverImagePaths = {
   // have a local-fallback style/no zero-latency cover).
   'true-false': 'curricula/true-false.webp',
   'bible-trivia': 'curricula/bible-trivia.webp',
+  'world-facts': 'curricula/world-facts.webp',
 } as const;
 
 export type CurriculumSlug = keyof typeof CurriculumCoverImagePaths;

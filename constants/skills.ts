@@ -58,4 +58,10 @@ export const LANDING_SKILLS: LandingSkill[] = [
     subtitle: 'Bible Trivia',
     tracks: ['reading', 'full'],
   },
+  {
+    id: 'world-facts',
+    title: 'Test yourself with\n150 world facts\nquestions',
+    subtitle: 'World Facts',
+    tracks: ['reading', 'full'],
+  },
 ];
