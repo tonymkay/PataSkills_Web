@@ -130,7 +130,7 @@ export default function KeysTab() {
           <>
             {/* Keys Count Hero */}
             <View style={styles.keysCountRow}>
-              <Text style={[styles.keysCountText, { color: colors.onSurface }]}>
+              <Text style={[styles.keysCountText, { color: StaticColors.achievementAmber }]}>
                 {displayCount}
               </Text>
               <Image

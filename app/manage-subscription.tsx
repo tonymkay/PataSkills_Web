@@ -9,7 +9,7 @@ import { getSubscriptionInfo, type SubscriptionInfo } from '@/lib/billing';
 import { getKeysState } from '@/lib/keys';
 import { DownloadAppModal } from '@/components/ui/DownloadAppModal';
 
-const FAQ_URL = 'https://www.pataskills.com/FAQ';
+const FAQ_URL = 'https://www.pataskills.com/';
 
 function ChevronPillButton({
   label,
