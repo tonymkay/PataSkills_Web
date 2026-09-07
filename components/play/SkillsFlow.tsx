@@ -58,20 +58,30 @@ function parseSkill(value?: string): CurriculumSlug | null {
  */
 interface SkillsFlowProps {
   embedded?: boolean;
+  standalone?: boolean;
 }
 
-export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
+export function SkillsFlow({ embedded = false, standalone = false }: SkillsFlowProps = {}) {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ resume?: string; track?: string; skill?: string; topic?: string }>();
   const urlTrack = parseTrack(params.track);
-  const [stage, setStage] = useState<Stage>('landing');
+  const initialSkill = parseSkill(params.skill) ?? DEFAULT_SKILL;
+
+  const [selectedSkill, setSelectedSkill] = useState<CurriculumSlug>(initialSkill);
+  const [stage, setStage] = useState<Stage>(() => {
+    if (standalone) {
+      if (params.resume === 'true') return 'downloading';
+      if (urlTrack) return 'track-detail';
+      if (params.skill) return 'learning-style';
+    }
+    return 'landing';
+  });
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<PlaySessionData[]>([]);
   const [signCatalog, setSignCatalog] = useState<SignCatalogEntry[]>([]);
-  const [selectedSkill, setSelectedSkill] = useState<CurriculumSlug>(DEFAULT_SKILL);
   const [currentTrack, setCurrentTrack] = useState<Track>('full');
   const [trackIsDeepLinked, setTrackIsDeepLinked] = useState(false);
   const [previewTrack, setPreviewTrack] = useState<Track | null>(null);
@@ -124,9 +134,17 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
   }, []);
 
   const handleBackToLanding = useCallback(() => {
+    if (standalone) {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/skills');
+      }
+      return;
+    }
     setStageDirection('backward');
     setStage('landing');
-  }, []);
+  }, [standalone, router]);
 
   const openTrackDetail = useCallback((track: Track, origin: TrackDetailOrigin) => {
     setPreviewTrack(track);
@@ -136,9 +154,17 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
   }, []);
 
   const closeTrackDetail = useCallback(() => {
+    if (standalone && trackDetailOrigin === 'landing') {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/skills');
+      }
+      return;
+    }
     setStageDirection('backward');
     setStage(trackDetailOrigin);
-  }, [trackDetailOrigin]);
+  }, [standalone, trackDetailOrigin, router]);
 
   const handlePreviewFromLanding = useCallback(
     (track: Track) => openTrackDetail(track, 'landing'),
@@ -180,9 +206,18 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
       return;
     }
 
+    if (standalone) {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/skills');
+      }
+      return;
+    }
+
     setStageDirection('backward');
     setStage('landing');
-  }, [router]);
+  }, [router, standalone]);
 
   useEffect(() => {
     // Resolve skill before dispatching either mount-time flow below.
@@ -199,6 +234,8 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
       void runDownload(urlTrack ?? 'full', true, urlSkill ?? DEFAULT_SKILL);
     } else if (urlTrack) {
       openTrackDetail(urlTrack, 'landing');
+    } else if (standalone && urlSkill) {
+      setStage('learning-style');
     }
     // Deliberately keyed on the raw param strings, not just `[]`. Under
     // expo-router's <Tabs>, this screen (the "Skills" tab) stays mounted
@@ -208,7 +245,7 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
     // components/home/SkillProgressCard.tsx), so this effect has to
     // react to those params changing, not just fire once on first mount,
     // or a second card tap after the first would silently no-op.
-  }, [params.resume, params.skill, params.track, params.topic]);
+  }, [params.resume, params.skill, params.track, params.topic, standalone]);
 
   return (
     <View

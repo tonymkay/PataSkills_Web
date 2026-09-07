@@ -296,6 +296,7 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
       <KeysOfferScreen
         skillId={skillId}
         track={track}
+        onBack={onExit}
         onMaybeLater={() => setFlowState('outOfKeys')}
       />
     );

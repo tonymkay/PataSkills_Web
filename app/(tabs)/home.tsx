@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Spacing, Typography } from '@/theme/tokens';
+import { useTheme, Spacing, Typography, FontFamily } from '@/theme/tokens';
 import { AppHeader } from '@/components/nav/AppHeader';
 import { SkillProgressCard, deriveSkillProgressState } from '@/components/home/SkillProgressCard';
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
@@ -76,13 +76,10 @@ export default function HomeTab() {
       router.push('/(tabs)/reports');
       return;
     }
-    // Resume straight into the session, skipping the learning-style/track
-    // pickers — SkillsFlow's param-driven effect (see the comment on its
-    // useEffect deps) picks this up and calls the same resume-from-
-    // progress path a deep link would. 'full' matches what runDownload
-    // already defaults to for an untracked resume; PlaySession still
-    // resumes from the learner's actual saved topic index within it.
-    router.push({ pathname: '/(tabs)/skills', params: { resume: 'true', skill: skill.slug } });
+    // Resume straight into the session in the dedicated full-screen play route
+    // (outside tabs so no bottom tab bar is visible) — SkillsFlow's param-driven
+    // effect picks this up and resumes the session directly.
+    router.push({ pathname: '/play', params: { resume: 'true', skill: skill.slug } });
   };
 
   return (
@@ -92,6 +89,9 @@ export default function HomeTab() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <Text style={[styles.heading, { color: colors.onSurface }]}>
+          My Skills
+        </Text>
         {loaded && skills.length === 0 ? (
           <Text style={[Typography.bodyMedium, { color: colors.onSurfaceVariant }]}>
             Finish your first topic in Skills to see your progress here.
@@ -121,5 +121,12 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.base,
     paddingBottom: Spacing.xl,
     gap: Spacing.md,
+  },
+  heading: {
+    fontFamily: FontFamily.bold,
+    fontSize: 28,
+    lineHeight: 34,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
   },
 });

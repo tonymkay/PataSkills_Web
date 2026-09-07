@@ -13,6 +13,7 @@ import {
   Shield,
   FileText,
   LogOut,
+  Moon,
 } from 'lucide-react-native';
 import { useTheme, Spacing, Radius, Typography, IconSize, StaticColors } from '@/theme/tokens';
 import { FontFamily } from '@/constants/typography';
@@ -33,7 +34,7 @@ const CURRENCY_STORAGE_KEY = '@play/currency';
  * unlocked — see the tabbed-home plan §4/§5/§9 for the rationale.
  */
 export default function SettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, scheme, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -106,6 +107,13 @@ export default function SettingsScreen() {
 
         {/* ── Preferences ── */}
         <SectionHeader title="Preferences" />
+        <SettingsToggleRow
+          icon={<Moon size={IconSize.inline} color={iconColor} />}
+          label="Dark theme"
+          value={scheme === 'dark'}
+          onValueChange={(v) => setMode(v ? 'dark' : 'light')}
+          activeColor={StaticColors.tealAccent}
+        />
         <SettingsToggleRow
           icon={<Bell size={IconSize.inline} color={iconColor} />}
           label="Notifications"

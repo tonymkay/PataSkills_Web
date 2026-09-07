@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Spacing, Typography } from '@/theme/tokens';
+import { useTheme, Spacing } from '@/theme/tokens';
 import { AppHeader } from '@/components/nav/AppHeader';
 import { KeysOptionsContent } from '@/components/feedback/KeysOptionsContent';
 import { FontFamily } from '@/constants/typography';
@@ -25,10 +25,7 @@ export default function KeysTab() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.heading, { color: colors.onSurface }]}>
-          Get More Keys
-        </Text>
-        <Text style={[Typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: Spacing.md }]}>
-          Unlock more sessions by purchasing keys, subscribing for unlimited access, or using the free trial timer.
+          Unlock more sessions
         </Text>
         <KeysOptionsContent />
       </ScrollView>
@@ -49,6 +46,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 24,
     lineHeight: 32,
-    marginBottom: Spacing.base,
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
   },
 });

@@ -23,6 +23,8 @@ interface LandingScreenProps {
    *  progress directly, skipping LearningStyleScreen (they already
    *  picked a track on whichever device they started on). */
   onRestore: (track: Track) => void;
+  /** Optional bottom padding for scroll content (e.g. inside tabbed layout). */
+  bottomPadding?: number;
 }
 
 /**
@@ -32,7 +34,7 @@ interface LandingScreenProps {
  * learning mode later (after a topic completes) reuses the same track
  * list via ModeSwitcherSheet — see components/landing/ModeSwitcherSheet.tsx.
  */
-export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
+export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScreenProps) {
   const { colors } = useTheme();
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
@@ -99,7 +101,10 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
     <View style={styles.screen}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.containerContent}
+        contentContainerStyle={[
+          styles.containerContent,
+          bottomPadding !== undefined && { paddingBottom: bottomPadding },
+        ]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
