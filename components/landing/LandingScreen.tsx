@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
@@ -8,7 +8,8 @@ import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
-import { getLocalProgress, areTabsUnlocked } from '@/lib/progress';
+import { getLocalProgress, areTabsUnlocked, syncAllProgressWithCloud } from '@/lib/progress';
+import { trackLandingPageSeen } from '@/lib/deviceAnalytics';
 import { Track } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
@@ -74,7 +75,30 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
       if (email) setLinkedEmail(email);
     }).catch(() => {});
     areTabsUnlocked().then(setTabsUnlocked);
+    // Every mount of this screen -- first-ever pre-unlock landing and any
+    // later visit to the Skills tab alike -- see docs/device-tracking-plan.md §7.1.
+    void trackLandingPageSeen();
   }, []);
+
+  // Auto-restore-on-mount: if this device already has an email linked, pull
+  // every known skill's cloud progress in ONE batched query
+  // (syncAllProgressWithCloud) rather than one query per skill, and merge
+  // max-wins into local storage. Offline-first means no connectivity check
+  // is needed here -- the Supabase call inside fails silently and local
+  // progress is simply left as-is (see docs/progress-restore-fix-plan.md §4).
+  // Waits for the catalog so it restores every current skill, not just the
+  // static fallback list; the `didAutoRestore` ref keeps this to once per
+  // mount even though catalogRows/linkedEmail can each trigger a re-run.
+  const didAutoRestore = useRef(false);
+  useEffect(() => {
+    if (didAutoRestore.current) return;
+    if (!linkedEmail || catalogRows.length === 0) return;
+    didAutoRestore.current = true;
+    const slugs = catalogRows.map((r) => r.slug);
+    syncAllProgressWithCloud(linkedEmail, slugs)
+      .then(refreshProgress)
+      .catch(() => {});
+  }, [linkedEmail, catalogRows]);
 
   const handleRestoreSuccess = (result: RestoreResult) => {
     refreshProgress();

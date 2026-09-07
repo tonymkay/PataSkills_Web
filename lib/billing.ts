@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase';
 import { PLANS, keyPackById } from '@/lib/premium';
 import { usdToKES } from '@/lib/currency';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDeviceId } from '@/lib/deviceId';
+import { linkDeviceToEmail } from '@/lib/deviceAnalytics';
 
 const PAYSTACK_PUBLIC_KEY = process.env.EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder';
 
@@ -82,10 +84,15 @@ export async function purchasePlan(packageId: string, email: string, skill?: str
     const reference = await openCheckout(amountKES, email, `PataSkills ${plan.name}`, 'subscription', plan.packageId, undefined, expiresAt);
     if (!reference) return 'cancelled';
 
+    // Join the device to this email right away, rather than waiting for
+    // the next tracking checkpoint to carry it (see docs/device-tracking-plan.md).
+    const deviceId = await getDeviceId();
+    await linkDeviceToEmail(email);
+
     // Save purchase & account state to Supabase
     try {
       await supabase.from('play_purchases').upsert(
-        { email, paystack_ref: reference, keys: 0, is_premium: true, updated_at: new Date().toISOString() },
+        { email, paystack_ref: reference, keys: 0, is_premium: true, device_id: deviceId, updated_at: new Date().toISOString() },
         { onConflict: 'paystack_ref' }
       );
       await supabase.from('play_accounts').upsert(
@@ -128,10 +135,15 @@ export async function purchaseKeyPack(packId: string, email: string, skill?: str
     await AsyncStorage.setItem('@play/user_email', email);
     const reference = await openCheckout(amountKES, email, `PataSkills ${pack.keys} keys`, 'keys', pack.productId, pack.keys);
     if (!reference) return 'cancelled';
+
+    // Join the device to this email right away -- same as purchasePlan().
+    const deviceId = await getDeviceId();
+    await linkDeviceToEmail(email);
+
     // Save purchase to Supabase
     try {
       await supabase.from('play_purchases').upsert(
-        { email, paystack_ref: reference, keys: pack.keys, is_premium: false, updated_at: new Date().toISOString() },
+        { email, paystack_ref: reference, keys: pack.keys, is_premium: false, device_id: deviceId, updated_at: new Date().toISOString() },
         { onConflict: 'paystack_ref' }
       );
     } catch {}

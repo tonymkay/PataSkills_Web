@@ -25,9 +25,9 @@ The app employs an **Offline-First & Local-First** architecture:
 | **Subscription Expiry Timestamp** | `expiresAt` | **Timestamp** (ISO 8601 string) | `@play/premium_expires_at`, `@play/keys` (`expiresAt`) | `play_accounts.expires_at`, `play_purchases.expires_at` | Calculated upon subscribing (7d, 30d, 365d); used to enforce local and server expiry |
 | **Key Refill Timestamp** | `resetAt` | **Timestamp** (Epoch ms / ISO 8601 string) | `@play/keys` (`resetAt`) | `play_accounts.reset_at` | Generated the moment key balance reaches `0` (escalating timer: 5m, 2h, 8h) |
 | **Reset Escalation Count** | `resetCount` | **Numerical** (Integer, e.g. `0`, `1`, `2`) | `@play/keys` (`resetCount`) | `play_accounts.reset_count` | Increments each time a free timer reset finishes |
-| **Completed Topics Count** | `completedTopics` | **Numerical** (Integer, e.g. `5`) | `@play/progress:{skillId}` | `play_progress.completed_topics` | Updated when a learner finishes all questions in a session topic |
-| **Total Topics in Curriculum** | `totalTopics` | **Numerical** (Integer, e.g. `46`) | `@play/progress:{skillId}` | `play_progress.total_topics` | Derived from the loaded curriculum definition |
-| **Completed Tracks List** | `completedTracks` | **Array of Strings** (e.g. `["full", "reading"]`) | `@play/completed_tracks:{skillId}` | Local per-skill cache | Recorded when all topics within a specific track are finished |
+| **Completed Topics Count** | `completedTopics` | **Numerical** (Integer, e.g. `5`) | `@play/progress:{skillId}` | `play_progress.completed_topics` (composite key `email, skill_id`) | Updated when a learner finishes all questions in a session topic |
+| **Total Topics in Curriculum** | `totalTopics` | **Numerical** (Integer, e.g. `46`) | `@play/progress:{skillId}` | `play_progress.total_topics` (composite key `email, skill_id`) | Derived from the loaded curriculum definition |
+| **Completed Tracks List** | `completedTracks` | **Array of Strings** (e.g. `["full", "reading"]`) | `@play/completed_tracks:{skillId}` | `play_progress.completed_tracks` (jsonb, composite key `email, skill_id`) | Recorded when all topics within a specific track are finished |
 | **Tabs Unlocked Gate** | `tabsUnlocked` | **Boolean as String** (`"true"`) | `@play/tabs_unlocked` | Local device state | Permanently set to `"true"` the first time any topic is completed |
 | **Daily Activity Dates** | `dates` | **Array of Strings** (`YYYY-MM-DD`, e.g. `["2026-09-06", "2026-09-07"]`) | `@play/activity_dates` | `play_user_stats.last_active_date`, `play_user_stats.active_days_count` | Appended automatically on first question/session completed each day |
 | **Current Streak** | `currentStreak` | **Numerical** (Integer, e.g. `4`) | Computed from `activity_dates` | Computed dynamically | Displayed in Reports tab & Streak panel |
@@ -43,6 +43,7 @@ The app employs an **Offline-First & Local-First** architecture:
 | **Last Notified Reset** | `last_notified_reset_at` | **String (Epoch ms)** (`"1788775000000"`) | `@play/last_notified_reset_at` | Local device state | Prevents duplicate notifications for the same cooldown period |
 | **Display Currency** | `currency` | **String** (`"USD"` or `"KES"`) | `@play/currency` | Local device state | User selection in Settings |
 | **Theme Mode** | `theme` | **String** (`"dark"`, `"light"`, or `"system"`) | `@theme_preference` | Local device state | User theme selection |
+| **Anonymous Device ID** | `deviceId` | **String** (UUID v4 shape, e.g. `"a1b2c3d4-..."`) | `@play/device_id` | `play_devices.device_id` (Primary Key) | Generated once on first use of `getDeviceId()` (`lib/deviceId.ts`) -- present before any email is ever linked |
 
 ---
 
@@ -68,10 +69,16 @@ Stores high-level engagement and gamification metrics:
 - `updated_at` (timestamptz)
 
 ### 3. `play_progress`
-Stores topic completion per learner:
-- `email` (text, Primary Key / Composite)
+Stores per-skill topic and track completion, restored across devices on
+login (`syncAllProgressWithCloud()` in `lib/progress.ts` -- one batched
+query per learner, not one per skill):
+- `email` (text, Composite Primary Key with `skill_id`)
+- `skill_id` (text, Composite Primary Key) -- curriculum slug; keeps one
+  skill's progress from colliding with another's for the same learner
 - `completed_topics` (integer) — Highest completed topic index + 1
 - `total_topics` (integer) — Total topics in curriculum
+- `completed_tracks` (jsonb) — Array of completed track names (e.g.
+  `["full", "reading"]`), mirrors `@play/completed_tracks:{skillId}`
 - `updated_at` (timestamptz)
 
 ### 4. `play_question_attempts`
@@ -92,6 +99,9 @@ Stores immutable purchase records from Paystack:
 - `paystack_ref` (text, Primary Key)
 - `keys` (integer) — Number of keys purchased (e.g. `20`)
 - `is_premium` (boolean) — `true` if this was an Unlimited subscription
+- `device_id` (text, nullable) — the device that made this purchase
+  (`lib/deviceId.ts`), stamped at checkout time; a permanent record
+  independent of whatever email is later stored on that device
 - `updated_at` (timestamptz)
 
 ### 6. `help_requests`
@@ -105,11 +115,125 @@ Stores support, billing, bug, and feedback submissions from Settings → Help �
 - `app_version` (text) — App version string (e.g. `1.0.0`)
 - `created_at` (timestamptz)
 
+### 7. `play_devices`
+Stores one row per anonymous device, upserted on every checkpoint
+(`lib/deviceAnalytics.ts`). Present before any email is ever linked -- the
+current-state summary table for the device tracking feature (see
+`docs/device-tracking-plan.md`):
+- `device_id` (text, Primary Key) -- from `lib/deviceId.ts`
+- `platform` (text) -- `ios` | `android` | `web`
+- `first_seen_at` (timestamptz) -- set once, on first insert
+- `last_seen_at` (timestamptz) -- bumped on every checkpoint; this is the
+  "is this device currently active" signal (recency, not a live socket
+  connection)
+- `landing_views_count` (integer) -- incremented every time `LandingScreen`
+  mounts, pre-unlock first run *and* every later Skills-tab visit alike
+- `sessions_count` (integer) -- incremented each time a track download
+  finishes and play starts (`SkillsFlow.runDownload`)
+- `topics_completed_count` (integer) -- incremented each time a topic is
+  finished (`PlaySession.handleSessionComplete`)
+- `key_balance` (integer) -- latest known balance snapshot (999999 stands
+  for Premium/unlimited, same convention as `lib/keys.ts`)
+- `is_premium` (boolean) -- latest known value
+- `last_skill_id` (text, nullable) -- curriculum slug of most recent activity
+- `last_track` (text, nullable) -- track of most recent activity
+- `email` (text, nullable) -- filled in once/if this device links an
+  account; use it to roll multiple `device_id`s up to one learner when
+  reporting (same device after a reinstall, or one learner across several
+  devices) -- see "Device identity & merging" below
+- `updated_at` (timestamptz)
+
+### 8. `play_device_events`
+Append-only checkpoint log backing `play_devices` -- one row per
+`landing_page_seen` / `session_started` / `topic_complete` event, each with
+its own timestamp. This is the timeline: "was this today or yesterday,"
+a per-device activity feed, and the source rows that
+`questions_answered`/`questions_missed` roll up from per skill:
+- `id` (uuid, Primary Key)
+- `device_id` (text) -- FK -> `play_devices.device_id`
+- `event_type` (text) -- `landing_page_seen` | `session_started` | `topic_complete`
+- `skill_id` (text, nullable) -- curriculum slug
+- `track` (text, nullable) -- e.g. `pairs`, `full`, `reading`
+- `topic_index` (integer, nullable) -- only on `topic_complete`
+- `questions_answered` (integer, nullable) -- `totalAnswered` from the
+  topic's `SessionStats`; only on `topic_complete`
+- `questions_missed` (integer, nullable) -- `totalAnswered - correctCount`;
+  only on `topic_complete`
+- `key_balance` (integer, nullable) -- snapshot at this exact checkpoint
+- `created_at` (timestamptz) -- defaults `now()`
+
 ---
 
 ## 4. Account Lifecycle & Data Security
 
 - **Anonymous Mode:** Learners can use the app without entering an email. All state resides on-device in `AsyncStorage`.
-- **Identity Linkage:** Entering an email on `KeysOfferScreen`, buying keys, or signing in associates the local device data with that email on Supabase.
-- **Account Restore:** Entering a previously used email downloads and restores the remote key balance, premium status, and topic progress to the device (`lib/restore.ts`).
+- **Identity Linkage:** Entering an email on `KeysOfferScreen`, buying keys, or signing in associates the local device data with that email on Supabase. On a successful purchase, `lib/billing.ts` also calls `linkDeviceToEmail()` (`lib/deviceAnalytics.ts`) immediately -- joining `play_devices.email` right at checkout, rather than waiting for the next tracking checkpoint to carry it -- and stamps `device_id` directly onto the `play_purchases` row, so which device paid for a given purchase stays on record even if the locally stored email later changes.
+- **Account Restore:** Entering a previously used email downloads and restores the remote key balance, premium status, and per-skill topic/track progress to the device (`lib/restore.ts` → `syncAllProgressWithCloud()`).
+- **Auto-Restore on Launch:** If a device already has an email linked (from a prior login/purchase on that device), `LandingScreen`'s mount effect calls `syncAllProgressWithCloud()` once the skill catalog resolves -- one batched Supabase query covering every skill, not one query per skill -- and merges the result into local storage. Merge is max-wins per field (topics, tracks) so neither an offline device's local progress nor a stale cloud snapshot can regress the other; this fails silently offline, same as every other Supabase call in this app, so no explicit connectivity check is needed.
 - **Logout:** Logging out in Settings clears `@play/user_email` locally so a different learner can use the device without overwriting the previous account.
+
+---
+
+## 5. Anonymous Device Tracking (pre-email)
+
+Everything above §1-4 requires an email to reach Supabase. `play_devices` /
+`play_device_events` are the exception: they exist specifically to make
+anonymous, pre-email activity visible, from the very first landing-page
+view onward. See `docs/device-tracking-plan.md` for the full design
+rationale; this section is the durable reference.
+
+**Device identity & merging.** `device_id` (`lib/deviceId.ts`) is an
+app-generated random UUID persisted in `AsyncStorage` under
+`@play/device_id` -- not a hardware fingerprint, not IDFA/GAID. It survives
+normal app close/reopen and is reused on every later launch, exactly like
+every other piece of local device state in this app (keys, progress, XP).
+It only resets if local storage is cleared or the app is
+uninstalled/reinstalled. `play_devices` is keyed by `device_id` and every
+write is an upsert, so a given device is never duplicated. Two `device_id`s
+that end up representing one real person -- the same device after a
+reinstall, or one learner across two devices -- are reconciled through
+`play_devices.email`: the moment *either* device links an account
+(checkout, Google sign-in, or restore -- the existing flow in §4), that
+row's `email` is filled in, and reporting should `GROUP BY email` (falling
+back to `device_id` when `email is null`) to avoid counting one learner as
+two. Fully anonymous devices that never link an email and are then
+reinstalled cannot be merged -- an accepted limitation of not using a
+store-level advertising identifier.
+
+**Checkpoints** (`lib/deviceAnalytics.ts`), each upserts `play_devices`
+(bumps the relevant counter + `last_seen_at` + latest skill/track/key
+snapshot) and appends one `play_device_events` row:
+
+| Event | Fires from |
+|---|---|
+| `landing_page_seen` | `LandingScreen` mount -- every time, pre-unlock first run and every later Skills-tab visit alike |
+| `session_started` | `SkillsFlow.runDownload()`, right after a track's questions finish downloading and play begins |
+| `topic_complete` | `PlaySession.handleSessionComplete`, alongside the existing `markTopicCompleted()` call |
+
+"Is this device online / active" is read off `last_seen_at` recency (it's
+bumped on every checkpoint above) -- there is no live socket/heartbeat
+connection, only last-seen timestamps.
+
+**Sample queries** (read via the Supabase SQL/table editor -- no in-app
+admin screen for this, by design):
+
+```sql
+-- Current-state report: every device, most recently active first
+select device_id, platform, landing_views_count, sessions_count,
+       topics_completed_count, key_balance, is_premium,
+       last_skill_id, last_track, email, last_seen_at
+from play_devices
+order by last_seen_at desc;
+
+-- Landed today but never completed a topic (drop-off)
+select * from play_devices
+where last_seen_at::date = current_date
+  and topics_completed_count = 0;
+
+-- One device's full timeline
+select event_type, skill_id, track, questions_answered,
+       questions_missed, key_balance, created_at
+from play_device_events
+where device_id = '...'
+order by created_at;
+```

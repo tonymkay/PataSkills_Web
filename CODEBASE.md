@@ -195,7 +195,7 @@ Extends `expo/tsconfig.base`, `strict: true`, path `@/*` → project root. `excl
 
 Edge Functions use **server** secrets (`PATASKILLS_PAYSTACK_SECRET_KEY`, `RC_WEBHOOK_SECRET`, `RESEND_API_KEY`, etc.), not `EXPO_PUBLIC_*`.
 
-Shares the PataSkills Supabase project; Play tables/bucket are independent (`play_curricula`, `play_signs`, `play_sign_pairs`, `play_accounts`, `play_purchases`, `play_progress`, `play_user_stats`, `play_question_attempts`, `play_track_defaults`, `help_requests`, bucket `play-assets`).
+Shares the PataSkills Supabase project; Play tables/bucket are independent (`play_curricula`, `play_signs`, `play_sign_pairs`, `play_accounts`, `play_purchases`, `play_progress`, `play_user_stats`, `play_question_attempts`, `play_track_defaults`, `play_devices`, `play_device_events`, `help_requests`, bucket `play-assets`).
 
 ### `vercel.json`
 
@@ -381,19 +381,21 @@ UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install C
 | `keys.ts` | Economy (below) |
 | `premium.ts` | `PLANS`, `KEY_PACKS` |
 | `currency.ts` | `KES_PER_USD = 129` |
-| `billing.ts` | Paystack checkout, `getSubscriptionInfo`, `enforceLocalExpiry` / `configureBilling` |
+| `billing.ts` | Paystack checkout, `getSubscriptionInfo`, `enforceLocalExpiry` / `configureBilling`; on success also calls `linkDeviceToEmail()` and stamps `device_id` on `play_purchases` |
 | `restore.ts` | Email/Google restore; `logoutAccount` |
 | `email.ts` | Validate + truncate |
 | `ads.ts` | Android AdMob rewarded only; non-Android → `'unavailable'` |
 | `webRewardedAd.ts` | `adBreak` rewarded; **unused by WatchAdPromptSheet** |
 | `notifications.ts` | Web Notification API + `public/sw.js` |
-| `progress.ts` | Per-skill topics/tracks + tabs unlock |
+| `progress.ts` | Per-skill topics/tracks + tabs unlock; `play_progress` keyed `(email, skill_id)`; `syncAllProgressWithCloud()` batches every skill into one query, max-wins merge, called from `LandingScreen`'s mount effect when an email is already linked |
 | `mistakes.ts` | `@play/mistakes:${skillId}` + `play_question_attempts` |
 | `xp.ts` | `@play/total_xp`, `@play/xp:${skillId}`, `play_user_stats` |
 | `streak.ts` | `@play/activity_dates` |
 | `leagues.ts` | 11 lifetime-XP bands of 500 |
 | `leaderboard.ts` | Current user + mock peers in-band |
 | `help.ts` | Topics + `help_requests` insert |
+| `deviceId.ts` | Anonymous per-device UUID, persisted in `AsyncStorage` -- not a hardware fingerprint/IDFA/GAID; see `userdata.md` §5 |
+| `deviceAnalytics.ts` | Anonymous pre-email checkpoints (`landing_page_seen` / `session_started` / `topic_complete`) -> `play_devices` + `play_device_events`; see `userdata.md` §5 and `docs/device-tracking-plan.md` |
 | `navDirection.ts` | `navPush` / `navBack` / `navReplace` |
 
 ### Keys (`keys.ts`)
@@ -432,7 +434,7 @@ Quartz, Topaz, Amber, Jade, Opal, Sapphire, Ruby, Emerald, Obsidian, Diamond, Le
 
 ### Progress
 
-`@play/progress:${skillId}`, `@play/completed_tracks:${skillId}`, `@play/tabs_unlocked`. First `markTopicCompleted` unlocks tabs permanently. `unlockTabsIfNeeded` is **not** exported (internal).
+`@play/progress:${skillId}`, `@play/completed_tracks:${skillId}`, `@play/tabs_unlocked`. First `markTopicCompleted` unlocks tabs permanently. `unlockTabsIfNeeded` is **not** exported (internal). Both `markTopicCompleted` and `markTrackCompleted` upsert `play_progress` (composite key `email, skill_id`, includes `completed_tracks` jsonb) when an email is linked. Cross-device restore goes through `syncAllProgressWithCloud(email, skillIds[])` — one query for every skill, max-wins merge on topics and a union on tracks, never regresses either side. `syncProgressWithCloud(email, skillId)` still exists as a single-skill wrapper around it (used by `restore.ts`). `LandingScreen` calls the batched version automatically on mount once the catalog resolves, if `@play/user_email` is already set — this is the auto-restore-on-launch path, no explicit connectivity check (fails silently offline like everything else).
 
 ---
 
@@ -487,9 +489,10 @@ One-off Node `.mjs` (run from `play/`). Highlights:
 - `play_purchases.sql` — `paystack_ref` PK
 - `play_sign_pairs.sql`
 - `play_track_defaults.sql` — nullable `image_path` / `label`; seed `full` → `"Learn Full Skill"` (images unseeded so driving art does not leak)
+- `play_devices.sql` / `play_device_events.sql` — anonymous pre-email device tracking (device state + append-only checkpoint log); see `userdata.md` §5
 - `fix_play_signs_rls.sql`, `reset_signs_fresh.sql`
 
-Other tables (`play_curricula`, `play_signs`, `play_progress`, `play_user_stats`, `play_question_attempts`, `help_requests`) are used in app code; full column inventory is in `userdata.md`.
+Other tables (`play_curricula`, `play_signs`, `play_progress`, `play_user_stats`, `play_question_attempts`, `play_devices`, `play_device_events`, `help_requests`) are used in app code; full column inventory is in `userdata.md`.
 
 ### Edge Functions (`supabase/functions/`)
 

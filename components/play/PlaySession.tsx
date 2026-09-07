@@ -12,6 +12,7 @@ import { useKeys } from '@/hooks/useKeys';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted, markTrackCompleted } from '@/lib/progress';
+import { trackTopicComplete } from '@/lib/deviceAnalytics';
 import { recordXpEarned } from '@/lib/xp';
 import { recordActivityToday } from '@/lib/streak';
 import { Track } from '@/lib/curriculum';
@@ -139,10 +140,11 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
       void recordActivityToday();
       // Source of truth: hitting topic complete screen marks topic done
       void markTopicCompleted(skillId, sessionIndex, sessions.length);
+      void trackTopicComplete(skillId, track, sessionIndex, stats);
       setScreenDirection('forward');
       setFlowState('topicComplete');
     },
-    [sessionIndex, sessions.length, skillId],
+    [sessionIndex, sessions.length, skillId, track],
   );
 
   // Directly advances to next session if keys available, or shows outOfKeys.

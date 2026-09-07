@@ -11,6 +11,7 @@ import { TrackDetailScreen } from '@/components/landing/TrackDetailScreen';
 import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
 import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
 import { areTabsUnlocked } from '@/lib/progress';
+import { trackSessionStarted } from '@/lib/deviceAnalytics';
 import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
@@ -125,6 +126,7 @@ export function SkillsFlow({ embedded = false, standalone = false }: SkillsFlowP
     setSessions(sessions);
     setSignCatalog(result.signCatalog);
     setStage('session');
+    void trackSessionStarted(skill, track);
   }, [selectedSkill, params.topic]);
 
   const handleStart = useCallback((skillId: CurriculumSlug) => {

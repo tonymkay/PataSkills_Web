@@ -106,18 +106,23 @@ export async function markTopicCompleted(
     await unlockTabsIfNeeded();
   } catch {}
 
-  // Sync to Supabase if email is known
+  // Sync to Supabase if email is known -- scoped by (email, skill_id) so
+  // this skill's row never collides with another skill's progress for the
+  // same learner (see docs/progress-restore-fix-plan.md Bug B).
   try {
     const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
     if (email) {
+      const tracks = await getCompletedTracks(skillId);
       await supabase.from('play_progress').upsert(
         {
           email,
+          skill_id: skillId,
           completed_topics: updated.completedTopics,
           total_topics: updated.totalTopics,
+          completed_tracks: tracks,
           updated_at: updated.lastUpdated,
         },
-        { onConflict: 'email' }
+        { onConflict: 'email,skill_id' }
       );
     }
   } catch {}
@@ -127,36 +132,90 @@ export async function markTopicCompleted(
 
 /**
  * Restores cloud progress from Supabase for a given email, merged into the
- * given skill's local bucket. Note: `play_progress` doesn't currently exist
- * as a Supabase table (confirmed via a PGRST205 error), so this silently
- * no-ops today — kept scoped per-skill so it's correct the moment that
- * table (and a skill column on it) gets added.
+ * given skill's local bucket. Kept for callers that only care about one
+ * skill (e.g. right after a purchase resumes a specific skill/track) --
+ * internally just filters syncAllProgressWithCloud()'s single batched
+ * fetch down to this skillId, so it never does its own extra round trip.
  */
 export async function syncProgressWithCloud(
   email: string,
   skillId: CurriculumSlug | string = LEGACY_UNSCOPED_BUCKET
 ): Promise<ProgressState> {
+  const merged = await syncAllProgressWithCloud(email, [skillId]);
+  return merged[skillId] ?? (await getLocalProgress(skillId));
+}
+
+/**
+ * Restores cloud progress for EVERY skill in `skillIds`, in a single
+ * Supabase query (`.eq('email', ...)`, no per-skill filter) rather than
+ * one round trip per skill -- this is what LandingScreen's mount effect
+ * calls so auto-restore-on-launch stays at one query regardless of how
+ * many skills the catalog grows to (see docs/progress-restore-fix-plan.md §5.3).
+ *
+ * Merge is max-wins per field, never regresses: offline-first means a
+ * device that's been offline for a while and has stale-looking local
+ * counters should never have its own progress erased by an older cloud
+ * snapshot, and vice versa -- whichever side is further along wins, per
+ * skill, per field. Completed tracks are unioned for the same reason.
+ * Every Supabase call here fails silently (try/catch, same pattern as
+ * deviceAnalytics.ts) -- offline just means local progress is left as-is,
+ * no connectivity check needed.
+ */
+export async function syncAllProgressWithCloud(
+  email: string,
+  skillIds: (CurriculumSlug | string)[]
+): Promise<Record<string, ProgressState>> {
+  const results: Record<string, ProgressState> = {};
+
+  let cloudRows: {
+    skill_id: string;
+    completed_topics: number;
+    total_topics: number;
+    completed_tracks: Track[] | null;
+  }[] = [];
+
   try {
     const { data, error } = await supabase
       .from('play_progress')
-      .select('completed_topics, total_topics, updated_at')
-      .eq('email', email)
-      .single();
-
-    if (!error && data) {
-      const local = await getLocalProgress(skillId);
-      const mergedCompleted = Math.max(local.completedTopics, data.completed_topics || 0);
-      const merged: ProgressState = {
-        completedTopics: mergedCompleted,
-        totalTopics: data.total_topics || 34,
-        lastUpdated: new Date().toISOString(),
-      };
-      await AsyncStorage.setItem(progressStorageKey(skillId), JSON.stringify(merged));
-      return merged;
-    }
+      .select('skill_id, completed_topics, total_topics, completed_tracks')
+      .eq('email', email);
+    if (!error && data) cloudRows = data as typeof cloudRows;
   } catch {}
 
-  return await getLocalProgress(skillId);
+  const cloudBySkill = new Map(cloudRows.map((r) => [r.skill_id, r]));
+
+  for (const skillId of skillIds) {
+    const local = await getLocalProgress(skillId);
+    const cloud = cloudBySkill.get(String(skillId));
+
+    if (!cloud) {
+      results[String(skillId)] = local;
+      continue;
+    }
+
+    const merged: ProgressState = {
+      completedTopics: Math.max(local.completedTopics, cloud.completed_topics || 0),
+      totalTopics: Math.max(local.totalTopics, cloud.total_topics || 0) || DEFAULT_PROGRESS.totalTopics,
+      lastUpdated: new Date().toISOString(),
+    };
+    try {
+      await AsyncStorage.setItem(progressStorageKey(skillId), JSON.stringify(merged));
+    } catch {}
+    results[String(skillId)] = merged;
+
+    // Union completed tracks the same max-wins way -- a track finished on
+    // either device stays finished.
+    try {
+      const localTracks = await getCompletedTracks(skillId);
+      const cloudTracks = cloud.completed_tracks || [];
+      const unioned = Array.from(new Set([...localTracks, ...cloudTracks]));
+      if (unioned.length !== localTracks.length) {
+        await AsyncStorage.setItem(completedTracksStorageKey(skillId), JSON.stringify(unioned));
+      }
+    } catch {}
+  }
+
+  return results;
 }
 
 /**
@@ -194,6 +253,27 @@ export async function markTrackCompleted(
   const updated = [...current, track];
   try {
     await AsyncStorage.setItem(completedTracksStorageKey(skillId), JSON.stringify(updated));
+  } catch {}
+
+  // Sync to Supabase if email is known -- same upsert shape as
+  // markTopicCompleted, so a track finished on this device is visible to
+  // syncAllProgressWithCloud() on any other device without a separate table.
+  try {
+    const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
+    if (email) {
+      const progress = await getLocalProgress(skillId);
+      await supabase.from('play_progress').upsert(
+        {
+          email,
+          skill_id: skillId,
+          completed_topics: progress.completedTopics,
+          total_topics: progress.totalTopics,
+          completed_tracks: updated,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'email,skill_id' }
+      );
+    }
   } catch {}
 
   return updated;
