@@ -1,0 +1,182 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/lib/supabase';
+import type { QuizQuestion, OptionChoice } from '@/types/quiz';
+
+const EMAIL_STORAGE_KEY = '@play/user_email';
+
+export interface QuestionAttempt {
+  skillId: string;
+  topicIndex: number;
+  questionId: string;
+  questionText: string;
+  options: string[];
+  correctAnswerText: string;
+  failCount: number;
+  attemptCount: number;
+  solved: boolean;
+  lastMissedAt: string;
+}
+
+export interface MistakeItem {
+  number: number;
+  questionId: string;
+  question: string;
+  mistakeCount: number;
+  correctAnswer: string;
+  options: string[];
+  solved: boolean;
+}
+
+function mistakesKey(skillId: string): string {
+  return `@play/mistakes:${skillId}`;
+}
+
+type MistakeMap = Record<string, QuestionAttempt>;
+
+async function readSkillMistakes(skillId: string): Promise<MistakeMap> {
+  try {
+    const raw = await AsyncStorage.getItem(mistakesKey(skillId));
+    if (raw) {
+      return JSON.parse(raw) as MistakeMap;
+    }
+  } catch {}
+  return {};
+}
+
+async function writeSkillMistakes(skillId: string, data: MistakeMap): Promise<void> {
+  try {
+    await AsyncStorage.setItem(mistakesKey(skillId), JSON.stringify(data));
+  } catch {}
+}
+
+function resolveCorrectAnswerText(question: QuizQuestion): string {
+  if (Array.isArray(question.answers) && question.answers.length > question.correctAnswer) {
+    const ans = question.answers[question.correctAnswer];
+    if (ans) return ans;
+  }
+  if (Array.isArray(question.labels) && question.labels.length > question.correctAnswer) {
+    const lbl = question.labels[question.correctAnswer];
+    if (lbl) return lbl;
+  }
+  if (question.explanation && question.explanation.trim().length > 0) {
+    return question.explanation;
+  }
+  return `Option ${question.correctAnswer + 1}`;
+}
+
+function extractOptionsStrings(question: QuizQuestion): string[] {
+  if (Array.isArray(question.answers) && question.answers.length > 0) {
+    return question.answers;
+  }
+  if (Array.isArray(question.labels) && question.labels.length > 0) {
+    return question.labels;
+  }
+  return [];
+}
+
+/**
+ * Records a question answered incorrectly. Increments failCount and attemptCount,
+ * marks solved as false, and sets lastMissedAt.
+ */
+export async function recordQuestionFailure(
+  skillId: string,
+  topicIndex: number,
+  question: QuizQuestion,
+): Promise<void> {
+  if (!skillId || !question || !question.id) return;
+
+  const map = await readSkillMistakes(skillId);
+  const prev = map[question.id];
+
+  const updated: QuestionAttempt = {
+    skillId,
+    topicIndex,
+    questionId: question.id,
+    questionText: question.question || 'Question',
+    options: extractOptionsStrings(question),
+    correctAnswerText: resolveCorrectAnswerText(question),
+    failCount: (prev?.failCount ?? 0) + 1,
+    attemptCount: (prev?.attemptCount ?? 0) + 1,
+    solved: false,
+    lastMissedAt: new Date().toISOString(),
+  };
+
+  map[question.id] = updated;
+  await writeSkillMistakes(skillId, map);
+
+  // Background cloud mirror if user email is present
+  void syncAttemptToCloud(updated);
+}
+
+/**
+ * Records a question answered correctly. If it was previously missed,
+ * marks it as solved so the user can see they overcame it.
+ */
+export async function recordQuestionSuccess(
+  skillId: string,
+  questionId: string,
+): Promise<void> {
+  if (!skillId || !questionId) return;
+
+  const map = await readSkillMistakes(skillId);
+  const prev = map[questionId];
+  if (prev) {
+    prev.solved = true;
+    prev.attemptCount += 1;
+    map[questionId] = prev;
+    await writeSkillMistakes(skillId, map);
+    void syncAttemptToCloud(prev);
+  }
+}
+
+/**
+ * Returns all recorded mistakes for a given skill, formatted for display.
+ */
+export async function getSkillMistakes(skillId: string): Promise<MistakeItem[]> {
+  const map = await readSkillMistakes(skillId);
+  const entries = Object.values(map);
+
+  return entries
+    .map((e, index) => ({
+      number: index + 1,
+      questionId: e.questionId,
+      question: e.questionText,
+      mistakeCount: e.failCount,
+      correctAnswer: e.correctAnswerText,
+      options: e.options,
+      solved: e.solved,
+    }))
+    .sort((a, b) => b.mistakeCount - a.mistakeCount);
+}
+
+/**
+ * Returns the total count of unique questions missed at least once for this skill.
+ */
+export async function getSkillMistakesCount(skillId: string): Promise<number> {
+  const map = await readSkillMistakes(skillId);
+  return Object.keys(map).length;
+}
+
+/**
+ * Cloud sync mirror to Supabase if table exists and email is known.
+ */
+async function syncAttemptToCloud(attempt: QuestionAttempt): Promise<void> {
+  try {
+    const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
+    if (!email) return;
+
+    await supabase.from('play_question_attempts').upsert(
+      {
+        email,
+        skill_id: attempt.skillId,
+        question_id: attempt.questionId,
+        topic_index: attempt.topicIndex,
+        fail_count: attempt.failCount,
+        attempt_count: attempt.attemptCount,
+        solved: attempt.solved,
+        last_missed_at: attempt.lastMissedAt,
+      },
+      { onConflict: 'email,question_id' }
+    );
+  } catch {}
+}

@@ -8,7 +8,7 @@ import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { RestoreResult } from '@/lib/restore';
 import { truncateEmailMiddle } from '@/lib/email';
-import { getLocalProgress } from '@/lib/progress';
+import { getLocalProgress, areTabsUnlocked } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
@@ -36,6 +36,12 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
   const { colors } = useTheme();
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
+  // Once tabs are unlocked, AppHeader (shown above this screen in the
+  // "Skills" tab) already surfaces identity + a Settings gear that owns
+  // login/restore — so this screen's own login link becomes redundant
+  // and is hidden. Pre-unlock (rendered with no header, via app/index.tsx's
+  // gate), it's the only way to log in and stays exactly as before.
+  const [tabsUnlocked, setTabsUnlocked] = useState(false);
   // Which skills exist at all, and their display titles, both come from
   // play_curricula (is_active=true) via lib/curriculaCatalog.ts — so
   // shipping a new skill is a DB row + storage upload, not an app-code
@@ -65,6 +71,7 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
     AsyncStorage.getItem('@play/user_email').then((email) => {
       if (email) setLinkedEmail(email);
     }).catch(() => {});
+    areTabsUnlocked().then(setTabsUnlocked);
   }, []);
 
   const handleRestoreSuccess = (result: RestoreResult) => {
@@ -104,18 +111,23 @@ export function LandingScreen({ onStart, onRestore }: LandingScreenProps) {
           ))}
         </View>
 
-        {/* Existing user, login link — outside the grid */}
-        <View style={styles.bottom}>
-          <Pressable
-            onPress={() => setRestoreModalVisible(true)}
-            hitSlop={10}
-            style={styles.restoreLinkWrap}
-          >
-            <Text style={[styles.restoreLinkText, { color: colors.onSurfaceVariant || '#9CA3AF' }]}>
-              {linkedEmail ? `Logged in as ${truncateEmailMiddle(linkedEmail)}` : 'Existing user, login'}
-            </Text>
-          </Pressable>
-        </View>
+        {/* Existing user, login link — outside the grid. Hidden once tabs
+            are unlocked: AppHeader (shown above this screen in the
+            "Skills" tab) already owns identity display, and login/restore
+            moves to Settings from there. */}
+        {!tabsUnlocked && (
+          <View style={styles.bottom}>
+            <Pressable
+              onPress={() => setRestoreModalVisible(true)}
+              hitSlop={10}
+              style={styles.restoreLinkWrap}
+            >
+              <Text style={[styles.restoreLinkText, { color: colors.onSurfaceVariant || '#9CA3AF' }]}>
+                {linkedEmail ? `Logged in as ${truncateEmailMiddle(linkedEmail)}` : 'Existing user, login'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Restore Account Modal */}
         <RestoreAccountModal

@@ -25,6 +25,7 @@ import { CheckButton, FeedbackState } from '@/components/feedback/CheckButton';
 import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
 import { FeedbackSheet, FeedbackSheetState } from '@/components/feedback/FeedbackSheet';
 import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
+import { recordQuestionFailure, recordQuestionSuccess } from '@/lib/mistakes';
 
 const XP_PER_CORRECT = 5;
 
@@ -40,6 +41,8 @@ interface CardDeckProps {
   signCatalog?: SignCatalogEntry[];
   sessionTitle?: string;
   keyBalance?: number;
+  skillId?: string;
+  topicIndex?: number;
   onSessionComplete?: (stats: { totalAnswered: number; correctCount: number }) => void;
   onFinish?: (stats: { totalAnswered: number; correctCount: number }) => void;
   onClose?: () => void;
@@ -325,6 +328,8 @@ function QuizCardDeck({
   signCatalog,
   sessionTitle,
   keyBalance,
+  skillId,
+  topicIndex,
   onSessionComplete,
   onFinish,
   onClose,
@@ -475,6 +480,13 @@ function QuizCardDeck({
       // Permanently marks this question as missed for scoring, even though
       // Try Again lets them keep attempting it.
       missedFirstAttemptRef.current.add(currentCard.id);
+      if (skillId) {
+        void recordQuestionFailure(skillId, topicIndex ?? 0, currentCard);
+      }
+    } else {
+      if (skillId && !missedFirstAttemptRef.current.has(currentCard.id)) {
+        void recordQuestionSuccess(skillId, currentCard.id);
+      }
     }
     setFeedbackState(isCorrect ? 'correct' : 'incorrect');
     setEvaluatedResult(isCorrect ? 'right' : 'wrong');

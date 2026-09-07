@@ -12,6 +12,8 @@ import { useKeys } from '@/hooks/useKeys';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted, markTrackCompleted } from '@/lib/progress';
+import { recordXpEarned } from '@/lib/xp';
+import { recordActivityToday } from '@/lib/streak';
 import { Track } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
@@ -131,7 +133,10 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
   const handleSessionComplete = useCallback(
     (stats: SessionStats) => {
       setLastStats(stats);
-      setTotalXp((prev) => prev + stats.correctCount * XP_PER_CORRECT);
+      const earnedXp = stats.correctCount * XP_PER_CORRECT;
+      setTotalXp((prev) => prev + earnedXp);
+      void recordXpEarned(skillId, earnedXp);
+      void recordActivityToday();
       // Source of truth: hitting topic complete screen marks topic done
       void markTopicCompleted(skillId, sessionIndex, sessions.length);
       setScreenDirection('forward');
@@ -367,6 +372,8 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
           signCatalog={signCatalog}
           sessionTitle={currentSession.title}
           keyBalance={isPremium ? 999999 : (balance ?? 0)}
+          skillId={skillId}
+          topicIndex={sessionIndex}
           onSessionComplete={handleSessionComplete}
           onExit={onExit}
         />
@@ -377,6 +384,8 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
           signCatalog={signCatalog}
           sessionTitle={currentSession.title}
           keyBalance={isPremium ? 999999 : (balance ?? 0)}
+          skillId={skillId}
+          topicIndex={sessionIndex}
           onSessionComplete={handleSessionComplete}
           onExit={onExit}
         />

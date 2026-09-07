@@ -17,18 +17,18 @@ export interface CurriculumCatalogRow {
 let cache: CurriculumCatalogRow[] | null = null;
 let inflight: Promise<CurriculumCatalogRow[]> | null = null;
 
-export function getCurriculaCatalog(): Promise<CurriculumCatalogRow[]> {
-  if (cache) return Promise.resolve(cache);
+export async function getCurriculaCatalog(): Promise<CurriculumCatalogRow[]> {
+  if (cache) return cache;
   if (!inflight) {
-    inflight = supabase
-      .from('play_curricula')
-      .select('slug, title, cover_image_path')
-      .eq('is_active', true)
-      .then(({ data, error }) => {
-        cache = !error && data ? data : [];
-        inflight = null;
-        return cache;
-      });
+    inflight = (async () => {
+      const { data, error } = await supabase
+        .from('play_curricula')
+        .select('slug, title, cover_image_path')
+        .eq('is_active', true);
+      cache = !error && data ? data : [];
+      inflight = null;
+      return cache;
+    })();
   }
   return inflight;
 }

@@ -18,6 +18,31 @@ const EMAIL_STORAGE_KEY = '@play/user_email';
 // passes a real skillId.
 const LEGACY_UNSCOPED_BUCKET = 'unscoped';
 
+// Set once, permanently, the first time markTopicCompleted() ever fires for
+// any skill -- the "hit the topicComplete screen for the very first time"
+// moment. From then on the app's tabbed shell ((tabs)/_layout.tsx) is used
+// instead of the single-page Skills Corner flow -- see app/index.tsx's gate.
+const TABS_UNLOCKED_KEY = '@play/tabs_unlocked';
+
+/** Whether the tabbed home shell has been unlocked yet (persists forever
+ *  once true -- never re-locks). */
+export async function areTabsUnlocked(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(TABS_UNLOCKED_KEY)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+async function unlockTabsIfNeeded(): Promise<void> {
+  try {
+    const already = await AsyncStorage.getItem(TABS_UNLOCKED_KEY);
+    if (already !== 'true') {
+      await AsyncStorage.setItem(TABS_UNLOCKED_KEY, 'true');
+    }
+  } catch {}
+}
+
 function progressStorageKey(skillId: CurriculumSlug | string): string {
   return `@play/progress:${skillId}`;
 }
@@ -73,6 +98,12 @@ export async function markTopicCompleted(
 
   try {
     await AsyncStorage.setItem(progressStorageKey(skillId), JSON.stringify(updated));
+    // Reaching this point means the learner just hit the topicComplete
+    // screen for real (not merely read cached progress) -- the trigger
+    // moment for unlocking the tabbed home shell, see the comment above
+    // TABS_UNLOCKED_KEY. A no-op after the first call, for this skill or
+    // any other.
+    void unlockTabsIfNeeded();
   } catch {}
 
   // Sync to Supabase if email is known

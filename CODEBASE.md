@@ -1,6 +1,33 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-06 (h) — Third skill (**Bible
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-07 (i) — Shipped the **Tabbed Home Shell**,
+> **Progress Gate**, and full **Reports & Missed Questions System**:
+> **(1) Progressive Unlock & Root Gate**: `lib/progress.ts` gained `areTabsUnlocked()` and
+> `unlockTabsIfNeeded()` (`@play/tabs_unlocked`). Pre-unlock, `app/index.tsx` acts as a root gate
+> rendering the classic single-route `SkillsFlow` directly without a tab bar. The moment the
+> learner completes their first topic on any skill, tabs permanently unlock and subsequent launches
+> redirect to `/(tabs)/home`.
+> **(2) Tabbed Navigation (`app/(tabs)/`)**: Custom `FloatingTabBar` (`components/nav/FloatingTabBar.tsx`)
+> with spring-animated sliding pill and Lucide icons (`Home`, `Library`, `KeyRound`, `PieChart`)
+> wrapping four tabs: `home` (`SkillProgressCard` list with dynamic progress & resume actions),
+> `skills` (embedded `SkillsFlow`), `keys` (`KeysOptionsContent` with buy-keys/subscribe/free-trial timer),
+> and `reports` (live analytics). All four tabs display `AppHeader` (`components/nav/AppHeader.tsx`)
+> with avatar initials, learner name, and gear link to `app/settings.tsx`.
+> **(3) Settings & Login Migration**: "Existing user, login" is hidden once tabs are unlocked.
+> Account sign-in, account restore, notifications toggle, currency toggle (`KES`/`USD`), and support/legal
+> links now live in `app/settings.tsx` (`components/settings/SettingsComponents.tsx`).
+> **(4) Missed Questions Tracking**: `lib/mistakes.ts` tracks every failed question per skill in
+> `@play/mistakes:${skillId}` with question prompt, options, correct answer, fail count, and mastered status.
+> Captured in real time in `components/cards/CardDeck.tsx`. `app/mistakes.tsx` (`components/reports/MistakeCard.tsx`)
+> provides a dedicated drill-down review screen with "All" vs "Unsolved" filters.
+> **(5) XP & Streak Analytics**: `lib/xp.ts` records lifetime (`@play/total_xp`) and per-skill XP (awarded
+> upon topic complete in `components/play/PlaySession.tsx`). `lib/streak.ts` records practice days
+> (`@play/activity_dates`), computing consecutive Day Streak and Mon–Sun weekly active flags.
+> `app/(tabs)/reports.tsx` dynamically renders live Day Streak, Total XP, 7-day calendar dots,
+> Bronze/Silver/Gold League tier, and per-skill cards with missed questions count.
+> **(6) Bugfix**: `lib/curriculaCatalog.ts` rewritten with async IIFE to fix a `PromiseLike` typecheck error.
+>
+> **Last updated**: 2026-09-06 (h) — Third skill (**Bible
 > Trivia**) shipped, and the `full` track's label moved from a hardcoded string to a DB-driven
 > universal default, closing the gap `play_track_defaults` was reserved for. **(1)**
 > `constants/skills.ts` gained a `bible-trivia` `LANDING_SKILLS` entry and
@@ -111,13 +138,20 @@ Since the previous documentation pass, three large areas were built out that thi
 ### Core User Flow
 
 ```
-Landing Screen (skills grid)
-  → Learning Style Screen (pick a track)
-    → Track Detail Screen (preview + Start Practice)
-      → Download Session (track-aware)
-        → Play Session (Card Deck: Quiz or Reading)
-          → Topic Complete
-            → Next Session, or Out of Keys (buy keys / subscribe / free-trial timer / watch ad)
+Pre-unlock:
+  app/index.tsx (RootGate)
+    → SkillsFlow (LandingScreen 2-col grid → LearningStyleScreen → TrackDetailScreen → Downloading → PlaySession)
+      → Topic 1 Completed!
+        → unlockTabsIfNeeded() fires in lib/progress.ts permanently
+
+Post-unlock (every future launch):
+  app/index.tsx redirects to /(tabs)/home
+    ├── (tabs)/home    — In-progress skill cards, percentage, direct session resume
+    ├── (tabs)/skills  — Skills Corner grid, track pickers, and play sessions (embedded SkillsFlow)
+    ├── (tabs)/keys    — Balance hero, key packs, subscriptions, free-trial countdown & reminder toggle
+    └── (tabs)/reports — Day streak, total XP, 7-day calendar, league tier, and per-skill cards with missed questions
+  app/settings.tsx     — Account restore/sign-in, notification toggle, currency toggle, legal/support links
+  app/mistakes.tsx     — Drill-down per-skill mistake review (question prompt, fail count, correct answer)
 ```
 
 A `?track=` URL param (ad/campaign links) skips straight to Track Detail; `?resume=true` (returning from checkout) skips straight into a session.
@@ -146,7 +180,15 @@ play/
 │
 ├── app/                               # Expo Router pages
 │   ├── _layout.tsx                    # Root layout (providers, fonts, splash)
-│   ├── index.tsx                      # Home page — 5-stage flow (landing/learning-style/track-detail/downloading/session)
+│   ├── index.tsx                      # Root gate (pre-unlock: SkillsFlow; post-unlock: redirect to /(tabs)/home)
+│   ├── (tabs)/                        # Tabbed home shell (unlocked after first topic complete)
+│   │   ├── _layout.tsx                # Tabs layout with FloatingTabBar (Home, Skills, Keys, Reports)
+│   │   ├── home.tsx                   # Home tab — in-progress skill cards + direct session resume
+│   │   ├── skills.tsx                 # Skills tab — embedded SkillsFlow under AppHeader
+│   │   ├── keys.tsx                   # Keys tab — standalone keys balance, packs, subscriptions, free trial
+│   │   └── reports.tsx                # Reports tab — Day streak, total XP, 7-day activity, league, skill cards
+│   ├── settings.tsx                   # Settings screen — Account, preferences, currency, support, legal
+│   ├── mistakes.tsx                   # Mistake Overview screen — per-skill missed questions list & review
 │   ├── +html.tsx                      # Web-only HTML shell (fonts, viewport, CSS)
 │   ├── keys-packs.tsx                 # Buy one-time keys — pack list + balance hero
 │   ├── keys-confirm.tsx               # Confirm a key-pack purchase + email capture
@@ -166,7 +208,7 @@ play/
 │   │   ├── GoogleWebButton.tsx        # Native stub (renders nothing — no native Google sign-in yet)
 │   │   └── GoogleWebButton.web.tsx    # Real Google Identity Services button (web only)
 │   ├── cards/
-│   │   ├── CardDeck.tsx               # Router: QuizCardDeck (quiz flow) or ReadingCardDeck (browse flow)
+│   │   ├── CardDeck.tsx               # Router: QuizCardDeck (with mistake recording) or ReadingCardDeck
 │   │   ├── ReadingCard.tsx            # Reading Mode card — sign image, name, meaning, explanation
 │   │   ├── ScrollHintChevron.tsx      # Shared bouncing "more content below" chevron
 │   │   └── TwoImageCard.tsx           # Individual quiz card (3 layout types)
@@ -176,28 +218,39 @@ play/
 │   │   ├── FeedbackSheet.tsx          # Correct/Not-quite bottom sheet
 │   │   ├── FlagIcon.tsx               # Flag-a-question toggle button
 │   │   ├── KeyRewardSuccessModal.tsx  # "+1 key" reward screen (bare content + standalone modal wrapper)
+│   │   ├── KeysOfferScreen.tsx        # Upsell offer screen
+│   │   ├── KeysOptionsContent.tsx     # Reusable 3-option card container (Buy Keys, Subscribe, Free Trial)
 │   │   ├── LearnMoreSheet.tsx         # Explanation bottom sheet — backed by the signs catalog
 │   │   ├── QuitConfirmSheet.tsx       # "Are you sure?" quit confirmation
-│   │   ├── SessionStateScreen.tsx     # Multi-purpose interstitial screen, incl. scrollable Out-of-Keys screen
+│   │   ├── SessionStateScreen.tsx     # Interstitial screen (topic/chapter complete, out-of-keys, rewards)
 │   │   └── WatchAdPromptSheet.tsx     # "Watch an ad for +1 session?" sheet, chains into KeyRewardSuccessModal
-│   ├── landing/
-│   │   ├── CarouselDots.tsx           # Animated pager dots (currently unused by LandingScreen's grid)
+│   ├── home/
 │   │   ├── LandingIllustration.tsx    # Remote cover image component
 │   │   ├── LandingScreen.tsx          # Entry screen — 2-column "Skills Corner" grid
-│   │   ├── LearningStyleScreen.tsx    # Full-page track/mode list (reuses ModeCard)
-│   │   ├── ModeCard.tsx               # One learning-mode row (illustration, title, plain-text status label, progress bar, "N questions" count)
-│   │   ├── ModeSwitcherSheet.tsx      # Bottom sheet: switch track mid-flow, or "N/6 tracks complete" on trackComplete
-│   │   ├── SkillCard.tsx              # Bordered skill card w/ progress + CTA (currently unused — see LandingScreen note)
+│   │   ├── SkillCard.tsx              # Bordered skill card w/ progress + CTA
 │   │   ├── SkillGridCard.tsx          # Compact grid-cell skill card (used by LandingScreen)
+│   │   └── SkillProgressCard.tsx      # In-progress skill card on Home tab (progress bar, %, CTA)
+│   ├── landing/
+│   │   ├── CarouselDots.tsx           # Animated pager dots (currently unused by LandingScreen's grid)
+│   │   ├── LearningStyleScreen.tsx    # Full-page track/mode list (reuses ModeCard)
+│   │   ├── ModeCard.tsx               # One learning-mode row (illustration, title, status, progress, count)
+│   │   ├── ModeSwitcherSheet.tsx      # Bottom sheet: switch track mid-flow, or "N/6 tracks complete"
 │   │   └── TrackDetailScreen.tsx      # Full-page single-track preview + "Start Practice" CTA
 │   ├── nav/
-│   │   └── ScreenTransition.tsx       # Web-only slide-in wrapper for standalone app/ routes (pairs with lib/navDirection.ts)
+│   │   ├── AppHeader.tsx              # Header shown across tabs (avatar initials, name, settings gear icon)
+│   │   ├── FloatingTabBar.tsx         # Pill-animated bottom tab bar (Home, Skills, Keys, Reports)
+│   │   └── ScreenTransition.tsx       # Web-only slide-in wrapper for standalone app/ routes
 │   ├── play/
-│   │   └── PlaySession.tsx            # Session orchestrator (keys, flow states, quiz-vs-reading branch, mode switcher)
+│   │   ├── PlaySession.tsx            # Session orchestrator (keys, flow states, XP/streak award, mode switcher)
+│   │   └── SkillsFlow.tsx             # Extracted 4-stage Skills flow (Landing -> LearningStyle -> TrackDetail -> Play)
+│   ├── reports/
+│   │   └── MistakeCard.tsx            # Mistake card displaying question, fail count, and correct answer
+│   ├── settings/
+│   │   └── SettingsComponents.tsx     # SectionHeader, SettingsRow, SettingsToggleRow
 │   └── ui/
-│       ├── Button.tsx                 # Shared CTA pill button (solid/gradient/outline) — every full-width button in the app
+│       ├── Button.tsx                 # Shared CTA pill button (solid/gradient/outline)
 │       ├── ConnectionError.tsx        # "App can't connect" full-screen state + RELOAD button
-│       └── Toggle.tsx                 # Small animated switch (used by the reminders toggle)
+│       └── Toggle.tsx                 # Small animated switch (used by reminders & notification toggles)
 │
 ├── constants/
 │   ├── index.ts                       # Barrel export for all constants
@@ -208,7 +261,7 @@ play/
 │   ├── icons.ts                       # Icon size tokens
 │   ├── curriculumAssets.ts            # Static cover-image paths by curriculum slug
 │   ├── skills.ts                      # LANDING_SKILLS catalog with trackLabels / trackImages overrides
-│   └── trackOptions.ts                # getTrackOptionsForSkill / getTrackOption — single source of truth for mode list & visuals
+│   └── trackOptions.ts                # getTrackOptionsForSkill / getTrackOption — mode list & visuals
 │
 ├── theme/
 │   ├── ThemeContext.tsx                # React context: dark/light/auto theme
@@ -217,18 +270,23 @@ play/
 ├── lib/
 │   ├── supabase.ts                    # Supabase client singleton
 │   ├── curriculum.ts                  # Fetch curriculum JSON + signs catalog; deriveTrack()
+│   ├── curriculaCatalog.ts            # DB-driven curricula catalog with cached Promise handling
+│   ├── trackDefaults.ts               # DB-driven universal track icons and labels
 │   ├── downloadSession.ts             # Orchestrate full session download (track-aware)
-│   ├── keys.ts                        # Keys balance: read/write/spend/reset/premium, escalating cooldown tiers
+│   ├── keys.ts                        # Keys balance: read/write/spend/reset/premium, cooldown tiers
 │   ├── premium.ts                     # PLANS (subscription tiers) + KEY_PACKS catalog & pricing display
 │   ├── currency.ts                    # USD/KES conversion + formatting helpers
 │   ├── billing.ts                     # Paystack web checkout — purchasePlan() / purchaseKeyPack()
 │   ├── restore.ts                     # Account restore/link by email or Google, play_accounts sync
 │   ├── email.ts                       # Email sanitize/validate + display truncation
-│   ├── ads.ts                         # Rewarded-ad bonus session (react-native-google-mobile-ads, optional; web fallback timer)
+│   ├── ads.ts                         # Rewarded-ad bonus session (optional native; web fallback timer)
 │   ├── notifications.ts               # Browser Notification API reset-timer reminder (web only)
-│   ├── progress.ts                    # Local (+cloud-synced) topic progress AND per-track completion tracking
+│   ├── progress.ts                    # Local (+cloud-synced) topic progress, tracks, and areTabsUnlocked() flag
+│   ├── mistakes.ts                    # Missed questions recording, fail count, mastered status, cloud sync
+│   ├── xp.ts                          # Lifetime & per-skill XP tracking and cloud sync
+│   ├── streak.ts                      # Activity date recording, streak calculation, 7-day week calendar
 │   ├── signs.ts                       # Fetch sign assets & sign pairs from DB
-│   └── navDirection.ts                # Explicit web slide-direction flag (navPush/navBack/navReplace) for ScreenTransition
+│   └── navDirection.ts                # Explicit web slide-direction flag (navPush/navBack/navReplace)
 │
 ├── hooks/
 │   ├── useKeys.ts                     # React hook wrapping lib/keys.ts (balance, isPremium, resetAt, isOutOfKeys)
@@ -353,32 +411,69 @@ Loads the Sora font family via `useFonts()` (empty map on web — fonts are alre
 
 ---
 
-### `index.tsx` — Home Page / Entry Point
+### `index.tsx` — Root Gate
 
-A **five-stage** state machine (`Stage = 'landing' | 'learning-style' | 'track-detail' | 'downloading' | 'session'`), a significant expansion from the old three-stage version:
+`app/index.tsx` functions as the **Root Gate** for the entire application:
+- On mount, checks `areTabsUnlocked()` in `lib/progress.ts` (`@play/tabs_unlocked`).
+- **Pre-unlock (New Learners)**: Renders `SkillsFlow` directly without a bottom tab bar, preserving the original single-route entry flow. The learner picks a skill, chooses a track, and plays through the first topic. The instant `markTopicCompleted()` fires for topic 0 on any skill, `unlockTabsIfNeeded()` sets `@play/tabs_unlocked = 'true'` permanently.
+- **Post-unlock (Returning Learners)**: Subsequent app launches immediately `<Redirect href="/(tabs)/home" />` into the tabbed shell.
 
-| Stage | Component | Reached from |
-|-------|-----------|---------------|
-| `landing` | `LandingScreen` | Initial load, or exiting a session |
-| `learning-style` | `LearningStyleScreen` | Tapping a skill card |
-| `track-detail` | `TrackDetailScreen` | Picking a track on Learning Style, or a `?track=` deep link straight from Landing |
-| `downloading` | `DownloadingScreen` | Tapping "Start Practice" |
-| `session` | `PlaySession` | Successful download |
+---
 
-**Stage transitions are animated** — each stage renders inside an `Animated.View` keyed by `stage`, sliding in from the right (`stageDirection === 'forward'`) or left (`'backward'`) via Reanimated's `SlideInRight`/`SlideInLeft`, always exiting with a plain `FadeOut` (a directional slide-out would read the *previous* transition's direction, since it's stale by one render whenever direction flips).
+### `app/(tabs)/` — Tabbed Home Shell (New)
 
-**Track-detail origin tracking** — `TrackDetailOrigin = 'landing' | 'learning-style'` records where the preview was opened from, so the back button returns to the right place AND so starting practice from a Landing-originated deep link (no explicit style ever chosen) is flagged `deepLinked` for `PlaySession` (drives whether "Continue" always reopens the mode switcher).
+The tabbed shell unlocked once the learner completes their first topic. Defined in `app/(tabs)/_layout.tsx`, using a custom `FloatingTabBar` (`components/nav/FloatingTabBar.tsx`) with spring-animated sliding pill and Lucide icons:
 
-**Track and skill resolution:** `VALID_TRACKS = ['pairs', 'names', 'meanings', 'whereUsed', 'full', 'reading']`; `parseTrack()` validates the `?track=` param, accepting any non-empty track string (including custom JSON-defined tracks like `?track=image-identification` or standard tracks) or returning `null`; while `parseSkill()` validates `?skill=` against `LANDING_SKILLS` (defaulting to `DEFAULT_SKILL = 'driving-theory'`).
+#### `(tabs)/_layout.tsx`
+Renders `<Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false }}>` for the four routes: `home`, `skills`, `keys`, and `reports`.
 
-**Auto-start on mount:**
-- `?resume=true` (returning from checkout) → `runDownload(urlTrack ?? 'full', deepLinked: true, urlSkill ?? DEFAULT_SKILL)`, skipping straight to a session.
-- A bare `?track=` (ad link) → opens Track Detail directly (`openTrackDetail(urlTrack, 'landing')`), skipping the grid and style list but still showing the preview + CTA.
-- Otherwise → starts on `LandingScreen`.
+#### `(tabs)/home.tsx` — Home Tab
+- Lists all skills where the learner has made progress (`completedTopics > 0`), loaded from the DB catalog (`play_curricula`) merged with static `LANDING_SKILLS`.
+- Each in-progress skill renders a `SkillProgressCard` (`components/home/SkillProgressCard.tsx`) showing display title, topic count, percentage progress bar, and dynamic action button (`CONTINUE` or `START`).
+- Tapping an in-progress card navigates straight to `/(tabs)/skills?resume=true&skill=<slug>`, jumping directly back into the session without re-showing track pickers. If a skill is 100% complete, tapping opens `/(tabs)/reports`.
+- Uses `useFocusEffect` to refresh local progress every time the learner tabs back to Home.
 
-**`runDownload(track, deepLinked, skillOverride?)`** — sets stage to `downloading`, calls `downloadSession(track, skill, onProgress)`, supports topic-level deep linking (`?topic=`) by advancing directly to the session containing that topicId, enforces a **minimum 2000ms** loading time (`MIN_LOADING_MS`) even on a fast/cached response so the loading beat doesn't flash, then moves to `session` on success or leaves the error on the downloading screen for RETRY.
+#### `(tabs)/skills.tsx` — Skills Tab
+- Renders the full 4-stage `SkillsFlow` component (`components/play/SkillsFlow.tsx`) embedded beneath `AppHeader`.
+- Learners can browse the 2-column Skills Corner grid, select alternative learning tracks on `LearningStyleScreen`, preview track details on `TrackDetailScreen`, and initiate practice sessions.
 
-**Exit** (`handleExit`) resets everything — `sessions`, `signCatalog`, `error`, `progress` — and returns to `landing`.
+#### `(tabs)/keys.tsx` — Keys Tab
+- The standalone, permanent home for key management.
+- Renders `AppHeader` followed by `KeysOptionsContent` (`components/feedback/KeysOptionsContent.tsx`), offering:
+  1. **Buy Temporary Access Keys** (packs of 20/40/80/120) → `/keys-packs`
+  2. **Subscribe for Unlimited** (Weekly/Monthly/Annual) → `/subscription-plans`
+  3. **Use Free Trial** with live countdown ticker and notifications reminder toggle.
+
+#### `(tabs)/reports.tsx` — Reports Tab
+- Full live learner analytics dashboard:
+  - **Day Streak Stat Card**: Real consecutive active days calculated by `lib/streak.ts`.
+  - **Total XP Stat Card**: Real lifetime accumulated XP from `lib/xp.ts`.
+  - **7-Day Calendar Strip**: Real active days for the current Monday–Sunday week with green illuminated dots.
+  - **Keys Balance Row**: Live key balance with shortcut to `/(tabs)/keys`.
+  - **League Tier Panel**: Dynamic Bronze (<250 XP), Silver (250–749 XP), or Gold (750+ XP) tier with progress bar towards the next league.
+  - **Per-Skill Report Cards**: Each active skill shows its completion percentage, per-skill earned XP, topic tally, and a "Missed Questions" badge (e.g. `2 Missed`) linking to `app/mistakes.tsx`.
+
+---
+
+### `settings.tsx` — Settings Screen (New)
+
+Accessed via the gear icon on `AppHeader` across all tabs:
+- **Account Section**: Displays logged-in email or "Sign in / Restore account" linking to `RestoreAccountModal`. Once logged in, shows a red "Log out" button.
+- **Preferences Section**:
+  - Notifications toggle (backed by `@play/timer_reminders`).
+  - Currency toggle switching between `KES` and `USD` (backed by `@play/currency`).
+- **Support Section**: Help (mailto `support@pataskills.com`) and About version info.
+- **Legal Section**: Links to Privacy Policy and Terms of Service.
+
+---
+
+### `mistakes.tsx` — Mistake Overview Screen (New)
+
+Reached from the "Missed Questions" button on any skill card in the Reports tab (`/mistakes?skillId=<slug>&skillName=<title>`):
+- Filter tabs: **All ({count})** vs **Unsolved ({count})**.
+- Reads from `lib/mistakes.ts` (`getSkillMistakes(skillId)`).
+- Renders a list of `MistakeCard` components (`components/reports/MistakeCard.tsx`) displaying question number, question prompt, `N MISTAKES` badge, highlighted correct answer banner, and a "Mastered" chip if resolved on a retry attempt.
+- Empty state: "No mistakes recorded yet! Great job."
 
 ---
 
@@ -453,9 +548,12 @@ Platform-split component. The default (`.tsx`, used on native) renders an empty 
 ### 6.2 Cards
 
 #### `CardDeck.tsx` — Router + Two Deck Implementations
-Unchanged in shape from the prior audit — routes to `ReadingCardDeck` when `props.signs` is a non-empty array, else `QuizCardDeck`. See prior structure: top bar (close/progress/keys), card viewport, bottom controls, overlay sheets for quiz mode; simpler linear `ScrollView` advance with no answer machinery for reading mode. Both now share scroll-hint logic via the `useScrollHint()` hook and `ScrollHintChevron` component (see §10/§6.2 below) rather than each deck owning its own bounce animation.
+Routes to `ReadingCardDeck` when `props.signs` is a non-empty array, else `QuizCardDeck`. Receives `skillId` and `topicIndex`. In `QuizCardDeck`:
+- Top bar (close/progress/keys), card viewport, bottom controls, and overlay sheets.
+- **Missed Questions Tracking**: In `handleCheck()`, whenever an answer check fails (`!isCorrect`), it calls `recordQuestionFailure(skillId, topicIndex, currentCard)` from `lib/mistakes.ts` to log the failure, prompt, choices, and right answer. If answered correctly on a subsequent retry, calls `recordQuestionSuccess(skillId, currentCard.id)` to mark it mastered.
+- Shares scroll-hint logic via `useScrollHint()` and `ScrollHintChevron`.
 
-#### `ScrollHintChevron.tsx` (new)
+#### `ScrollHintChevron.tsx`
 Extracted, deck-agnostic presentational component: a small bouncing chevron pill shown when `visible`, tapping it calls `onPress` (wired to `useScrollHint()`'s `scrollToBottom`). Both `QuizCardDeck` and `ReadingCardDeck` render one instance each, driven by their own `useScrollHint()` hook instance.
 
 #### `ReadingCard.tsx` / `TwoImageCard.tsx`
@@ -465,104 +563,112 @@ Unchanged from the prior audit — see that section's detail on layout types, gr
 
 ### 6.3 Feedback
 
-#### `SessionStateScreen.tsx` — now with a scrollable Out-of-Keys screen
-Still the multi-purpose interstitial keyed by `SessionStateKind`, but the `outOfKeys` branch has changed substantially:
+#### `KeysOptionsContent.tsx` (New)
+Extracted, reusable presentation component containing the three proceed options:
+1. **Buy Temporary Access Keys** (packs of 20, 40, 80, 120 keys) → `/keys-packs`
+2. **Subscribe for Unlimited** → `/subscription-plans`
+3. **Use Free Trial** with live ticking countdown and reminders `Toggle` (scheduled via `lib/notifications.ts` and saved to `@play/timer_reminders`).
+Rendered both inside `SessionStateScreen`'s `outOfKeys` flow and as the standalone `app/(tabs)/keys.tsx` tab.
 
-- **Scrollable** — the close button, title, and all three proceed options (buy keys / subscribe / free trial + reminders toggle + login link) now render inside a `ScrollView` (`styles.proceedScroll` / `proceedContent`), with the CONTINUE button pinned outside it in a fixed `actions` View. Previously this was a single fixed `View` with no scroll container, so short screens clipped content under the button — fixed 2026-09-05.
-- **Three proceed options**, each a selectable card (`selectedProceedOption: 'keys' | 'unlimited' | 'trial'`):
-  - **Buy one-time keys** → `handleBuyKeys()` → `onBuyKeysPress?.() ?? router.push('/keys-packs')`
-  - **Subscribe for Unlimited** → `handleSubscribe()` → `onSubscribePress?.() ?? router.push('/subscription-plans')`
-  - **Use Free trial** → shows a live countdown (`timerText`, ticking every second off `resetAt`) and a reminders `Toggle` that calls `ensureNotificationPermission()` + `scheduleResetReminder(resetAt)` from `lib/notifications.ts` when enabled, persisting the preference to `@play/timer_reminders`.
-- **CONTINUE** routes based on `selectedProceedOption` via `handleProceedContinue()`; the `trial` option instead pushes `/how-free-mode-works`.
-- **Restore/login link** at the bottom opens `RestoreAccountModal`; a successful restore calls `onPrimaryPress?.() ?? router.replace('/', { resume: 'true' })`.
-- **Exit interception** — the X button no longer closes directly; it opens `WatchAdPromptSheet` (`handleAttemptExit`) offering a bonus session before letting the learner leave.
+#### `SessionStateScreen.tsx` — Interstitial screen
+The multi-purpose interstitial keyed by `SessionStateKind`:
+- In the `outOfKeys` flow, renders the option cards and an exit interceptor leading to `WatchAdPromptSheet`.
+- Gated login link: the "Existing user, login" link at the bottom is hidden once tabs are unlocked (`areTabsUnlocked()`), since login and restore are centrally managed in Settings.
 
-The non-`outOfKeys` branch (topicComplete/chapterComplete/sessionUnlocked/keysReset/rewardUnlocked/shareApp/rateApp) is otherwise as previously documented.
+#### `WatchAdPromptSheet.tsx`
+Shown when the learner tries to exit while out of keys. Renders **one** native `<Modal>` whose content switches between two internal steps (`'prompt' | 'reward'`).
 
-#### `WatchAdPromptSheet.tsx` (new)
-Shown when the learner tries to exit while out of keys. Renders **one** native `<Modal>` whose content switches between two internal steps (`'prompt' | 'reward'`) rather than mounting/unmounting two separate Modals — doing the latter caused Android to visually squash the transition and sometimes auto-dismiss the reward screen before the user could tap anything (documented in an inline comment as a real bug fix, not a hypothetical).
-
-- **`prompt` step** — "Watch an ad for an extra session?" with a WATCH AD button (`showRewardedForSession()` from `lib/ads.ts`) and a "Go to Home" dismiss.
-- **`reward` step** — renders `KeyRewardContent` (see below). The bonus key is granted only when the learner taps "Unlock Next Session" on this screen (`grantBonusKey(1, 'ad_reward')`), deliberately **not** the moment the ad finishes — granting it earlier let `useKeys`'s background balance poll flip `isOutOfKeys` to false while this screen was still showing, auto-advancing the app past the reward screen before the learner could interact with it.
-
-#### `KeyRewardSuccessModal.tsx` (new)
-Exports two things:
-- **`KeyRewardContent`** — bare content, no `<Modal>` wrapper. This is what `WatchAdPromptSheet` embeds as its `reward` step.
-- **`KeyRewardSuccessModal`** — a thin wrapper that puts `KeyRewardContent` inside its own opaque `<Modal>`, kept for any caller wanting a fully self-contained modal (not used by `WatchAdPromptSheet` itself anymore).
-
-Layout: "Your key reward is ready!" title, a large "1" + key illustration, subtitle, and an "Unlock Next Session" pill button.
+#### `KeyRewardSuccessModal.tsx`
+Exports `KeyRewardContent` and `KeyRewardSuccessModal`.
 
 #### `CheckButton.tsx` / `DownloadingScreen.tsx` / `FeedbackSheet.tsx` / `FlagIcon.tsx` / `LearnMoreSheet.tsx` / `QuitConfirmSheet.tsx`
 Unchanged from the prior audit.
 
 ---
 
-### 6.4 Landing (substantially rebuilt)
+### 6.4 Landing & Home
 
-The single `LandingScreen` "skill pager + mode picker" described in the prior audit **no longer exists in that shape**. The flow is now three separate screens plus a bottom sheet, each a standalone file:
+#### `SkillProgressCard.tsx` (New)
+Rendered on the Home tab (`app/(tabs)/home.tsx`) for every skill with local progress:
+- Displays skill title, topic completion count (`N/Total topics`), and a progress bar with percentage.
+- Dynamic CTA: `CONTINUE` for in-progress skills (resumes straight into session), `START` for not started, or `REVIEW` for 100% completed (routes to Reports tab).
 
 #### `LandingScreen.tsx` — "Skills Corner" grid
-A 2-column grid of `SkillGridCard`s (compact — title + remote cover image, no progress bar, no CTA button; the whole card is the tap target) below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS` (`driving-theory`, `true-false`, `bible-trivia` as of 2026-09-06 (h)), plus a bottom "Existing user, login" link that opens `RestoreAccountModal`. Tapping any card calls `onStart(skill.id)` passing the selected `CurriculumSlug` so the parent advances to `LearningStyleScreen` with that skill's context.
+A 2-column grid of `SkillGridCard`s below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS`.
+- Gated login link: the bottom "Existing user, login" link is hidden once tabs are unlocked, as account management moves to Settings.
 
-A successful account restore (`onRestore(track)`) skips `LearningStyleScreen` entirely and opens `TrackDetailScreen` directly with `'full'` (the restoring learner already picked a track on whichever device they started on).
+#### `LearningStyleScreen.tsx` — full-page track list
+Back-arrow header ("Choose Learning Style") + a scrollable list of detected learning styles rendered as `ModeCard` rows.
 
-**`SkillCard.tsx` is currently unused** — a fuller bordered card (title, progress bar, illustration, RESUME/GET STARTED CTA) that appears to be what `LandingScreen` rendered before the grid redesign. Left in the tree; not imported anywhere as of this audit. `CarouselDots.tsx` is similarly currently unused (no pager exists to paginate) but kept for the same reason.
-
-#### `LearningStyleScreen.tsx` — full-page track list (updated)
-Back-arrow header ("Choose Learning Style") + a scrollable list of detected learning styles rendered as `ModeCard` rows:
-- Receives `skillId: CurriculumSlug`.
-- Dynamically fetches available tracks via `getAvailableTracks(skillId)` and custom track definitions via `getCurriculumTrackDefs(skillId)` (from `lib/curriculum.ts`), falling back to `skill.tracks` synchronously on mount.
-- Resolves row models via `getTrackOptionsForSkill(skill, availableTracks, trackDefs)` (from `constants/trackOptions.ts`), automatically applying per-skill overrides or JSON-defined custom track titles and images.
-- Implements synchronous state reconciliation on `skillId` changes (`prevSkillId !== skillId`) to reset tracks, definitions, and totals immediately, eliminating stale-track flashes when switching skills.
-- Fetches real question counts from `getTrackTotals(skillId)`. `highlighted` falls on the first not-yet-done track (`nextUpTrack`, from `getCompletedTracks()`). Tapping a card calls `onPreviewTrack(track)`, opening `TrackDetailScreen`.
-
-#### `TrackDetailScreen.tsx` — full-page single-track preview (updated)
-Full-page single-track preview card + "Start Practice" CTA:
-- Receives `skillId: CurriculumSlug` and `track: Track | null`.
-- Concurrently fetches `getAvailableTracks(skillId)` and `getCurriculumTrackDefs(skillId)`. Looks up track visual and copy via `getTrackOption(skill, effectiveTrack, trackDefs)` (from `constants/trackOptions.ts`), honoring JSON titles/images and skill overrides.
-- If a deep link specifies a track unsupported by the current curriculum (e.g. `pairs` for `true-false`), it gracefully falls back to `availableTracks[0]`.
-- Start Practice CTA `Button` shows a loading spinner (`loading={isLoadingTracks}`) until track availability is confirmed, preventing race conditions.
-- Displays the 7-dot session progress row based on `getLocalProgress()`.
+#### `TrackDetailScreen.tsx` — full-page single-track preview
+Full-page single-track preview card + "Start Practice" CTA.
 
 #### `ModeCard.tsx` — shared learning-mode row
-Illustration + title, plus three independent optional pieces of state, not a single badge:
-- `status?: 'done' | 'inProgress' | 'notStarted'` — plain coloured **text** next to the title (green "Done" / teal "In Progress" / grey "Not started"), not a badge. Omit to hide it entirely.
-- `highlighted?: boolean` — a teal border/tint on the card itself, independent of `status`, marking the one row the learner should look at next (current track while in progress, or the next not-yet-done track once the current one finishes). Kept separate so a completed track is never highlighted just for sitting first in the list.
-- `progress?: number` (0–1) — renders the segmented bar (`PROGRESS_SEGMENTS = 7`, matching the session chunk size). Omitted entirely hides the progress row.
-- `totalQuestions?: number` — real per-track question count (from `getTrackTotals()`), rendered as a small "N questions" label next to the status text. Omitted (not just `0`) while the totals fetch hasn't resolved yet, so there's no "0 questions" flash.
+Illustration + title, plus status, highlight, progress segments, and total question count.
 
-Used by both `LearningStyleScreen` and `ModeSwitcherSheet` — same component, same rendering, each caller just supplies different values for these four props.
+#### `ModeSwitcherSheet.tsx` — mid-flow track switcher
+Bottom sheet with `'switch'` and `'trackComplete'` heading states.
 
-#### `ModeSwitcherSheet.tsx` — mid-flow track switcher (updated)
-Bottom sheet with two heading states:
-- **`'switch'`** — "Switch to a different learning style", reached from `PlaySession`'s continue-prompt when the current track came from a deep link.
-- **`'trackComplete'`** — title is a dynamic fraction, `"{completedCount}/{trackOptions.length} tracks complete"`, reached automatically once every session in the current track is exhausted.
-
-Builds options dynamically via `getTrackOptionsForSkill(skill, availableTracks, trackDefs)`:
-- Initializes `availableTracks` with `skill.tracks` seeded with `currentTrack` so the active track is guaranteed present without initial UI flicker.
-- Reconciles state when `skillId` changes (`prevSkillId !== skillId`).
-- Concurrently fetches `getAvailableTracks(skillId)`, `getCurriculumTrackDefs(skillId)`, and `getTrackTotals(skillId)` when opened.
-- Persisted completion from `getCompletedTracks()` is unioned with `currentTrack` when `heading === 'trackComplete'` to prevent a "0/N" flash before storage commits.
-- Current track is moved to the front and highlighted. Tapping any option triggers `onSelectTrack(track)`.
-
-#### `SkillGridCard.tsx` (new)
-Compact 2-column grid cell — centered title, remote cover illustration below, no progress/CTA (whole card is the tap target). Cover image resolved via `getPlayAssetPublicUrl(CurriculumCoverImagePaths[skill.id])`, same source as `LandingIllustration`/`SkillCard`.
-
-#### `CarouselDots.tsx`
-Animated pager dots, borrowed from PataSkillsV2's equivalent, simplified (no 5-dot windowing — this app ships only a handful of skills). **Currently unused** (see `LandingScreen` note above).
-
-#### `LandingIllustration.tsx`
-Unchanged — driving-theory cover image from Supabase Storage, built at module-load time via `getPlayAssetPublicUrl()`.
+#### `SkillGridCard.tsx` / `CarouselDots.tsx` / `LandingIllustration.tsx`
+Unchanged.
 
 ---
 
-### 6.5 Nav (new section — previously undocumented)
+### 6.5 Nav
+
+#### `FloatingTabBar.tsx` (New)
+Pill-style bottom tab bar borrowed from PataSkillsV2, adapted for `play`'s tokens and `lucide-react-native`:
+- Renders 4 tabs: `home` (`Home`), `skills` (`Library`), `keys` (`KeyRound`), `reports` (`PieChart`).
+- Features a spring-animated sliding pill indicator that smoothly glides underneath whichever tab is selected using Reanimated `withSpring`.
+- Completely theme-aware using `selectionActiveTint` and `selectionActiveBorder`.
+
+#### `AppHeader.tsx` (New)
+Header shown at the top of all four tabs once tabs are unlocked:
+- Deterministic initial avatar circle (hash-mapped to a stable color palette).
+- Learner display name (derived from linked email or defaulting to "Learner").
+- Settings gear button navigating directly to `/settings`.
 
 #### `ScreenTransition.tsx`
-Web-only slide-in wrapper. Every standalone route in `app/` (the monetization funnel screens, explainers, etc.) renders its content inside this component. On native it's a pass-through (`if (!isWeb) return <>{children}</>`) — `app/_layout.tsx`'s `Stack` already does `animation: 'slide_from_right'` there. On web, `react-native-screens` doesn't animate native-stack transitions at all (screens just swap instantly), so `_layout.tsx` sets the Stack's own `animation: 'none'` for web and this component supplies the real animation instead: on focus, it reads a direction flag via `peekNavDirection()` (from `lib/navDirection.ts`), snaps `translateX` to ±the current window width, then animates back to 0 over 280ms.
+Web-only slide-in wrapper for standalone routes in `app/`. Pairs with `lib/navDirection.ts`.
 
-Pairs with **`lib/navDirection.ts`** — an explicit, non-inferred direction flag:
-- `navPush(router, href)` / `navBack(router)` / `navReplace(router, href, direction?)` — thin wrappers around `expo-router`'s `router.push`/`back`/`replace` that set the pending direction (`'forward'`/`'backward'`) before navigating. Every screen that navigates uses these instead of calling `router.*` directly, specifically so this flag is always accurate.
+---
+
+### 6.6 Play
+
+#### `SkillsFlow.tsx` (New)
+Extracted, self-contained 4-stage Skills flow:
+- Contains `LandingScreen` (grid) → `LearningStyleScreen` → `TrackDetailScreen` → `DownloadingScreen` → `PlaySession`.
+- Rendered pre-unlock directly by `app/index.tsx` (no tabs), and post-unlock embedded under `app/(tabs)/skills.tsx` (with `embedded` prop to align top safe-area padding under `AppHeader`).
+
+#### `PlaySession.tsx` — Session Flow Orchestrator
+Core key-economy state machine:
+- Passes `skillId` and `sessionIndex` down to `CardDeck`.
+- **XP & Streak Award**: When a topic finishes (`handleSessionComplete`), calculates `earnedXp = stats.correctCount * XP_PER_CORRECT` (5 XP per correct answer) and invokes `recordXpEarned(skillId, earnedXp)` (`lib/xp.ts`) and `recordActivityToday()` (`lib/streak.ts`).
+- Calls `markTopicCompleted(skillId, sessionIndex, sessions.length)` which triggers `unlockTabsIfNeeded()` on the first topic completed.
+- Calls `markTrackCompleted(track)` when all sessions in a track are finished.
+
+---
+
+### 6.7 Reports (New)
+
+#### `MistakeCard.tsx`
+Rendered on `app/mistakes.tsx` to review failed questions:
+- Displays question number and prompt.
+- `N MISTAKES` badge pill with red accent tint.
+- Correct answer banner with teal highlight.
+- "Mastered" chip if the learner subsequently got the question right on retry.
+
+---
+
+### 6.8 Settings (New)
+
+#### `SettingsComponents.tsx`
+Three presentational components used by `app/settings.tsx`:
+- **`SectionHeader`**: Uppercase category label (Account, Preferences, Support, Legal, Actions).
+- **`SettingsRow`**: Icon + label + optional value text + chevron right, with optional `danger` styling.
+- **`SettingsToggleRow`**: Icon + label + `Toggle` switch for preferences.
+
+---
 - Explicit-over-inferred is a deliberate choice, per an inline comment: the browser's `popstate` event doesn't fire reliably for `router.back()`, since expo-router doesn't guarantee it calls the real `history.back()` versus just updating navigation state.
 - `peekNavDirection()` is a **read-only** peek (not read-and-clear) specifically to survive React Strict Mode's double-invoked render — a destructive read-and-clear would have the first invocation see the real direction and the second see it already cleared, silently collapsing every back-navigation to the forward animation. `resetNavDirection()` (called from `ScreenTransition`'s focus effect, which settles after Strict Mode's double-invoke) resets it to `'forward'` post-commit so an unrelated remount doesn't inherit a stale direction.
 
@@ -683,8 +789,8 @@ Unchanged from the prior audit — `ThemeContext.tsx` (dark/light/auto, AsyncSto
 ### `supabase.ts` / `downloadSession.ts` / `signs.ts`
 Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`hydrateSignCatalog`, track-aware `downloadSession`) documented there is still current. `downloadSession` extracts optional `remote.tracks` and forwards them to `deriveTrack(hydrated, signCatalog, track, remote.tracks)`.
 
-### `curriculaCatalog.ts` (new, previously undocumented) — DB-driven skill catalog
-Module-level cache (shared in-flight promise, same shape as `trackDefaults.ts` below) over `play_curricula`. `getCurriculaCatalog()` fetches `{ slug, title, cover_image_path }` for every active row, once per app session. `getCachedCurricula()` is a synchronous read of whatever's resolved so far (`[]` before the first fetch lands). `getCachedCoverImagePath(slug)` is what `constants/trackOptions.ts`'s `trackImage()` calls for its final fallback (see §7) — every skill's existence, display name, and cover image now genuinely lives in this table, not in a local constants file; adding or renaming a skill is a DB edit only. `LandingScreen` kicks off the fetch first in the normal user flow, but any screen that might render before it (a `?track=` deep link landing straight on `TrackDetailScreen`) also calls `getCurriculaCatalog()` itself — the shared in-flight promise means this is still only one network round trip.
+### `curriculaCatalog.ts` (updated 2026-09-07) — DB-driven skill catalog
+Module-level cache (shared in-flight promise, same shape as `trackDefaults.ts`) over `play_curricula`. `getCurriculaCatalog()` fetches `{ slug, title, cover_image_path }` for every active row, once per app session. `getCachedCurricula()` is a synchronous read of whatever's resolved so far (`[]` before the first fetch lands). `getCachedCoverImagePath(slug)` is what `constants/trackOptions.ts`'s `trackImage()` calls for its final fallback (see §7) — every skill's existence, display name, and cover image now genuinely lives in this table, not in a local constants file; adding or renaming a skill is a DB edit only. `LandingScreen` kicks off the fetch first in the normal user flow, but any screen that might render before it (a `?track=` deep link landing straight on `TrackDetailScreen`) also calls `getCurriculaCatalog()` itself — the shared in-flight promise means this is still only one network round trip. **Fixed 2026-09-07**: Query fetch rewritten with an `async` IIFE to return a true `Promise<CurriculumCatalogRow[]>` resolving the prior `PromiseLike` typecheck error.
 
 ### `trackDefaults.ts` (updated 2026-09-06 (h)) — DB-driven universal track icons AND labels
 Same shared-promise cache pattern as `curriculaCatalog.ts`, over `play_track_defaults` (see §14), now selecting `{ track_id, image_path, label }` instead of image-only. The cache shape changed from a flat `Record<string, string>` to `{ images: Record<string, string>, labels: Record<string, string> }`, with two synchronous readers: `getCachedTrackDefaultUrl(trackId)` (unchanged signature, still what `trackImage()` calls) and the new `getCachedTrackDefaultLabel(trackId)` (what `trackLabel()` now calls — see §7). A row with no `image_path` simply doesn't populate `images` for that track id; same for a row with no `label`. The fetch is still kicked off at module-import time so it's usually warm before first render.
@@ -781,16 +887,33 @@ Defines the two purchasable catalogs:
 ### `notifications.ts` (new) — Web reset reminders
 Uses the browser's native `Notification` API directly (`ensureNotificationPermission()` calls `Notification.requestPermission()`; `scheduleResetReminder(resetAt)` sets a `setTimeout` for the exact refill moment and fires a notification with a click-to-focus handler; `cancelResetReminder()` clears it). Entirely web-scoped — native builds have no equivalent (no `expo-notifications` dependency), so the reminders toggle is effectively a no-op on native today.
 
-### `progress.ts` — Topic progress AND per-track completion (expanded)
+### `progress.ts` — Topic progress, tab unlock gate, and track completion (expanded)
 
-**Topic progress** (unchanged from the prior audit): `getLocalProgress()` / `markTopicCompleted(topicIndex, totalTopics)` / `syncProgressWithCloud(email)`, backed by `@play/progress` and the `play_progress` Supabase table.
+- **Topic progress**: `getLocalProgress(skillId)` / `markTopicCompleted(skillId, topicIndex, totalTopics)` / `syncProgressWithCloud(email, skillId)`. Progress is stored per-skill in `@play/progress:${skillId}`.
+- **Tabbed Home Unlock Gate (new 2026-09-07)**:
+  - `areTabsUnlocked(): Promise<boolean>`: Reads `@play/tabs_unlocked`.
+  - `unlockTabsIfNeeded(): Promise<void>`: Fired inside `markTopicCompleted()` the moment a learner hits `topicComplete` for topic 0 on any skill. Sets `@play/tabs_unlocked = 'true'` permanently.
+  - `lockTabs(): Promise<void>`: Debug utility to reset the gate.
+- **Per-track completion**:
+  - `getCompletedTracks(skillId)` reads `@play/completed_tracks:${skillId}`.
+  - `markTrackCompleted(skillId, track)` records track completion.
 
-**Per-track completion (new)** — added specifically to back `ModeSwitcherSheet`'s real "N/6 tracks complete" count and per-row DONE state (previously that count was a hardcoded `1`):
-```typescript
-export async function getCompletedTracks(): Promise<Track[]>            // reads @play/completed_tracks
-export async function markTrackCompleted(track: Track): Promise<Track[]> // idempotent append + persist
-```
-Local-only (AsyncStorage) — **not** synced to Supabase or `play_accounts` the way topic progress and keys are, so it won't survive a reinstall or show up cross-device. Flagged as a known gap, not yet requested to be closed.
+### `mistakes.ts` (new 2026-09-07) — Missed Questions Tracking
+Tracks every question the learner fails during card deck quiz sessions:
+- **`QuestionAttempt`**: `{ skillId, topicIndex, questionId, questionText, options, correctAnswerText, failCount, attemptCount, solved, lastMissedAt }`.
+- **`recordQuestionFailure(skillId, topicIndex, question)`**: Increments `failCount` and `attemptCount`, sets `solved: false`, and updates `@play/mistakes:${skillId}`. Best-effort mirrors to Supabase `play_question_attempts` when user email is linked.
+- **`recordQuestionSuccess(skillId, questionId)`**: When a previously-missed question is answered correctly on retry, sets `solved: true`.
+- **`getSkillMistakes(skillId)`**: Returns formatted `MistakeItem[]` sorted by mistake count.
+- **`getSkillMistakesCount(skillId)`**: Returns count of unique missed questions for the skill.
+
+### `xp.ts` (new 2026-09-07) — Experience Points Tracking
+- **`recordXpEarned(skillId, amount)`**: Adds `amount` (5 XP per correct answer) to both the skill bucket (`@play/xp:${skillId}`) and lifetime total (`@play/total_xp`). Best-effort syncs to Supabase `play_user_stats`.
+- **`getSkillXp(skillId)`**: Reads per-skill earned XP.
+- **`getTotalXp()`**: Reads lifetime accumulated XP.
+
+### `streak.ts` (new 2026-09-07) — Practice Streaks & Weekly Calendar
+- **`recordActivityToday()`**: Logs today's date (`YYYY-MM-DD`) into `@play/activity_dates`.
+- **`getStreakData()`**: Returns `{ currentStreak, maxStreak, todayActive, weekDays }`. `weekDays` is an array of 7 booleans (Monday through Sunday) indicating active practice days in the current week.
 
 ---
 
@@ -1044,46 +1167,97 @@ App Start: AsyncStorage → KeysState { balance: 3, resetAt: null, isPremium: fa
   resume session
 ```
 
-### Component Hierarchy (updated)
+### Component Hierarchy (updated 2026-09-07)
 
 ```
-RootLayout
+RootLayout (_layout.tsx)
 └── ThemeProvider
     └── RootLayoutInner
         └── Stack
-            ├── PlayEntry (index.tsx)                       — 5-stage flow, reads ?track= / ?resume=
-            │   ├── LandingScreen                            — Skills Corner grid
-            │   │   ├── SkillGridCard (×N)
-            │   │   └── RestoreAccountModal
-            │   │       └── GoogleWebButton (.web.tsx on web)
-            │   ├── LearningStyleScreen
-            │   │   └── ModeCard (×N, detectAvailableTracks + trackOptions)
-            │   ├── TrackDetailScreen                       — single-track preview (getTrackOption + getAvailableTracks)
-            │   ├── DownloadingScreen
-            │   └── PlaySession
-            │       ├── CardDeck (router)
-            │       │   ├── QuizCardDeck (kind === 'quiz')
-            │       │   │   ├── TwoImageCard (×N) → RoadSignGraphic, FlagIcon
-            │       │   │   ├── CheckButton ("CHECK"), ScrollHintChevron (useScrollHint)
-            │       │   │   ├── LearnMoreSheet ← signCatalog
-            │       │   │   ├── FeedbackSheet
-            │       │   │   └── QuitConfirmSheet
-            │       │   └── ReadingCardDeck (kind === 'reading')
-            │       │       ├── ReadingCard, CheckButton ("GOT IT"), ScrollHintChevron
-            │       │       └── QuitConfirmSheet
-            │       ├── ModeSwitcherSheet ('switch' | 'trackComplete')
-            │       │   └── ModeCard (×N, dynamic tracks, highlighted/DONE per real completion data)
-            │       └── SessionStateScreen (various kinds)
-            │           ├── outOfKeys → scrollable proceed options, Toggle (reminders)
-            │           │   └── RestoreAccountModal
-            │           └── WatchAdPromptSheet → KeyRewardContent
+            ├── RootGate (index.tsx) — checks areTabsUnlocked()
+            │   ├── [Pre-unlock]: SkillsFlow
+            │   │   ├── LandingScreen (Skills Corner grid)
+            │   │   │   └── SkillGridCard (×N)
+            │   │   ├── LearningStyleScreen (ModeCard ×N)
+            │   │   ├── TrackDetailScreen
+            │   │   ├── DownloadingScreen
+            │   │   └── PlaySession
+            │   │       ├── CardDeck (QuizCardDeck / ReadingCardDeck)
+            │   │       │   ├── TwoImageCard / ReadingCard
+            │   │       │   ├── CheckButton, ScrollHintChevron
+            │   │       │   ├── LearnMoreSheet, FeedbackSheet, QuitConfirmSheet
+            │   │       │   └── [Mistakes Hook]: recordQuestionFailure / recordQuestionSuccess
+            │   │       ├── ModeSwitcherSheet
+            │   │       └── SessionStateScreen
+            │   │           ├── outOfKeys → KeysOptionsContent
+            │   │           └── WatchAdPromptSheet → KeyRewardContent
+            │   │
+            │   └── [Post-unlock]: Redirect → /(tabs)/home
+            │
+            ├── TabsLayout (app/(tabs)/_layout.tsx)
+            │   ├── FloatingTabBar (animated sliding pill: Home, Skills, Keys, Reports)
+            │   ├── HomeTab (home.tsx)
+            │   │   ├── AppHeader
+            │   │   └── SkillProgressCard (×N, resume actions)
+            │   ├── SkillsTab (skills.tsx)
+            │   │   ├── AppHeader
+            │   │   └── SkillsFlow (embedded)
+            │   ├── KeysTab (keys.tsx)
+            │   │   ├── AppHeader
+            │   │   └── KeysOptionsContent (buy keys / subscribe / free-trial timer)
+            │   └── ReportsTab (reports.tsx)
+            │       ├── AppHeader
+            │       ├── StatRow (Day Streak + Total XP)
+            │       ├── WeekCalendarRow (7-day Mon–Sun illuminated dots)
+            │       ├── KeysRow (Balance shortcut)
+            │       ├── LeaguePanel (Bronze/Silver/Gold tier + progress bar)
+            │       └── SkillReportCards (percentage, XP badge, N Missed button)
+            │
+            ├── SettingsScreen (app/settings.tsx)
+            │   ├── AppHeader / Back Header
+            │   ├── SectionHeader, SettingsRow, SettingsToggleRow
+            │   └── RestoreAccountModal
+            │
+            ├── MistakesScreen (app/mistakes.tsx)
+            │   ├── Back Header + Filter Tabs (All vs Unsolved)
+            │   └── MistakeCard (×N, question, mistake count, correct answer, mastered chip)
+            │
             ├── keys-packs → keys-confirm
             ├── subscription-plans → subscription-confirm
             ├── premium-benefits, how-keys-work, how-free-mode-works
             └── payment-complete
 ```
 
-Every standalone route above (everything except the `PlayEntry` tree, which animates its own stages internally) renders its body inside `ScreenTransition` — web-only slide-in, paired with `navPush`/`navBack`/`navReplace` from `lib/navDirection.ts` (see §6.5).
+Every standalone route outside the tab shell renders its body inside `ScreenTransition` — web-only slide-in, paired with `navPush`/`navBack`/`navReplace` from `lib/navDirection.ts` (see §6.5).
+
+### Progress, Analytics & Mistakes Feedback Loop (New 2026-09-07)
+
+```
+                       ┌─────────────────────────────────────┐
+                       │        PlaySession (Gameplay)       │
+                       └──────────────────┬──────────────────┘
+                                          │
+                  ┌───────────────────────┴───────────────────────┐
+                  ▼                                               ▼
+     CardDeck: Check Answer                        SessionStateScreen: Topic Complete
+  (records attempts in real-time)                     (advances topic / calculates XP)
+                  │                                               │
+       ┌──────────┴──────────┐                         ┌──────────┴──────────┐
+       ▼                     ▼                         ▼                     ▼
+Wrong Answer           Correct Answer             recordXpEarned()    recordActivityToday()
+recordQuestionFailure recordQuestionSuccess      (adds 5 XP / correct) (adds YYYY-MM-DD to
+(increments failCount (marks solved: true)             │               @play/activity_dates)
+ in @play/mistakes)          │                         ▼                     │
+       │                     │                  @play/total_xp &             ▼
+       └──────────┬──────────┘                  @play/xp:${skill}       currentStreak &
+                  │                                    │                7-day week dots
+                  ▼                                    │                     │
+           app/mistakes.tsx                            └──────────┬──────────┘
+       (Mistake Overview drill-down)                              │
+                                                                  ▼
+                                                        app/(tabs)/reports.tsx
+                                                    (Live Streak, XP, League, Reports)
+```
 
 ### Track Derivation Summary
 

@@ -12,6 +12,7 @@ import { StaticColors } from '@/constants/colors';
 import { Toggle } from '@/components/ui/Toggle';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { truncateEmailMiddle } from '@/lib/email';
+import { areTabsUnlocked } from '@/lib/progress';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { WatchAdPromptSheet } from '@/components/feedback/WatchAdPromptSheet';
 import { navPush, navReplace } from '@/lib/navDirection';
@@ -164,11 +165,18 @@ export function SessionStateScreen({
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [watchAdSheetVisible, setWatchAdSheetVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
+  // Same reasoning as LandingScreen: once tabs are unlocked, AppHeader
+  // (shown above every tab) already owns identity + Settings-based
+  // login/restore, so this screen's own login link is redundant and
+  // hidden. This screen has no header of its own pre-unlock, so it keeps
+  // showing the link exactly as before until then.
+  const [tabsUnlocked, setTabsUnlocked] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('@play/user_email').then((email) => {
       if (email) setLinkedEmail(email);
     }).catch(() => {});
+    areTabsUnlocked().then(setTabsUnlocked);
   }, []);
 
   // Both fallbacks below must forward skill/track, same as
@@ -435,16 +443,19 @@ export function SessionStateScreen({
               </View>
             </Pressable>
 
-            {/* Existing user, login link */}
-            <Pressable
-              onPress={() => setRestoreModalVisible(true)}
-              hitSlop={10}
-              style={styles.restoreAccountLinkWrap}
-            >
-              <Text style={[styles.restoreAccountLinkText, { color: colors.onSurfaceVariant }]}>
-                {linkedEmail ? `Logged in as ${truncateEmailMiddle(linkedEmail)}` : 'Existing user, login'}
-              </Text>
-            </Pressable>
+            {/* Existing user, login link — hidden once tabs are unlocked;
+                see the tabsUnlocked comment above. */}
+            {!tabsUnlocked && (
+              <Pressable
+                onPress={() => setRestoreModalVisible(true)}
+                hitSlop={10}
+                style={styles.restoreAccountLinkWrap}
+              >
+                <Text style={[styles.restoreAccountLinkText, { color: colors.onSurfaceVariant }]}>
+                  {linkedEmail ? `Logged in as ${truncateEmailMiddle(linkedEmail)}` : 'Existing user, login'}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </ScrollView>
 

@@ -1,3 +1,23 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const EMAIL_STORAGE_KEY = '@play/user_email';
+
+/**
+ * Reads the linked account email straight from AsyncStorage, or null if
+ * no account is linked on this device yet. Small shared helper so
+ * AppHeader (and anything else that just needs to know "is someone
+ * logged in") doesn't need its own copy of the raw '@play/user_email'
+ * key — lib/restore.ts and lib/progress.ts still read/write it directly
+ * since they're the ones actually mutating it.
+ */
+export async function getStoredEmail(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Sanitizes and validates an email string with RFC compliance.
  */
