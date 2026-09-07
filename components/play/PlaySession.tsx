@@ -5,6 +5,7 @@ import Animated, { SlideInRight, SlideInLeft, FadeOut } from 'react-native-reani
 import { useTheme } from '@/theme/ThemeContext';
 import { CardDeck } from '@/components/cards/CardDeck';
 import { SessionStateScreen } from '@/components/feedback/SessionStateScreen';
+import { KeysOfferScreen } from '@/components/feedback/KeysOfferScreen';
 import { ModeSwitcherSheet, ModeSwitcherHeading } from '@/components/landing/ModeSwitcherSheet';
 import { LoadingQuestionsScreen } from '@/components/feedback/DownloadingScreen';
 import { useKeys } from '@/hooks/useKeys';
@@ -16,7 +17,14 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 const XP_PER_CORRECT = 5;
 
-type FlowState = 'playing' | 'topicComplete' | 'outOfKeys' | 'loadingTopic';
+// 'keysOffer' is the first-look pack_20 upsell (KeysOfferScreen), shown
+// before 'outOfKeys' (SessionStateScreen's full "Other ways to Proceed"
+// list) the moment a learner actually runs out of keys -- see the
+// 'entry'/'advance' branches below. Its "Maybe later" moves straight to
+// 'outOfKeys'; resuming after a purchase attempt or the empty-sessions
+// defensive fallback go straight to 'outOfKeys' without repeating the
+// upsell.
+type FlowState = 'playing' | 'topicComplete' | 'keysOffer' | 'outOfKeys' | 'loadingTopic';
 
 type OutOfKeysReason = 'entry' | 'advance' | null;
 
@@ -100,7 +108,7 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
     (async () => {
       if (isOutOfKeys) {
         setOutOfKeysReason('entry');
-        setFlowState('outOfKeys');
+        setFlowState('keysOffer');
         return;
       }
 
@@ -108,14 +116,14 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
         const remaining = await spendKey();
         if (remaining === null) {
           setOutOfKeysReason('entry');
-          setFlowState('outOfKeys');
+          setFlowState('keysOffer');
           return;
         }
         setSessionStarted(true);
       } catch (err) {
         console.warn('[PlaySession] entry spendKey failed:', err);
         setOutOfKeysReason('entry');
-        setFlowState('outOfKeys');
+        setFlowState('keysOffer');
       }
     })();
   }, [ready]); // minimal deps — ref guards re-entry
@@ -143,14 +151,14 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
 
     if (isOutOfKeys) {
       setOutOfKeysReason('advance');
-      setFlowState('outOfKeys');
+      setFlowState('keysOffer');
       return;
     }
 
     const remaining = await spendKey();
     if (remaining === null) {
       setOutOfKeysReason('advance');
-      setFlowState('outOfKeys');
+      setFlowState('keysOffer');
       return;
     }
 
@@ -239,7 +247,7 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
   }, []);
 
   const showingOutOfKeysScreen =
-    flowState === 'outOfKeys' || (ready && flowState === 'playing' && !currentSession);
+    flowState === 'outOfKeys' || flowState === 'keysOffer' || (ready && flowState === 'playing' && !currentSession);
 
   const showingExhaustedFallback =
     ready && flowState === 'playing' && !currentSession;
@@ -257,7 +265,7 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
   // fires invisibly in the background AND again when the user actually
   // returns and taps "Continue Playing" — spending 2 keys for one unlock.
   React.useEffect(() => {
-    if (isFocused && flowState === 'outOfKeys' && !isOutOfKeys) {
+    if (isFocused && (flowState === 'outOfKeys' || flowState === 'keysOffer') && !isOutOfKeys) {
       void resumeSessionWithNewKeys();
     }
   }, [isFocused, flowState, isOutOfKeys, resumeSessionWithNewKeys]);
@@ -276,6 +284,16 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
 
   if (flowState === 'loadingTopic') {
     return <LoadingQuestionsScreen />;
+  }
+
+  if (flowState === 'keysOffer') {
+    return (
+      <KeysOfferScreen
+        skillId={skillId}
+        track={track}
+        onMaybeLater={() => setFlowState('outOfKeys')}
+      />
+    );
   }
 
   if (flowState === 'outOfKeys') {

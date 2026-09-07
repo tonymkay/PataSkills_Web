@@ -109,7 +109,12 @@ const stateCopy: Record<
   outOfKeys: {
     icon: Lock,
     iconColor: StaticColors.achievementAmber,
-    title: 'Choose how to proceed',
+    // Renamed from "Choose how to proceed" once KeysOfferScreen (the
+    // pack_20 upsell) was inserted before this screen in the out-of-keys
+    // flow -- this heading now needs to read as the fallback/rest-of-list
+    // screen reached via that upsell's "Maybe later", not the first
+    // choice presented.
+    title: 'Other ways to Proceed',
     subtitle: 'Packs of 20, 40, 80 or 120 keys',
     primary: 'CONTINUE',
     secondary: 'WAIT UNTIL TOMORROW',
