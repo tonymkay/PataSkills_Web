@@ -174,14 +174,34 @@ function ReadingCardDeck({
     if (isTransitioning) return;
     setIsTransitioning(true);
 
-    // Ease the active segment the rest of the way to full, timed to land
-    // right as the card finishes sliding out — same as QuizCardDeck.
-    activeFillAnim.value = withTiming(100, {
-      duration: DURATION,
-      easing: Easing.out(Easing.cubic),
-    });
-
     const nextIndex = currentIndex + 1;
+    const isLastCard = nextIndex >= signs.length;
+
+    // Ease the active segment the rest of the way to full, timed to land
+    // right as the card finishes sliding out — same as QuizCardDeck. On the
+    // last card there's no next slot to slide the strip toward (the session
+    // is ending), so this callback is the one that hands off to
+    // PlaySession's own topicComplete screen transition instead of the
+    // strip's onComplete below.
+    activeFillAnim.value = withTiming(
+      100,
+      { duration: DURATION, easing: Easing.out(Easing.cubic) },
+      isLastCard
+        ? (finished) => {
+            if (finished) {
+              runOnJS(handleTransitionEnd)(nextIndex);
+            }
+          }
+        : undefined
+    );
+
+    if (isLastCard) {
+      // Sliding the strip here as well as running PlaySession's
+      // SlideInRight/FadeOut into topicComplete stacked two directional
+      // slides back to back and looked like a double swipe — skip it.
+      return;
+    }
+
     const targetX = -(nextIndex * stride);
 
     stripX.value = withTiming(
@@ -193,7 +213,7 @@ function ReadingCardDeck({
         }
       }
     );
-  }, [currentIndex, isTransitioning, stride, stripX, activeFillAnim, handleTransitionEnd]);
+  }, [currentIndex, isTransitioning, stride, stripX, activeFillAnim, handleTransitionEnd, signs.length]);
 
   const stripStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: stripX.value }],
@@ -438,12 +458,25 @@ function QuizCardDeck({
     if (isTransitioning || !currentCard) return;
     setIsTransitioning(true);
 
+    const nextIndex = currentIndex + 1;
+    const isLastCard = nextIndex >= deck.length;
+
     // Ease the active segment the rest of the way to full, timed to land
-    // right as the card finishes sliding out.
-    activeFillAnim.value = withTiming(100, {
-      duration: DURATION,
-      easing: Easing.out(Easing.cubic),
-    });
+    // right as the card finishes sliding out. On the last card there's no
+    // next slot to slide the strip toward (the session is ending), so this
+    // callback hands off to PlaySession's own topicComplete screen
+    // transition instead of the strip's onComplete below.
+    activeFillAnim.value = withTiming(
+      100,
+      { duration: DURATION, easing: Easing.out(Easing.cubic) },
+      isLastCard
+        ? (finished) => {
+            if (finished) {
+              runOnJS(handleTransitionEnd)(isCorrect, nextIndex);
+            }
+          }
+        : undefined
+    );
 
     try {
       Haptics.notificationAsync(
@@ -453,7 +486,13 @@ function QuizCardDeck({
       );
     } catch {}
 
-    const nextIndex = currentIndex + 1;
+    if (isLastCard) {
+      // Sliding the strip here as well as running PlaySession's
+      // SlideInRight/FadeOut into topicComplete stacked two directional
+      // slides back to back and looked like a double swipe — skip it.
+      return;
+    }
+
     const targetX = -(nextIndex * stride);
 
     // Slide strip continuously forward to the next index
@@ -469,7 +508,7 @@ function QuizCardDeck({
         }
       }
     );
-  }, [currentIndex, isTransitioning, currentCard, stripX, activeFillAnim, handleTransitionEnd, stride]);
+  }, [currentIndex, isTransitioning, currentCard, stripX, activeFillAnim, handleTransitionEnd, stride, deck.length]);
 
   // Check button handler — opens the feedback sheet instead of auto-advancing.
   const handleCheck = () => {

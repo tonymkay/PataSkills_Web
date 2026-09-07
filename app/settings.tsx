@@ -161,7 +161,7 @@ export default function SettingsScreen() {
         <SettingsRow
           icon={<HelpCircle size={IconSize.inline} color={iconColor} />}
           label="Help"
-          onPress={() => router.push('/help')}
+          onPress={() => Linking.openURL('https://pataskills.com')}
         />
         <SettingsRow
           icon={<Info size={IconSize.inline} color={iconColor} />}

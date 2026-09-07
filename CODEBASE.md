@@ -1,157 +1,7 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-07 (m) — Shipped the **Unlimited Subscription Flow**, **Keys Tab Active Premium State**, **Manage Subscription Screen**, **Background Reset Reminders**, and **Supabase Edge Functions Mirroring**:
-> **(1) Keys Tab Active Premium Screen (`app/(tabs)/keys.tsx`)**: When `isPremium` is true (Unlimited subscription active), the keys tab transforms into the active Premium card matching PataSkillsV2. Features the 3D crown graphic (`assets/premium/crown.webp`, 168x168), "You're on Premium" headline, active expiry date or unlimited access subtitle, a "Manage subscription" button routing to `/manage-subscription`, and a "Premium benefits" shortcut row. If not premium, cleanly shows key count hero, "N keys left", and session unlock options.
-> **(2) Dedicated Manage Subscription Screen (`app/manage-subscription.tsx`)**: Screen accessible from Settings or Keys Tab with plan state card (active Premium badge or Free upgrade prompt), direct management action (Play Store subscriptions / management URL), and Help section with public FAQ links.
-> **(3) Settings Integration (`app/settings.tsx`)**: Added "Manage Subscriptions" row under Account with live `Premium` or `Free` badge, routing directly to `/manage-subscription`.
-> **(4) Billing & Keys Sync Layer (`lib/billing.ts`, `lib/keys.ts`)**: Added `SubscriptionInfo` and `PremiumOverrideInfo` types, `getSubscriptionInfo()`, `enforceLocalExpiry()`, and `configureBilling()`. Supports `expiresAt` timestamps in `KeysState` and `AsyncStorage` (`@play/premium_expires_at`), automatically expiring subscriptions locally and remotely once the valid duration ends.
-> **(5) Supabase Edge Functions (`supabase/functions/`)**: Added `paystack-webhook`, `revenuecat-webhook`, and `subscription-reminders` edge functions to `pataproducts/play/supabase/functions/`. Configured `paystack-webhook` to verify HMAC-SHA512 signatures and mirror successful payments to both `web_purchases`/`user_premium` and `play_purchases`/`play_accounts`.
-> **(6) Environment & Auth Keys Sync (`.env`)**: Added missing keys from PataSkillsV2 to `play/.env`: `EXPO_PUBLIC_RC_ANDROID_KEY`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`, `EXPO_PUBLIC_APP_ENV`, and `EXPO_PUBLIC_APP_VERSION`.
->
-> **Last updated**: 2026-09-07 (l) — Shipped the **Dedicated Full-Screen Learning Route (`app/play.tsx`)**, **Skills Tab Isolation**, **Keys Offer Navigation Alignment**, **Settings Dark Theme Toggle**, and **Header/Typography Polish**:
-> **(1) Dedicated Full-Screen Learning Route (`app/play.tsx`)**: Created `/play` outside the `(tabs)` group so no bottom floating tab bar is rendered during learning-style selection, track detail preview, downloading, quiz card play, and payment flows. Buttons like "PAY WITH PAYSTACK", choice pills, and continue buttons have full unobstructed viewport height and safe area insets.
-> **(2) Skills Tab Isolation (`app/(tabs)/skills.tsx`)**: Refactored to strictly display the 2-column grid (`LandingScreen`) under `AppHeader`. Tapping any skill or restoring progress navigates to `/play`. Added `bottomPadding` support so the bottom-most cards clear the floating tab bar during scroll.
-> **(3) Headroom & Typography Polish**: Matched the headroom above "Skills Corner" on `LandingScreen` with "My Skills" on the Home tab by standardizing `containerContent.paddingTop: Spacing.base` (8px) and `lineHeight: 34`. Updated `SkillProgressCard.tsx` so the green completion percentage label (e.g. `7% Complete`) uses regular font (`FontFamily.regular`) instead of bold. Centered "My Skills" on Home tab and "Unlock more sessions" on Keys tab (removed secondary text).
-> **(4) Settings Screen Dark Theme Toggle (`app/settings.tsx`)**: Added a Dark theme on/off switch (`Moon` icon, `SettingsToggleRow`) matching `pataskillsv2/app/settings.tsx`, directly managing `useTheme().setMode(...)` and persisted via `AsyncStorage`.
-> **(5) Keys Offer Screen Navigation (`components/feedback/KeysOfferScreen.tsx`)**: Removed top-left button for a clean header layout. Unified OS-based back navigation (`BackHandler` hardware back button / gestures) and the "Maybe later" button to cleanly transition to Image 2 (`SessionStateScreen kind="outOfKeys"`, "Other ways to Proceed").
-> **(6) Master User Data Specification (`userdata.md`)**: Created comprehensive specification documenting all user data collected (XP, balance, streak, mistakes, progress, transactions), formats, local keys, and Supabase tables.
->
-> **Last updated**: 2026-09-07 (k) — Built the full **Leaderboard**
-> and aligned the **Mistakes** screen to match PataSkillsV2 1:1:
-> **(1) Leaderboard Screen (`app/leaderboard.tsx`)**: Reached from the Reports tab's `LeaguePanel`
-> ("View Leaderboard" button). Features a top header with `ChevronLeft` back navigation, full-height
-> `LeagueCard` (`components/profile/LeagueCard.tsx`) showing current league tier (`{Tier} League`),
-> information button opening `LeagueSheet` modal carousel (`components/profile/LeagueSheet.tsx`),
-> and automatic scrolling to the learner's middle position.
-> **(2) Leaderboard Profile Components (`components/profile/`)**: `Avatar.tsx` (deterministic colored initial
-> avatar circles or profile image), `LeaderboardRow.tsx` (rank, avatar, learner name, dot, and XP with tabular numbers,
-> highlighted in green for the signed-in learner), `LeagueCard.tsx` (header bar with Info icon and scrollable
-> ranked rows), and `LeagueSheet.tsx` (swipeable trophy carousel across all 11 tiers from Quartz to Legend).
-> **(3) Leaderboard Data Layer (`lib/leaderboard.ts`)**: `fetchLeaderboard(myXp)` and `fetchLeagueBoard(tier, myXp)`
-> querying user stats or populating competitive tier bands with realistic peers, correctly ranking the active user.
-> **(4) Mistakes Screen 1:1 Alignment (`app/mistakes.tsx`, `components/reports/MistakeCard.tsx`)**:
-> Updated header with `ChevronLeft` and centered "Mistake Overview", clean empty state, and redesigned
-> `MistakeCard` featuring centered question text, horizontal divider with centered mistake count pill
-> (`N MISTAKE(S)` in `#F77BA0` bg / `#B01030` text), and "Correct answer is:" with highlighted answer.
->
-> **Last updated**: 2026-09-07 (j) — Redesigned the **Reports Tab**
-> to 1:1 match PataSkillsV2's Profile tab design, imported 3D assets, and polished tab transitions:
-> **(1) Reports Tab Alignment (`app/(tabs)/reports.tsx`)**: Replaced the previous report layout
-> with PataSkillsV2's Profile layout: 2-column `StatCard` row displaying Max Streak (`assets/homepage/streak.webp`)
-> and Recharges (`assets/homepage/recharge.webp`), followed by `WeekCalendarRow` (4-day strip with today
-> highlighted and horizontal progress track), full-width `Keys and Quest(N)` pressable link, `LeaguePanel`
-> (amber XP, 3-league trophy preview using `assets/profile/trophy.webp` with `lib/leagues.ts` 11-tier scale,
-> and band progress bar), and per-skill `SkillReportCard` list with progress bars and "Missed Questions"
-> buttons routing to `app/mistakes.tsx`.
-> **(2) Components & Assets (`components/reports/`)**: Created modular `StatCard.tsx`, `WeekCalendarRow.tsx`,
-> `LeaguePanel.tsx`, and `SkillReportCard.tsx` in `components/reports/` (barrel-exported in `index.ts`).
-> Copied `streak.webp`, `recharge.webp`, and `trophy.webp` into `play/assets/`.
-> **(3) Skills Entrance Animation Fix (`components/play/SkillsFlow.tsx`)**: Removed `<ScreenTransition>`
-> wrapper that previously caused a full-screen sliding animation on web whenever entering or focusing
-> the Skills tab. Disabled entrance/exit slide animations for the `landing` catalog stage so it renders
-> statically and instantly like the other tabs.
-> **(4) Exit-to-Home Routing**: Fixed `handleExit` in `SkillsFlow.tsx` and `app/index.tsx` to inspect
-> `areTabsUnlocked()` and replace the route to `/(tabs)/home` instead of resetting in-memory to the pre-unlock landing page.
->
-> **Last updated**: 2026-09-07 (i) — Shipped the **Tabbed Home Shell**,
-> **Progress Gate**, and full **Reports & Missed Questions System**:
-> **(1) Progressive Unlock & Root Gate**: `lib/progress.ts` gained `areTabsUnlocked()` and
-> `unlockTabsIfNeeded()` (`@play/tabs_unlocked`). Pre-unlock, `app/index.tsx` acts as a root gate
-> rendering the classic single-route `SkillsFlow` directly without a tab bar. The moment the
-> learner completes their first topic on any skill, tabs permanently unlock and subsequent launches
-> redirect to `/(tabs)/home`.
-> **(2) Tabbed Navigation (`app/(tabs)/`)**: Custom `FloatingTabBar` (`components/nav/FloatingTabBar.tsx`)
-> with spring-animated sliding pill and Lucide icons (`Home`, `Library`, `KeyRound`, `PieChart`)
-> wrapping four tabs: `home` (`SkillProgressCard` list with dynamic progress & resume actions),
-> `skills` (embedded `SkillsFlow`), `keys` (`KeysOptionsContent` with buy-keys/subscribe/free-trial timer),
-> and `reports` (live analytics). All four tabs display `AppHeader` (`components/nav/AppHeader.tsx`)
-> with avatar initials, learner name, and gear link to `app/settings.tsx`.
-> **(3) Settings & Login Migration**: "Existing user, login" is hidden once tabs are unlocked.
-> Account sign-in, account restore, notifications toggle, currency toggle (`KES`/`USD`), and support/legal
-> links now live in `app/settings.tsx` (`components/settings/SettingsComponents.tsx`).
-> **(4) Missed Questions Tracking**: `lib/mistakes.ts` tracks every failed question per skill in
-> `@play/mistakes:${skillId}` with question prompt, options, correct answer, fail count, and mastered status.
-> Captured in real time in `components/cards/CardDeck.tsx`. `app/mistakes.tsx` (`components/reports/MistakeCard.tsx`)
-> provides a dedicated drill-down review screen with "All" vs "Unsolved" filters.
-> **(5) XP & Streak Analytics**: `lib/xp.ts` records lifetime (`@play/total_xp`) and per-skill XP (awarded
-> upon topic complete in `components/play/PlaySession.tsx`). `lib/streak.ts` records practice days
-> (`@play/activity_dates`), computing consecutive Day Streak and Mon–Sun weekly active flags.
-> `app/(tabs)/reports.tsx` dynamically renders live Day Streak, Total XP, 7-day calendar dots,
-> Bronze/Silver/Gold League tier, and per-skill cards with missed questions count.
-> **(6) Bugfix**: `lib/curriculaCatalog.ts` rewritten with async IIFE to fix a `PromiseLike` typecheck error.
->
-> **Last updated**: 2026-09-06 (h) — Third skill (**Bible
-> Trivia**) shipped, and the `full` track's label moved from a hardcoded string to a DB-driven
-> universal default, closing the gap `play_track_defaults` was reserved for. **(1)**
-> `constants/skills.ts` gained a `bible-trivia` `LANDING_SKILLS` entry and
-> `constants/curriculumAssets.ts` a matching `bible-trivia.webp` cover path — same shape as
-> `true-false`, converted from a nested `levels/chapters/topics` source schema per
-> `json-conversion.md`'s new "Bible Trivia" section (237 of 395 source questions kept; the
-> `matching` question type, new in this source, was excluded for the same single-answer-engine
-> reason `multi` already was). **(2)** `play_track_defaults` (§14) is no longer permanently
-> empty by design — it gained a `label` column (nullable, alongside `image_path` which is now
-> also nullable so a row can carry a label with no image) and a seeded `full` → `"Learn Full
-> Skill"` row, replacing `constants/trackOptions.ts`'s old hardcoded
-> `DEFAULT_TRACK_LABELS.full` string as the real source of truth. `lib/trackDefaults.ts`
-> (§9) now caches `{ images, labels }` instead of a flat image map, exposing both
-> `getCachedTrackDefaultUrl()` and a new `getCachedTrackDefaultLabel()`; its fetch was also
-> rewritten from a raw `.then()` chain to an `async` IIFE to fix a pre-existing `tsc` error
-> (`PromiseLike` assigned where a real `Promise` was declared) that this same pass ran into
-> again in the still-outstanding `lib/curriculaCatalog.ts` (untouched — see that section's
-> note). `constants/trackOptions.ts`'s `trackLabel()` now checks
-> `getCachedTrackDefaultLabel(track)` between the JSON's own `customTrackDef?.title` and the
-> hardcoded default, mirroring `trackImage()`'s existing DB-then-local fallback chain. **(3)**
-> Storage bucket gained `curricula/bible-trivia.json` and `curricula/bible-trivia.webp`; a
-> `play_curricula` row (`slug: 'bible-trivia'`) was handed to the user as SQL to run manually
-> (anon key can't write that table). **Known pre-existing gap, unrelated to this pass**: a
-> `world-facts` skill's JSON/cover image already exist in Storage and are documented in
-> `json-conversion.md`, but `constants/skills.ts`/`curriculumAssets.ts` still only list
-> `driving-theory`, `true-false`, and now `bible-trivia` — `world-facts` was left out of both
-> files by whatever WIP produced `lib/curriculaCatalog.ts` (uncommitted at the time of this
-> pass), not by this one. See §7, §9, §13, §14, and §18 for the corrected implementation.
->
-> **Last updated**: 2026-09-06 (g) — Per-track illustration
-> resolution made fully database/JSON-driven, closing the last two hardcoded-per-skill gaps.
-> **(1)** `constants/trackOptions.ts`'s `trackImage()` final fallback now reads the skill's cover
-> image from `lib/curriculaCatalog.ts` (DB, `play_curricula.cover_image_path`) instead of the
-> local `CurriculumCoverImagePaths` constant — that constant is now only the pre-fetch,
-> instant-render backup for the split second before the DB cache warms. **(2)** The five
-> `assets/driving/*.webp` illustrations (`differenciate`/`name`/`meaning`/`usage`/`reading`)
-> turned out to be driving-theory's own art, not generic/universal — they were uploaded to
-> `play-assets/track-icons/` (`scripts/upload-track-icons.mjs`, corrected to the real track ids
-> `pairs`/`names`/`meanings`/`whereUsed`/`reading` instead of a stale pre-consolidation
-> `differentiation`/`identification` naming) and wired as a per-curriculum override directly on
-> driving-theory's own JSON (`tracks[].image` in `curricula/questions.sample.json`) rather than
-> as a shared default. **(3)** `play_track_defaults` (new table, `lib/trackDefaults.ts`,
-> `supabase/play_track_defaults.sql`) is intentionally left **empty** — seeding it with driving's
-> art would have leaked those images onto every other skill's matching track id (e.g.
-> true-false's `reading` track), so it exists only as a place to add genuinely shared/universal
-> track art in the future; until then every skill's tracks correctly fall through to that skill's
-> *own* cover image. `constants/trackOptions.ts`'s `LOCAL_IMAGES` map was emptied for the same
-> reason — it was flash-rendering driving's art on any skill's matching track for the instant
-> before that skill's own JSON loaded. See §7, §9, and §14 for the corrected implementation.
->
-> **Last updated**: 2026-09-06 (f) — `full` and `reading` are now
-> compulsory: `detectAvailableTracks()` guarantees both are always selectable even if a
-> curriculum's JSON `tracks` array omits them. Driving-theory's JSON un-merged
-> `identification`/`differentiation` back into four independently selectable standard tracks
-> (`pairs`/`names`/`meanings`/`whereUsed`) — the brief two-track merge from pass (e) below was
-> reverted, since it collapsed three genuinely distinct learning styles into one. Added a
-> generic `filterTags`/`question.tags` filter primitive (AND-matched) alongside
-> `filterRole`/`filterFormat`, and `groupId`/`groupTitle` for visually clustering related tracks
-> under one heading in `LearningStyleScreen`/`ModeSwitcherSheet` without changing how each is
-> addressed (`constants/trackOptions.ts`'s `groupTrackOptions()`). Reading Mode's
-> question-derived path (`deriveReadingEntriesFromQuestions()` in `utils/hydrateQuestions.ts`,
-> used whenever a skill has no real `signs` catalog) is now question-shape-aware — image and
-> "similar items" sections only appear when the source question's format/pairId actually
-> supports them, and the question's own `explanation` merges in below the answer instead of
-> being discarded (`ReadingCard.tsx` updated to match, guarding empty sections). A
-> `kind: 'reading'` track can also scope itself via its own `filterRole`/`filterTags`. See §9,
-> §11, and `json-conversion.md`'s "Defining Custom Learning Tracks in JSON" section.
->
-> **Last updated**: 2026-09-06 (e) — `CurriculumTrackDefinition.filterRole`/`filterFormat` widened from a single string to `string | string[]` (`lib/curriculum.ts`'s `roleMatches()` now checks array membership), letting one JSON-declared track absorb several role values. Both live curricula in Supabase Storage now actually ship explicit `tracks` arrays using this: driving-theory (`differentiation`, `identification` [merges name+meaning+whereUsed], `reading`, `full`) and true-false (`full`) — previously the bucket copies were stale flat/role-only JSON despite the local repo files and app code already supporting the JSON-driven format. See §11 and §18 for the corrected type and bucket contents.
->
-> **Last updated**: 2026-09-05 (d) — this pass updates documentation to reflect the dynamic JSON-driven learning tracks system, multi-skill routing, and per-curriculum customization: **(1)** JSON-driven track definitions (`CurriculumTrackDefinition` in `types/quiz.ts`) allowing curricula to define arbitrary track IDs, custom titles, filtering rules (`filterRole`, `filterFormat`, `kind`), and custom icons directly in curriculum JSON without code changes; **(2)** Dynamic track detection (`detectAvailableTracks`/`getAvailableTracks`/`getCurriculumTrackDefs` in `lib/curriculum.ts`) supporting both custom JSON tracks and legacy question `role`/sign auto-detection with 100% backward compatibility; **(3)** Deduplicated cache (`loadCurriculumCached`) ensuring a single in-flight network promise shared across `getTrackTotals()`, `getAvailableTracks()`, and `getCurriculumTrackDefs()`; **(4)** `constants/trackOptions.ts` dynamic builders (`getTrackOptionsForSkill`, `getTrackOption`) prioritizing skill overrides → JSON `trackDef.title` → default labels; **(5)** `LearningStyleScreen`, `TrackDetailScreen`, and `ModeSwitcherSheet` updated to consume dynamic tracks and track definitions; **(6)** Multi-skill catalog in `constants/skills.ts` and deep linking in `app/index.tsx` supporting custom track IDs. · **Scope**: Every file inside `PataProducts/play/` · **Method**: Direct inspection of every file listed in §2 — verified against active source code and `tsc` typecheck.
+> **Generated from source**: 2026-09-07 · Root: `desktop/platform/PataProducts/play/`  
+> Companion specs: `userdata.md` (storage keys + tables), `json-conversion.md` (content pipeline).
 
 ---
 
@@ -180,36 +30,39 @@
 
 ## 1. Project Overview
 
-**PataSkills Play** is a mobile-first quiz application built with **Expo** (React Native) targeting iOS, Android, and web. It originated as a single **Driving Theory** curriculum (practicing highway-code questions about road-sign identification) and has since grown into a multi-skill catalog — `driving-theory`, `true-false`, and `bible-trivia` are all currently live (see `constants/skills.ts`'s `LANDING_SKILLS`). Curriculum and sign images are fetched from a **Supabase** backend at runtime; questions are presented in a swipeable card deck; continued play is gated behind a consumable **"keys"** system.
+**PataSkills Play** is a mobile-first quiz app built with **Expo 54** (React Native) for iOS, Android, and web. Curriculum JSON and images load at runtime from **Supabase** (`play-assets` bucket + `play_*` tables). Questions play in a swipeable card deck. Continued play is gated by a consumable **keys** economy; checkout is **Paystack** (web iframe), not a native IAP SDK.
 
-Since the previous documentation pass, three large areas were built out that this update captures for the first time:
+Live landing catalog in `constants/skills.ts` (`LANDING_SKILLS`):
 
-1. **Landing flow redesign** — the single-page track picker was replaced by a three-stage flow: a "Skills Corner" 2-column grid (`LandingScreen`) → a full-page learning-style list (`LearningStyleScreen`) → a full-page single-track preview (`TrackDetailScreen`) → download. Switching modes mid-session (after a topic completes) reuses the same track list via a bottom sheet, `ModeSwitcherSheet`.
-2. **A real monetization stack** — a tiered keys economy with escalating cooldowns, a premium "Unlimited Pass" subscription, one-time key packs, rewarded-ad bonus sessions, and account restore/sync via email or Google — checkout runs through **Paystack** (web-embedded), not RevenueCat or a native IAP SDK.
-3. **Learning Tracks and Reading Mode** (still current) — the same question bank filtered/regrouped client-side into **Pairs** (default) / **Names** / **Meanings** / **Where Used** / **Full course** / **Reading** (non-quiz, browse-only). See [§16 Docs](#16-docs-docs) for the original feature spec.
+| Slug | Subtitle | Notes |
+|------|----------|--------|
+| `driving-theory` | Driving theory | Role-tagged questions + signs catalog; JSON-declared tracks `pairs` / `names` / `meanings` / `whereUsed` / `reading` / `full` |
+| `true-false` | True/False | Text questions; compulsory `full` + `reading` |
+| `bible-trivia` | Bible Trivia | 237 `textChoice` questions (single-answer only) |
+| `world-facts` | World Facts | Converted trivia; cover `curricula/world-facts.webp` |
 
-### Core User Flow
+`play_curricula` (active rows) is the live source of truth for slug, title, and cover path. `LANDING_SKILLS` + `CurriculumCoverImagePaths` are the instant-render fallback before that fetch warms. A skill that exists only as a DB row still type-checks (`CurriculumSlug` is `string`); `getLandingSkill()` supplies default `tracks: ['reading', 'full']`.
+
+**Football** (`jsons/football.json`, `scripts/convert-football.mjs`, `scripts/upload-football.mjs`) is conversion/upload tooling only — it is **not** in `LANDING_SKILLS`.
+
+### Core user flow
 
 ```
-Pre-unlock:
-  app/index.tsx (RootGate)
-    → SkillsFlow (LandingScreen 2-col grid → LearningStyleScreen → TrackDetailScreen → Downloading → PlaySession)
-      → Topic 1 Completed!
-        → unlockTabsIfNeeded() fires in lib/progress.ts permanently
+Pre-unlock (first launch until first topic complete):
+  app/index.tsx RootGate → SkillsFlow
+    LandingScreen → LearningStyleScreen → TrackDetailScreen → Downloading → PlaySession
+    markTopicCompleted() → unlockTabsIfNeeded() → @play/tabs_unlocked = "true"
 
-Post-unlock (every future launch):
-  app/index.tsx redirects to /(tabs)/home
-    ├── (tabs)/home    — Centered "My Skills", in-progress skill cards, regular-font % complete, direct resume into /play
-    ├── (tabs)/skills  — Skills Corner 2-column grid under AppHeader; card tap navigates to /play
-    ├── (tabs)/keys    — Centered "Unlock more sessions", packs, subscriptions, free-trial countdown & reminder toggle
-    └── (tabs)/reports — Day streak, total XP, 7-day activity, league panel (view leaderboard), skill cards (missed questions)
-  app/play.tsx         — Dedicated full-screen learning route outside tabs (SkillsFlow standalone, zero tab obstruction)
-  app/leaderboard.tsx  — Full-height league rankings with tier carousel (LeagueSheet), active learner row, and mock peers
-  app/mistakes.tsx     — Drill-down per-skill mistake review (question prompt, fail count, correct answer)
-  app/settings.tsx     — Account, preferences (Dark theme toggle, notifications, currency), support, legal
+Post-unlock (every later launch):
+  app/index.tsx Redirect → /(tabs)/home
+    home     My Skills + SkillProgressCard resume → /play?resume=true&skill=
+    skills   Skills Corner grid only; tap → /play?skill=
+    keys     Key packs / subscribe / free trial  OR  Premium card → /manage-subscription
+    reports  Streak, recharges, 4-day strip, league, per-skill reports → /mistakes, /leaderboard
+  app/play.tsx   Full-screen SkillsFlow (standalone) — no FloatingTabBar
 ```
 
-A `?track=` URL param (ad/campaign links) skips straight to Track Detail; `?resume=true` (returning from checkout or Home) skips straight into a session in `/play`.
+Deep links: `?track=` skips to track detail; `?resume=true` (and optional `skill` / `track`) auto-starts a session. Payment success still `navReplace`s to `/` with `resume=true` (`app/payment-complete.tsx`).
 
 ---
 
@@ -217,1275 +70,546 @@ A `?track=` URL param (ad/campaign links) skips straight to Track Detail; `?resu
 
 ```
 play/
-├── .env                              # Supabase + Paystack + AdMob + Google client env vars
-├── .gitattributes                    # Binary-safe git config for fonts/images
-├── .gitignore                        # Standard Expo ignores
-├── AGENTS.md                         # AI agent instructions (Expo version pin)
-├── CLAUDE.md                         # AI agent marker
-├── CODEBASE.md                       # This file
-├── LICENSE                           # MIT License (Expo origin)
-├── README.md                         # Minimal readme
-├── app.json                          # Expo app manifest
-├── babel.config.js                   # Babel preset (expo)
-├── metro.config.js                   # Metro bundler config (woff/woff2 support)
-├── package.json                      # Dependencies & scripts
-├── tsconfig.json                     # TypeScript config
-├── vercel.json                       # Web deployment config (Vercel)
-├── userdata.md                       # Master user data specification (types, formats, local keys, DB tables)
-├── pataskills-swipe-demo.html        # Standalone HTML swipe-card prototype
+├── .env                         # Local env (never commit secrets). Names in §4
+├── AGENTS.md / CLAUDE.md        # Expo v57 docs pin for agents
+├── CODEBASE.md                  # This file
+├── userdata.md                  # User-data inventory (AsyncStorage + Supabase)
+├── json-conversion.md           # How source trivia JSON becomes curriculum JSON
+├── app.json                     # Expo manifest
+├── babel.config.js              # babel-preset-expo
+├── metro.config.js              # woff/woff2 asset extensions
+├── package.json
+├── tsconfig.json                # strict, @/* → root; excludes supabase/functions
+├── vercel.json                  # npm run build → dist/
+├── README.md / LICENSE
+├── pataskills-swipe-demo.html   # Standalone HTML swipe prototype
 │
-├── app/                               # Expo Router pages
-│   ├── _layout.tsx                    # Root layout (providers, fonts, splash)
-│   ├── index.tsx                      # Root gate (pre-unlock: SkillsFlow; post-unlock: redirect to /(tabs)/home)
-│   ├── play.tsx                       # Dedicated full-screen learning route outside tabs (SkillsFlow standalone)
-│   ├── leaderboard.tsx                # Dedicated Leaderboard screen (LeagueCard, 11-tier LeagueSheet, rankings)
-│   ├── mistakes.tsx                   # Mistake Overview screen — per-skill missed questions list & review
-│   ├── settings.tsx                   # Settings screen — Account, Dark theme switch, currency, support, legal
-│   ├── help.tsx                       # Help topic picker screen matching PataSkillsV2 (6 categories)
-│   ├── feedback-form.tsx              # Feedback and support request submission form
-│   ├── (tabs)/                        # Tabbed home shell (unlocked after first topic complete)
-│   │   ├── _layout.tsx                # Tabs layout with FloatingTabBar (Home, Skills, Keys, Reports)
-│   │   ├── home.tsx                   # Home tab — "My Skills", in-progress cards, direct resume into /play
-│   │   ├── skills.tsx                 # Skills tab — strictly 2-column grid (LandingScreen) under AppHeader
-│   │   ├── keys.tsx                   # Keys tab — "Unlock more sessions", packs, subscriptions, free trial
-│   │   └── reports.tsx                # Reports tab — StatCards, WeekCalendarRow, LeaguePanel, SkillReportCards
-│   ├── +html.tsx                      # Web-only HTML shell (fonts, viewport, CSS)
-│   ├── keys-packs.tsx                 # Buy one-time keys — pack list + balance hero
-│   ├── keys-confirm.tsx               # Confirm a key-pack purchase + email capture
-│   ├── how-keys-work.tsx              # Explainer: keys economy
-│   ├── subscription-plans.tsx         # Unlimited Pass plan list (weekly/regular/annual)
-│   ├── subscription-confirm.tsx       # Confirm a subscription + email capture
-│   ├── premium-benefits.tsx           # Free-vs-Premium comparison table
-│   ├── payment-complete.tsx           # Post-Paystack-checkout landing (grants keys/premium)
-│   ├── how-free-mode-works.tsx        # Explainer: free-trial keys/timer/ads/reminders
-│   ├── +not-found.tsx                 # Default Expo Router 404 screen (unmodified boilerplate)
-│   └── admin/
-│       └── signs.tsx                  # Admin tool: browse & swap sign images
+├── app/                         # Expo Router
+│   ├── _layout.tsx              # Providers, fonts, notifications, billing expiry
+│   ├── index.tsx                # RootGate (SkillsFlow vs redirect to tabs)
+│   ├── play.tsx                 # Standalone SkillsFlow (no tab bar)
+│   ├── +html.tsx                # Web HTML shell (fonts, AdSense, phone frame CSS)
+│   ├── +not-found.tsx
+│   ├── (tabs)/                  # home, skills, keys, reports + FloatingTabBar
+│   ├── settings.tsx
+│   ├── manage-subscription.tsx
+│   ├── leaderboard.tsx
+│   ├── mistakes.tsx
+│   ├── help.tsx / feedback-form.tsx
+│   ├── keys-packs.tsx / keys-confirm.tsx / how-keys-work.tsx
+│   ├── subscription-plans.tsx / subscription-confirm.tsx
+│   ├── premium-benefits.tsx / how-free-mode-works.tsx
+│   ├── payment-complete.tsx
+│   └── admin/signs.tsx
 │
 ├── components/
-│   ├── auth/
-│   │   ├── RestoreAccountModal.tsx    # Sign-in/restore modal (Google or email) + logged-in account view
-│   │   ├── GoogleWebButton.tsx        # Native stub (renders nothing — no native Google sign-in yet)
-│   │   └── GoogleWebButton.web.tsx    # Real Google Identity Services button (web only)
-│   ├── cards/
-│   │   ├── CardDeck.tsx               # Router: QuizCardDeck (with mistake recording) or ReadingCardDeck
-│   │   ├── ReadingCard.tsx            # Reading Mode card — sign image, name, meaning, explanation
-│   │   ├── ScrollHintChevron.tsx      # Shared bouncing "more content below" chevron
-│   │   └── TwoImageCard.tsx           # Individual quiz card (3 layout types)
-│   ├── feedback/
-│   │   ├── CheckButton.tsx            # "CHECK" / "GOT IT" button with feedback animation
-│   │   ├── DownloadingScreen.tsx      # Loading screen with bouncing dots
-│   │   ├── FeedbackSheet.tsx          # Correct/Not-quite bottom sheet
-│   │   ├── FlagIcon.tsx               # Flag-a-question toggle button
-│   │   ├── KeyRewardSuccessModal.tsx  # "+1 key" reward screen (bare content + standalone modal wrapper)
-│   │   ├── KeysOfferScreen.tsx        # Upsell offer screen
-│   │   ├── KeysOptionsContent.tsx     # Reusable 3-option card container (Buy Keys, Subscribe, Free Trial)
-│   │   ├── LearnMoreSheet.tsx         # Explanation bottom sheet — backed by the signs catalog
-│   │   ├── QuitConfirmSheet.tsx       # "Are you sure?" quit confirmation
-│   │   ├── SessionStateScreen.tsx     # Interstitial screen (topic/chapter complete, out-of-keys, rewards)
-│   │   └── WatchAdPromptSheet.tsx     # "Watch an ad for +1 session?" sheet, chains into KeyRewardSuccessModal
-│   ├── home/
-│   │   ├── LandingIllustration.tsx    # Remote cover image component
-│   │   ├── LandingScreen.tsx          # Entry screen — 2-column "Skills Corner" grid
-│   │   ├── SkillCard.tsx              # Bordered skill card w/ progress + CTA
-│   │   ├── SkillGridCard.tsx          # Compact grid-cell skill card (used by LandingScreen)
-│   │   └── SkillProgressCard.tsx      # In-progress skill card on Home tab (progress bar, %, CTA)
-│   ├── landing/
-│   │   ├── CarouselDots.tsx           # Animated pager dots (currently unused by LandingScreen's grid)
-│   │   ├── LearningStyleScreen.tsx    # Full-page track/mode list (reuses ModeCard)
-│   │   ├── ModeCard.tsx               # One learning-mode row (illustration, title, status, progress, count)
-│   │   ├── ModeSwitcherSheet.tsx      # Bottom sheet: switch track mid-flow, or "N/6 tracks complete"
-│   │   └── TrackDetailScreen.tsx      # Full-page single-track preview + "Start Practice" CTA
-│   ├── nav/
-│   │   ├── AppHeader.tsx              # Header shown across tabs (avatar initials, name, settings gear icon)
-│   │   ├── FloatingTabBar.tsx         # Pill-animated bottom tab bar (Home, Skills, Keys, Reports)
-│   │   └── ScreenTransition.tsx       # Web-only slide-in wrapper for standalone app/ routes
-│   ├── play/
-│   │   ├── PlaySession.tsx            # Session orchestrator (keys, flow states, XP/streak award, mode switcher)
-│   │   └── SkillsFlow.tsx             # Extracted 4-stage Skills flow (Landing -> LearningStyle -> TrackDetail -> Play)
-│   ├── profile/
-│   │   ├── Avatar.tsx                 # Colored initial avatar with deterministic palette or image
-│   │   ├── LeaderboardRow.tsx         # Ranked row (rank, avatar, name, dot, tabular XP, active user highlight)
-│   │   ├── LeagueCard.tsx             # Full-height card with tier header, info button, auto-scroll to active user
-│   │   ├── LeagueSheet.tsx            # Modal bottom sheet with swipeable 11-tier trophy carousel
-│   │   └── index.ts                   # Barrel export
-│   ├── reports/
-│   │   ├── StatCard.tsx               # Metric card with 3D art (Streak / Recharges)
-│   │   ├── WeekCalendarRow.tsx        # 4-day strip with today illuminated and progress track
-│   │   ├── LeaguePanel.tsx            # League preview panel with XP, trophy art, and "View Leaderboard" link
-│   │   ├── SkillReportCard.tsx        # Per-skill progress card with "Missed Questions" drill-down button
-│   │   ├── MistakeCard.tsx            # Question review card with pill badge, prompt, and correct answer
-│   │   └── index.ts                   # Barrel export
-│   ├── settings/
-│   │   └── SettingsComponents.tsx     # SectionHeader, SettingsRow, SettingsToggleRow
-│   └── ui/
-│       ├── Button.tsx                 # Shared CTA pill button (solid/gradient/outline)
-│       ├── ConnectionError.tsx        # "App can't connect" full-screen state + RELOAD button
-│       └── Toggle.tsx                 # Small animated switch (used by reminders & notification toggles)
+│   ├── ads/                     # AdSenseDisplayUnit (+ .web.tsx)
+│   ├── auth/                    # RestoreAccountModal, GoogleWebButton (+ .web.tsx)
+│   ├── cards/                   # CardDeck, TwoImageCard, ReadingCard, ScrollHintChevron
+│   ├── feedback/                # Keys/session/ad sheets, CheckButton, etc.
+│   ├── home/                    # SkillProgressCard only
+│   ├── landing/                 # LandingScreen, LearningStyle, TrackDetail, ModeCard, …
+│   ├── nav/                     # AppHeader, FloatingTabBar, ScreenTransition
+│   ├── play/                    # SkillsFlow, PlaySession
+│   ├── profile/                 # Avatar, LeagueCard, LeagueSheet, LeaderboardRow
+│   ├── reports/                 # StatCard, WeekCalendarRow, LeaguePanel, SkillReportCard, MistakeCard
+│   ├── settings/                # SettingsRow / Toggle / SectionHeader
+│   └── ui/                      # Button, Toggle, ConnectionError, DownloadAppModal
 │
-├── constants/
-│   ├── index.ts                       # Barrel export for all constants
-│   ├── colors.ts                      # Light/Dark/Static color palettes
-│   ├── gradients.ts                   # Gradient definitions (brand, category, sheets)
-│   ├── typography.ts                  # Font families, text styles, font assets
-│   ├── spacing.ts                     # Spacing scale & border radius tokens
-│   ├── icons.ts                       # Icon size tokens
-│   ├── curriculumAssets.ts            # Static cover-image paths by curriculum slug
-│   ├── skills.ts                      # LANDING_SKILLS catalog with trackLabels / trackImages overrides
-│   └── trackOptions.ts                # getTrackOptionsForSkill / getTrackOption — mode list & visuals
-│
-├── theme/
-│   ├── ThemeContext.tsx                # React context: dark/light/auto theme
-│   └── tokens.ts                      # Re-export barrel for design tokens
-│
-├── lib/
-│   ├── supabase.ts                    # Supabase client singleton
-│   ├── curriculum.ts                  # Fetch curriculum JSON + signs catalog; deriveTrack()
-│   ├── curriculaCatalog.ts            # DB-driven curricula catalog with cached Promise handling
-│   ├── trackDefaults.ts               # DB-driven universal track icons and labels
-│   ├── downloadSession.ts             # Orchestrate full session download (track-aware)
-│   ├── keys.ts                        # Keys balance: read/write/spend/reset/premium, cooldown tiers
-│   ├── premium.ts                     # PLANS (subscription tiers) + KEY_PACKS catalog & pricing display
-│   ├── currency.ts                    # USD/KES conversion + formatting helpers
-│   ├── billing.ts                     # Paystack web checkout — purchasePlan() / purchaseKeyPack()
-│   ├── restore.ts                     # Account restore/link by email or Google, play_accounts sync
-│   ├── email.ts                       # Email sanitize/validate + display truncation
-│   ├── ads.ts                         # Rewarded-ad bonus session (optional native; web fallback timer)
-│   ├── notifications.ts               # Browser Notification API reset-timer reminder (web only)
-│   ├── progress.ts                    # Local (+cloud-synced) topic progress, tracks, and areTabsUnlocked() flag
-│   ├── mistakes.ts                    # Missed questions recording, fail count, mastered status, cloud sync
-│   ├── xp.ts                          # Lifetime & per-skill XP tracking and cloud sync
-│   ├── streak.ts                      # Activity date recording, streak calculation, 7-day week calendar
-│   ├── signs.ts                       # Fetch sign assets & sign pairs from DB
-│   └── navDirection.ts                # Explicit web slide-direction flag (navPush/navBack/navReplace)
-│
-├── hooks/
-│   ├── useKeys.ts                     # React hook wrapping lib/keys.ts (balance, isPremium, resetAt, isOutOfKeys)
-│   └── useScrollHint.ts               # Shared "content taller than viewport" bouncing-chevron logic for card decks
-│
-├── types/
-│   └── quiz.ts                        # QuizQuestion (+ role field), SignCatalogEntry
-│
-├── utils/
-│   ├── groupSessions.ts               # groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions
-│   ├── hydrateQuestions.ts            # Replace sign keys with image URLs (questions + signs catalog)
-│   └── shuffleAnswers.ts              # Fisher-Yates answer randomization
-│
-├── scripts/                           # One-off Node data-pipeline scripts (see §13) + .gitignore + output/
-│
-├── supabase/                          # Standalone SQL migrations/fixes (see §14)
-│
-├── assets/
-│   ├── fonts/                         # Sora font family (5 weights × TTF + WOFF2)
-│   ├── images/                        # App icons, favicon, mascot, splash
-│   ├── homepage/                      # Landing page images (driving.png, homepage.webp)
-│   ├── premium/                       # key.webp, unlock.webp, crown.webp
-│   └── driving/                       # Learning-mode illustrations (differenciate/name/meaning/usage/reading.webp)
-│
-├── docs/
-│   └── learning-tracks-and-reading-mode.md   # Feature spec for Learning Tracks + Reading Mode
-│
-├── data/
-│   └── questions.sample.json          # { tracks?: CurriculumTrackDefinition[], questions: QuizQuestion[] (322, tagged with role), signs: SignCatalogEntry[] (92) }
-│
-├── dist/                              # Static web export output (expo export -p web) — build artifact, not source
-├── .claude/                           # Claude Code project settings
-├── Inspos/                            # Design inspiration screenshots
-└── _deleted_local_assets/             # Archived deleted assets
+├── constants/                   # colors, gradients, typography, spacing, icons,
+│                                # skills, trackOptions, curriculumAssets
+├── theme/                       # ThemeContext, tokens barrel
+├── lib/                         # See §9
+├── hooks/                       # useKeys, useScrollHint
+├── types/quiz.ts
+├── utils/                       # groupSessions, hydrateQuestions, shuffleAnswers
+├── data/questions.sample.json   # Local driving-theory sample
+├── jsons/                       # Source dumps: football.json, true-false_v2.json
+├── scripts/                     # Content/DB pipeline .mjs (+ output/)
+├── supabase/                    # SQL + Edge Functions
+├── public/                      # ads.txt, sw.js (web notifications)
+├── assets/                      # fonts, images, homepage, premium, driving, profile
+├── docs/                        # Feature notes
+├── dist/                        # expo export -p web (artifact)
+└── Inspos/                      # Design screenshots
 ```
 
 ---
 
 ## 3. Technology Stack & Dependencies
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| **Framework** | Expo (managed workflow) | ~54.0.33 |
-| **Routing** | expo-router | ~6.0.23 |
-| **UI Runtime** | React Native | 0.81.5 |
-| **React** | React | 19.1.0 |
-| **Animation** | react-native-reanimated | ~4.1.1 |
-| **Gestures** | react-native-gesture-handler | ~2.28.0 |
-| **Backend** | Supabase (hosted PostgreSQL + Storage + Auth) | ^2.112.4 |
-| **Local Storage** | AsyncStorage | 2.2.0 |
-| **Images** | expo-image | ~3.0.11 |
-| **Gradients** | expo-linear-gradient | ^55.0.13 |
-| **Haptics** | expo-haptics | ~15.0.8 |
-| **Icons** | @expo/vector-icons + lucide-react-native | — |
-| **SVG** | react-native-svg | ^15.15.4 |
-| **Web** | react-native-web + react-dom | ^0.21.0 / 19.1.0 |
-| **TypeScript** | typescript | ~5.9.2 |
+| Layer | Technology | Version (`package.json`) |
+|-------|-----------|--------------------------|
+| Framework | Expo (managed) | ~54.0.33 |
+| Routing | expo-router | ~6.0.23 |
+| UI | React Native / React | 0.81.5 / 19.1.0 |
+| Animation | react-native-reanimated | ~4.1.1 |
+| Gestures | react-native-gesture-handler | ~2.28.0 |
+| Backend | @supabase/supabase-js | ^2.112.4 |
+| Storage | @react-native-async-storage/async-storage | 2.2.0 |
+| Images | expo-image | ~3.0.11 |
+| Icons | lucide-react-native + @expo/vector-icons | — |
+| Web | react-native-web | ^0.21.0 |
 
-**Payment/ads/notifications are deliberately NOT in `package.json`:**
-- **Paystack** — loaded at runtime via a `<script>` tag injected into the web page (`lib/billing.ts`'s `loadPaystackScript()`); no npm package.
-- **`react-native-google-mobile-ads`** — referenced only via a guarded `require()` inside `lib/ads.ts` (`nativeModule()`), so its absence from `package.json` doesn't break anything; `adsAvailable()` returns false and every rewarded-ad call falls back to a simulated timer. Install it and it activates automatically, no code changes needed.
-- **Browser Notification API** — `lib/notifications.ts` uses the web-native `Notification` constructor directly; there is no `expo-notifications` dependency, so this reminder is web-only (native builds silently no-op).
-- **No RevenueCat, no native IAP** — unlike PataSkillsV2, this app's monetization is entirely Paystack (web checkout) + Supabase, keyed by email rather than device/store account.
+**Not in `package.json` (loaded optionally / at runtime):**
 
-### NPM Scripts
+- **Paystack** — `js.paystack.co/v1/inline.js` injected in `lib/billing.ts`
+- **AdMob** — optional `require('react-native-google-mobile-ads')` in `lib/ads.ts` (Android only)
+- **AdSense / Ad Placement API** — script tags in `app/+html.tsx`; `lib/webRewardedAd.ts` wraps `window.adBreak`
+- **Google Identity Services** — `components/auth/GoogleWebButton.web.tsx`
+- **No RevenueCat / native IAP client** in the Expo app. Play Store subscription *management* URLs and `supabase/functions/revenuecat-webhook` exist for the Android product / V2 parity, not as an in-app SDK
 
-| Script | Command | Purpose |
-|--------|---------|---------|
-| `start` | `expo start` | Start dev server |
-| `android` | `expo start --android` | Dev on Android |
-| `ios` | `expo start --ios` | Dev on iOS |
-| `web` | `expo start --web` | Dev on web |
-| `build` | `expo export -p web` | Static web export |
+### NPM scripts
 
-There is no `lint` script and no ESLint config. Type safety is enforced via `npx tsc --noEmit` only.
+| Script | Command |
+|--------|---------|
+| `start` / `android` / `ios` / `web` | `expo start` (+ platform) |
+| `build` | `expo export -p web` |
+
+No ESLint script. Typecheck: `npx tsc --noEmit` (Edge Functions excluded).
 
 ---
 
 ## 4. Configuration Files
 
 ### `app.json`
-Expo manifest. App name **"PataSkills Play"**, slug `play`. Portrait-only, dark `userInterfaceStyle`. Android adaptive icon with foreground/background/monochrome layers. Web output mode `static`. Deep link scheme `pataskillsplay`. Predictive back gesture disabled on Android.
+
+Name **PataSkills Play**, slug `play`, version `1.0.0`, portrait, dark `userInterfaceStyle`, scheme `pataskillsplay`. Web `output: "static"`. Android adaptive icon; predictive back disabled.
 
 ### `tsconfig.json`
-Extends `expo/tsconfig.base`. Strict mode. Path alias `@/*` → project root.
 
-### `babel.config.js` / `metro.config.js`
-`babel-preset-expo` (bundles the reanimated/worklets transform). Metro adds `woff`/`woff2` to asset extensions for the subsetted web fonts.
+Extends `expo/tsconfig.base`, `strict: true`, path `@/*` → project root. `exclude`: `node_modules`, `supabase/functions`.
 
-### `.env`
-Environment variables actually referenced in source (confirmed via `process.env` grep):
-- `EXPO_PUBLIC_PATASKILLS_SUPABASE_URL`, `EXPO_PUBLIC_PATASKILLS_SUPABASE_ANON_KEY` — Supabase project
-- `EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY` — Paystack public key (falls back to `pk_test_placeholder` if unset)
-- `EXPO_PUBLIC_ADMOB_REWARDED_ANDROID` — production AdMob rewarded ad unit ID (falls back to Google's test unit ID outside production)
-- `EXPO_PUBLIC_APP_ENV` — gates test vs. production ad unit selection
-- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — Google Identity Services client ID (web sign-in)
+### `.env` (names actually read in app source)
 
-Shares its Supabase project with PataSkillsV2 but uses independent tables (`play_curricula`, `play_signs`, `play_sign_pairs`, `play_accounts`, `play_purchases`) and storage bucket (`play-assets`).
+| Variable | Used by |
+|----------|---------|
+| `EXPO_PUBLIC_PATASKILLS_SUPABASE_URL` | `lib/supabase.ts`, `app/+html.tsx` cover preload |
+| `EXPO_PUBLIC_PATASKILLS_SUPABASE_ANON_KEY` | `lib/supabase.ts` |
+| `EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY` | `lib/billing.ts` |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | `GoogleWebButton.web.tsx` |
+| `EXPO_PUBLIC_ADSENSE_CLIENT_ID` | `app/+html.tsx`, `AdSenseDisplayUnit.web.tsx` |
+| `EXPO_PUBLIC_ADMOB_REWARDED_ANDROID` | `lib/ads.ts` (prod unit; test unit in `__DEV__` or non-production) |
+| `EXPO_PUBLIC_ADMOB_BANNER_ANDROID` | `lib/ads.ts` |
+| `EXPO_PUBLIC_APP_ENV` | `lib/ads.ts` production gate |
 
-### `.gitattributes`
-Marks binary asset formats as `binary` to prevent Git line-ending corruption on Windows.
+Edge Functions use **server** secrets (`PATASKILLS_PAYSTACK_SECRET_KEY`, `RC_WEBHOOK_SECRET`, `RESEND_API_KEY`, etc.), not `EXPO_PUBLIC_*`.
+
+Shares the PataSkills Supabase project; Play tables/bucket are independent (`play_curricula`, `play_signs`, `play_sign_pairs`, `play_accounts`, `play_purchases`, `play_progress`, `play_user_stats`, `play_question_attempts`, `play_track_defaults`, `help_requests`, bucket `play-assets`).
 
 ### `vercel.json`
-Web deployment configuration for hosting the static export on Vercel.
+
+`buildCommand: npm run build`, `outputDirectory: dist`, `cleanUrls: true`.
+
+### `metro.config.js` / `babel.config.js`
+
+WOFF/WOFF2 as assets. `babel-preset-expo` (Reanimated/worklets).
 
 ---
 
 ## 5. App Layer (`app/`)
 
-### `_layout.tsx` — Root Layout
+### `_layout.tsx`
 
 ```
-GestureHandlerRootView
-  └── SafeAreaProvider
-        └── ThemeProvider (defaultMode="dark")
-              └── RootLayoutInner
-                    ├── StatusBar (light style)
-                    └── Stack (headerShown: false)
+GestureHandlerRootView → SafeAreaProvider → ThemeProvider(defaultMode="dark")
+  → RootLayoutInner: StatusBar light, NavigationDarkTheme background, Stack headerShown:false
 ```
 
-Loads the Sora font family via `useFonts()` (empty map on web — fonts are already `@font-face`-declared in `+html.tsx`), hides the splash screen once loaded, renders the `Stack` navigator on the theme background.
+On mount: hide splash when fonts load; `initNotifications()`; `configureBilling()` (local premium expiry). Native loads Sora via `useFonts(fontAssets)`; web uses `@font-face` in `+html.tsx` (empty font map). Stack animation `slide_from_right` on native, `none` on web (`ScreenTransition` handles web slides).
 
----
+### `index.tsx` — RootGate
 
-### `index.tsx` — Root Gate
+- `areTabsUnlocked()` (`@play/tabs_unlocked`)
+- Locked: `<SkillsFlow />` (no tab bar)
+- Unlocked: `<Redirect href="/(tabs)/home" />`
+- While AsyncStorage is loading: blank themed `View` (no flash)
 
-`app/index.tsx` functions as the **Root Gate** for the entire application:
-- On mount, checks `areTabsUnlocked()` in `lib/progress.ts` (`@play/tabs_unlocked`).
-- **Pre-unlock (New Learners)**: Renders `SkillsFlow` directly without a bottom tab bar, preserving the original single-route entry flow. The learner picks a skill, chooses a track, and plays through the first topic. The instant `markTopicCompleted()` fires for topic 0 on any skill, `unlockTabsIfNeeded()` sets `@play/tabs_unlocked = 'true'` permanently.
-- **Post-unlock (Returning Learners)**: Subsequent app launches immediately `<Redirect href="/(tabs)/home" />` into the tabbed shell.
+### `(tabs)/`
 
----
+`FloatingTabBar`: Home, Skills (`Library`), Keys (`KeyRound`), Reports (`PieChart`). Spring pill. `headerShown: false`.
 
-### `app/(tabs)/` — Tabbed Home Shell (New)
+**`home.tsx`** — “My Skills”. Skills with `completedTopics > 0` from catalog ∪ `LANDING_SKILLS`. `SkillProgressCard`; tap in-progress → `/play?resume=true&skill=`; 100% → reports. `useFocusEffect` refresh.
 
-The tabbed shell unlocked once the learner completes their first topic. Defined in `app/(tabs)/_layout.tsx`, using a custom `FloatingTabBar` (`components/nav/FloatingTabBar.tsx`) with spring-animated sliding pill and Lucide icons:
+**`skills.tsx`** — Grid only (`LandingScreen` under `AppHeader`). Tap → `/play?skill=`. `bottomPadding` clears the tab bar. Learning/download/quiz never run inside this tab.
 
-#### `(tabs)/_layout.tsx`
-Renders `<Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false }}>` for the four routes: `home`, `skills`, `keys`, and `reports`.
+**`keys.tsx`** — If `isPremium`: crown (`assets/premium/crown.webp`), “You're on Premium”, expiry or unlimited copy, **Manage subscription** → `/manage-subscription`, Premium benefits row. Else: key count hero (`assets/premium/key.webp`), “N keys left”, `KeysOptionsContent` (packs, subscribe, free trial / timer).
 
-#### `(tabs)/home.tsx` — Home Tab
-- Lists all skills where the learner has made progress (`completedTopics > 0`), loaded from the DB catalog (`play_curricula`) merged with static `LANDING_SKILLS`.
-- Centered header: `"My Skills"` with standardized headroom (`paddingTop: Spacing.base`).
-- Each in-progress skill renders a `SkillProgressCard` (`components/home/SkillProgressCard.tsx`) showing display title, topic count, percentage progress bar, and regular-font green status text (e.g. `7% Complete` via `FontFamily.regular`).
-- Tapping an in-progress card navigates straight to `/play?resume=true&skill=<slug>` (outside the tab shell), jumping directly into the session with zero bottom tab obstruction. If a skill is 100% complete, tapping opens `/(tabs)/reports`.
-- Uses `useFocusEffect` to refresh local progress every time the learner tabs back to Home.
+**`reports.tsx`** — `StatCard` max streak (`streak.webp`) + recharges (`recharge.webp`); `WeekCalendarRow` **4-day** strip (today + next three, from 7-day `streak` data); “Keys and Quest(N)” → keys tab; `LeaguePanel` (lifetime XP, trophies, `lib/leagues.ts`); `SkillReportCard` list → `/mistakes`.
 
-#### `(tabs)/skills.tsx` — Skills Tab
-- Strictly displays the 2-column "Skills Corner" catalog grid (`LandingScreen`) under `AppHeader`.
-- Standardized headroom (`paddingTop: Spacing.base`, `lineHeight: 34`) matching the Home tab.
-- Tapping any skill or restoring progress navigates to `/play` with `?skill=` or `?track=`.
-- Supports `bottomPadding` so the bottom-most cards clear `FloatingTabBar` during scroll.
-- All interactive learning flows (learning-style picker, track detail, downloading, and quiz sessions) run in `/play` so the bottom tab bar never obstructs action buttons.
+### `play.tsx`
 
-#### `(tabs)/keys.tsx` — Keys Tab
-- The standalone, permanent home for key management.
-- **Keys Count Hero**: Prominent large key balance number (`useKeys()`, displaying `∞` if premium) paired with the golden 3D key asset (`assets/premium/key.webp`).
-- **Greyed Subtitle**: Directly below the hero, shows `"{N} keys left"` in small greyed text (`FontFamily.medium`, `colors.onSurfaceVariant`).
-- **Heading**: `"Unlock more sessions"` in regular text weight (`FontFamily.regular`).
-- **Dynamic Free Trial State**: Forwards `balance` and `isPremium` to `KeysOptionsContent`. When the user has keys (`balance > 0`), the Free Trial card displays `"You have {N} sessions left"`, hiding the cooldown timer and reset reminders toggle. When `balance === 0`, the live timer and reset reminders toggle are activated.
-- Balanced spacing: compact headroom below `AppHeader` and dynamic bottom inset padding (`paddingBottom: insets.bottom + 88`) ensuring the full options content can be scrolled into view without obstruction or cropping from `FloatingTabBar`.
-- Renders `KeysOptionsContent` (`components/feedback/KeysOptionsContent.tsx`), offering:
-  1. **Buy Temporary Access Keys** (packs of 20/40/80/120) → `/keys-packs`
-  2. **Subscribe for Unlimited** (Weekly/Monthly/Annual) → `/subscription-plans`
-  3. **Use Free Trial** (displays sessions remaining when keys > 0, or live countdown + reminders toggle when keys == 0).
+`<SkillsFlow standalone />`. Full viewport; back from learning-style returns to the skills grid.
 
-#### `(tabs)/reports.tsx` — Reports Tab
-- Redesigned 1:1 to match PataSkillsV2's Profile tab design:
-  - **2-Column Stat Cards (`StatCard.tsx`)**: Displays Max Streak (`assets/homepage/streak.webp`) and Recharges (`assets/homepage/recharge.webp`).
-  - **4-Day Week Calendar Strip (`WeekCalendarRow.tsx`)**: Monday–Sunday week with today illuminated and horizontal progress track.
-  - **League Panel (`LeaguePanel.tsx`)**: XP display, 3-tier trophy art preview (`assets/profile/trophy.webp`), current league status (Quartz to Legend 11-tier scale via `lib/leagues.ts`), band progress bar, and "View Leaderboard" button routing to `app/leaderboard.tsx`.
-  - **Per-Skill Report Cards (`SkillReportCard.tsx`)**: Completion percentage, per-skill XP, topic tally, and "Missed Questions" badge linking to `app/mistakes.tsx`.
+### `settings.tsx`
 
----
+- **Account**: sign-in/restore (`RestoreAccountModal`); **Manage Subscriptions** with live `Premium` / `Free` → `/manage-subscription`
+- **Preferences**: Dark theme (`useTheme().setMode`), notifications (`@play/timer_reminders` + `scheduleResetReminder`), currency `USD`/`KES` (`@play/currency`)
+- **Support**: Help currently opens `https://pataskills.com` (in-app `/help` + `/feedback-form` still exist as routes)
+- **Legal**: privacy / terms on pataskills.com
+- **Account Actions**: Log out (`logoutAccount()`) when email is set
 
-### `play.tsx` — Dedicated Full-Screen Learning Route (New)
+### `manage-subscription.tsx`
 
-Located at `app/play.tsx` as a top-level route in the root `<Stack>` outside `app/(tabs)`:
-- Renders `<SkillsFlow standalone />`.
-- Because `/play` is outside the tab shell, **no bottom floating tab bar is rendered**, giving full unobstructed viewport height to:
-  - `LearningStyleScreen`: choosing a track / mode.
-  - `TrackDetailScreen`: previewing questions and sample items.
-  - `DownloadingScreen`: animated session download.
-  - `PlaySession`: quiz card swipe deck, check buttons, and choice pills.
-  - `KeysOfferScreen`: first-look upsell with "PAY WITH PAYSTACK" and "Maybe later".
-- `SkillsFlow.tsx` in `standalone` mode:
-  - If `params.skill` is passed, initializes directly into `'learning-style'` without flash of landing.
-  - Tapping back on `LearningStyleScreen` calls `router.back()`, cleanly returning to the 2-column grid in `(tabs)/skills`.
-  - Exiting the session returns to `/(tabs)/home` if tabs are unlocked.
+Plan card (Premium vs Free upgrade). Premium + native: Play Store management URL from `getSubscriptionInfo()`. Premium or upgrade on **web**: `DownloadAppModal` (Play listing `com.pataskills.v2`). Help → public FAQ.
 
----
+### `leaderboard.tsx`
 
-### `leaderboard.tsx` — Leaderboard Screen (New)
+From Reports → View Leaderboard. `LeagueCard` + `LeagueSheet` (11 XP bands). `lib/leaderboard.ts` mixes the signed-in learner with deterministic mock peers in-band.
 
-Reached from the "View Leaderboard" button in the Reports tab (`app/leaderboard.tsx`):
-- Features top navigation with `ChevronLeft` back button and centered `"Leaderboard"` title.
-- Renders `LeagueCard` (`components/profile/LeagueCard.tsx`) showing current league tier (`{Tier} League`) and Info button opening `LeagueSheet`.
-- Auto-scrolls on content size change so the signed-in learner sits in the middle row.
-- `LeaderboardRow` (`components/profile/LeaderboardRow.tsx`) displays rank, avatar (`Avatar.tsx`), learner name, daily activity dot, and tabular XP, highlighted in green accent (`#2BD964`) for the active user.
-- `LeagueSheet` (`components/profile/LeagueSheet.tsx`) presents an interactive 11-tier trophy carousel (Quartz to Legend) with promotion thresholds.
+### `mistakes.tsx`
 
----
+`/mistakes?skillId=&skillName=`. All / Unsolved filters. `MistakeCard`.
 
-### `settings.tsx` — Settings Screen
+### `help.tsx` / `feedback-form.tsx`
 
-Accessed via the gear icon on `AppHeader` across all tabs:
-- **Account Section**: Displays logged-in email or "Sign in / Restore account" linking to `RestoreAccountModal`. When signed in, displays a red "Log out" button calling `logoutAccount()` from `lib/restore.ts`.
-- **Preferences Section**:
-  - **Dark theme toggle**: `SettingsToggleRow` with `Moon` icon matching PataSkillsV2, switching scheme between `'dark'` and `'light'` via `useTheme().setMode(...)`.
-  - **Notifications toggle**: Fully wired in with browser/system permissions (`ensureNotificationPermission()`), state persistence to `@play/timer_reminders`, and live timer reminder scheduling (`scheduleResetReminder()` / `cancelResetReminder()`) matching the free trial card in Keys tab.
-  - **Currency toggle**: Switches display currency between `KES` and `USD` (backed by `@play/currency`).
-- **Support Section**: Help (navigates to `/help` matching PataSkillsV2) and About version info (`v1.0.0`).
-- **Legal Section**: Links to Privacy Policy and Terms of Service.
+Topic picker (`lib/help.ts` six topics) → form → `help_requests`. Still routed; Settings Help does not currently push here.
 
----
+### Monetization routes
 
-### `help.tsx` — Help Topic Picker Screen (New)
+| Route | Role |
+|-------|------|
+| `keys-packs` | `KEY_PACKS` 20/40/80/120 |
+| `keys-confirm` | Email + `purchaseKeyPack` |
+| `how-keys-work` | Explainer |
+| `subscription-plans` | Weekly / Regular / Annual (`PLANS`) |
+| `subscription-confirm` | Email + `purchasePlan` |
+| `premium-benefits` | Free vs Premium table |
+| `payment-complete` | Grants keys (`grantBonusKey`) or `setPremium(true, expiresAt)`; continue → `/` resume |
+| `how-free-mode-works` | Free-trial explainer |
 
-Accessed from Settings → Help, matching PataSkillsV2 1:1:
-- Header with `ArrowLeft` back button and `"Help"` title.
-- Categorized menu under `"WHAT DO YOU NEED HELP WITH?"` presenting six options from `lib/help.ts`:
-  1. **Ask about Premium** (`Crown`)
-  2. **Payments & billing** (`CreditCard`)
-  3. **Report a bug** (`Bug`)
-  4. **Account & sign-in** (`CircleUser`)
-  5. **A lesson looks wrong** (`BookOpen`)
-  6. **Something else** (`CircleHelp`)
-- Tapping any option routes to `/feedback-form?topic={id}`.
+### `+html.tsx`
 
----
+Viewport, `ScrollViewStyleReset`, Sora WOFF2+TTF `@font-face`, driving cover preload, `#root` max 430×932 (svh), AdSense `ca-pub` script when `EXPO_PUBLIC_ADSENSE_CLIENT_ID` is set, Ad Placement API snippet for `adBreak`/`adConfig`.
 
-### `feedback-form.tsx` — Feedback & Support Submission Screen (New)
+### `admin/signs.tsx`
 
-Opened after choosing a topic in `/help`:
-- Header displays selected topic title (or `"Report a problem"` for bugs).
-- Shows active user identity: `"Sending as {name}"`.
-- Optional topic summary field for `'other'`.
-- Multiline description text area with placeholder `"Tell us what's going on…"`.
-- "Submit" CTA button calling `submitHelpRequest()` from `lib/help.ts` (inserts to Supabase `help_requests` table).
-- Shows checkmark success card upon delivery with a "Back to Settings" navigation action.
-
----
-
-### `mistakes.tsx` — Mistake Overview Screen
-
-Reached from the "Missed Questions" button on any skill card in the Reports tab (`/mistakes?skillId=<slug>&skillName=<title>`):
-- Aligned 1:1 with PataSkillsV2:
-  - Header with `ChevronLeft` back navigation and centered `"Mistake Overview"` title.
-  - Filter tabs: **All ({count})** vs **Unsolved ({count})**.
-  - Reads from `lib/mistakes.ts` (`getSkillMistakes(skillId)`).
-  - Renders `MistakeCard` (`components/reports/MistakeCard.tsx`) displaying question number in coral red (`StaticColors.wrongChipBg`), centered question prompt, horizontal line with centered pill badge (`N MISTAKE(S)` in `#F77BA0` bg / `#B01030` text), and "Correct answer is:" with highlighted answer.
-  - Centered clean empty state when no mistakes exist.
-
----
-
-### `+html.tsx` — Web HTML Shell
-
-Unchanged from the prior audit. Server-side-only; generates the static `<html>` wrapper at build/export time:
-1. Viewport meta (`width=device-width`, `viewport-fit=cover`)
-2. `ScrollViewStyleReset` (disables page-level bounce so RN ScrollViews behave)
-3. Preloads all 5 Sora WOFF2 weights
-4. Preloads the driving-theory cover illustration
-5. `@font-face` declarations (WOFF2 primary, TTF fallback, `font-display: swap`)
-6. Phone-width constraint on `#root` (`max-width: 430px`, `max-height: 932px`, dark backdrop) — phone frame on desktop, full-bleed on real phones.
-
----
-
-### `admin/signs.tsx` — Admin Sign Browser
-
-Unchanged. `/admin/signs` route; grid of every `play_signs` row with image, derived meaning, and question-reference count. Tapping a sign opens a swap modal that updates `image_path` directly in `play_signs` — propagates everywhere since images are resolved at session-download time. `deriveMeaningsByKey()` / `pickMeaning()` derive human labels from "What is this sign called?" questions by majority vote.
-
----
-
-### The Monetization Routes (all new since the last audit)
-
-These eight files form the keys/premium purchase funnel. All share the same visual shell (header with back arrow + title, `ScrollView` body, footer CTA) and read pricing from `lib/premium.ts` / `lib/currency.ts`.
-
-#### `keys-packs.tsx` — Buy one-time keys
-Shows the current balance (`getKeyBalance()`, displaying `∞` if premium) as a hero number, then lists `KEY_PACKS` (20/40/80/120, one marked `popular`) as tappable cards priced via `formatUSDAmount`. Tapping a pack pushes `/keys-confirm?pack=<id>`. A bottom link opens `/how-keys-work`.
-
-#### `keys-confirm.tsx` — Confirm key purchase
-Reads `?pack=`, shows total price + keys received, prompts for a receipt/restoration email (pre-filled from `@play/user_email` if set, validated via `sanitizeAndValidateEmail`), and on confirm calls `purchaseKeyPack(pack.id, email)` from `lib/billing.ts`, which opens the Paystack checkout.
-
-#### `how-keys-work.tsx` — Explainer
-Four static info rows (Unlock, Buy pack, Never expire, Unlimited skips keys) + a "GET UNLIMITED PASS" CTA to `/subscription-plans`. Purely informational, no state.
-
-#### `subscription-plans.tsx` — Unlimited Pass plans
-Lists `PLANS` (Weekly / Regular / Annual, Regular marked `popular`) via `planDisplay()`. Tapping a plan pushes `/subscription-confirm?plan=<id>`. Bottom link opens `/premium-benefits`.
-
-#### `subscription-confirm.tsx` — Confirm subscription
-Reads `?plan=`, shows price/term/savings note, the same email-capture pattern as `keys-confirm.tsx`, a static 3-item benefits list, and on confirm calls `purchasePlan(plan.packageId, email)`.
-
-#### `premium-benefits.tsx` — Free vs Premium
-A static 6-row comparison table (Check/X icons) ending in a "VIEW SUBSCRIPTION PLANS" CTA. No state, no data fetching.
-
-#### `payment-complete.tsx` — Post-checkout landing
-Reached via Paystack's redirect (`router.replace('/payment-complete', { type, count, reference, email })`). On mount: if `type === 'keys'` (or a bare `count` param with no type), calls `grantBonusKey(keysCount, 'key_pack_purchase', paystackRef)`; otherwise calls `setPremium(true)`. Shows a success screen with the reward preview and a "CONTINUE PLAYING" button that does `router.replace('/', { resume: 'true' })` — this is what re-enters `index.tsx`'s auto-start-on-resume branch.
-
-**Note — grant-then-navigate is separated from Paystack's own callback:** the actual grant happens here, not inside `billing.ts`'s Paystack callback, so a page reload/close mid-checkout doesn't lose the redirect target; Paystack's callback only does `router.replace('/payment-complete', {...})`, and this screen is the one source of truth for actually crediting the account.
-
-#### `how-free-mode-works.tsx` — Explainer
-Four static info rows describing the free-trial keys system (3 sessions per reset, automatic refill timer, ad bonus sessions, reset alerts) + a "GOT IT, CONTINUE" button (`router.replace('/')`).
+Grid of `play_signs`; tap to swap `image_path`.
 
 ---
 
 ## 6. Components (`components/`)
 
-### 6.1 Auth (new section)
+### Ads
 
-#### `RestoreAccountModal.tsx`
-A modal with three mutually-exclusive views, chosen by state:
+- `AdSenseDisplayUnit.tsx` — native stub (`null`)
+- `AdSenseDisplayUnit.web.tsx` — in-page `<ins>` unit  
+Used by `WatchingAdContent.tsx` (display-ad fallback). **Current out-of-keys product path does not mount this** — see WatchAdPromptSheet.
 
-1. **Account view** (`showAccountView`, shown when `currentEmail` is set and the user hasn't tapped "Use a different account") — shows the linked email, a LOG OUT button (`logoutAccount()` from `lib/restore.ts`), and a "Use a different account" link that flips to the sign-in form.
-2. **Success view** (after a restore completes) — checkmark, the restored email in a badge, and either "Unlimited Pass Active" (crown) or "`{keys}` Keys Available" (key icon) depending on `restoreSuccess.isPremium`, with a "CONTINUE AS THIS ACCOUNT" button that fires `onSuccess(restoreSuccess)`.
-3. **Sign-in form** (default) — a `GoogleWebButton` (real on web, a no-op stub on native), an "or with email" divider, an email `TextInput`, and a "RESTORE ACCOUNT" button that calls `restoreAccountByEmail()`.
+### Auth
 
-All three flows funnel into `restoreAccountByEmail` / `restoreAccountWithGoogle` from `lib/restore.ts`.
+- `RestoreAccountModal` — account view / success / email+Google restore
+- `GoogleWebButton.tsx` — native empty stub
+- `GoogleWebButton.web.tsx` — GIS button → `onIdToken`
 
-#### `GoogleWebButton.tsx` / `GoogleWebButton.web.tsx`
-Platform-split component. The default (`.tsx`, used on native) renders an empty `<View />` — **native Google sign-in is not implemented**. The `.web.tsx` variant loads Google Identity Services (`accounts.google.com/gsi/client`) at runtime and renders the real button, calling `onIdToken(idToken)` on success.
+### Cards
 
----
+- `CardDeck.tsx` — `QuizCardDeck` vs `ReadingCardDeck`. Quiz: `recordQuestionFailure` / `recordQuestionSuccess`. Horizontal strip advance via `withTiming` (not a pan gesture)
+- `TwoImageCard.tsx` — image / two-image / text layouts
+- `ReadingCard.tsx` — browse-only; explanation + similar items when the source question supports them
+- `ScrollHintChevron.tsx` + `useScrollHint`
 
-### 6.2 Cards
+### Feedback
 
-#### `CardDeck.tsx` — Router + Two Deck Implementations
-Routes to `ReadingCardDeck` when `props.signs` is a non-empty array, else `QuizCardDeck`. Receives `skillId` and `topicIndex`. In `QuizCardDeck`:
-- Top bar (close/progress/keys), card viewport, bottom controls, and overlay sheets.
-- **Missed Questions Tracking**: In `handleCheck()`, whenever an answer check fails (`!isCorrect`), it calls `recordQuestionFailure(skillId, topicIndex, currentCard)` from `lib/mistakes.ts` to log the failure, prompt, choices, and right answer. If answered correctly on a subsequent retry, calls `recordQuestionSuccess(skillId, currentCard.id)` to mark it mastered.
-- Shares scroll-hint logic via `useScrollHint()` and `ScrollHintChevron`.
+- `KeysOfferScreen` — 20-key Paystack upsell; Maybe later / hardware back → `outOfKeys` (`BackHandler`). Key art: `assets/premium/key.webp`
+- `KeysOptionsContent` — Buy keys / Subscribe / Free trial (sessions left vs countdown + reminder toggle)
+- `SessionStateScreen` — topic/chapter complete, out of keys, rewards. Login link hidden after tabs unlock
+- `WatchAdPromptSheet` — **Android**: `showRewardedForSession()` then reward step; grant on **Unlock** tap (`grantBonusKey`), not on ad complete. **Web**: skip ad → `DownloadAppModal` (`source="ads"`)
+- `KeyRewardSuccessModal` / `KeyRewardContent`
+- `WatchingAdContent` — in-page AdSense + timer; **not wired** from WatchAdPromptSheet today
+- `CheckButton`, `DownloadingScreen`, `FeedbackSheet`, `FlagIcon`, `LearnMoreSheet`, `QuitConfirmSheet`
 
-#### `ScrollHintChevron.tsx`
-Extracted, deck-agnostic presentational component: a small bouncing chevron pill shown when `visible`, tapping it calls `onPress` (wired to `useScrollHint()`'s `scrollToBottom`). Both `QuizCardDeck` and `ReadingCardDeck` render one instance each, driven by their own `useScrollHint()` hook instance.
+### Landing / Home
 
-#### `ReadingCard.tsx` / `TwoImageCard.tsx`
-Unchanged from the prior audit — see that section's detail on layout types, gradient headers, and `RoadSignGraphic` SVG fallbacks.
+Landing lives in `components/landing/` (not `home/`):
 
----
+- `LandingScreen` — 2-col Skills Corner; merges DB catalog with `LANDING_SKILLS`; `bottomPadding`
+- `SkillGridCard`, `SkillCard`, `LandingIllustration`, `CarouselDots` (unused by grid)
+- `LearningStyleScreen`, `ModeCard`, `TrackDetailScreen`, `ModeSwitcherSheet` (`groupTrackOptions` for `groupId`/`groupTitle`)
 
-### 6.3 Feedback
+`components/home/SkillProgressCard.tsx` — Home tab only. `% Complete` uses `FontFamily.regular`.
 
-#### `KeysOfferScreen.tsx` (New)
-The first-look key upsell screen presented when a learner runs out of sessions mid-quiz:
-- Displays prominent key graphic (`assets/homepage/key.webp`), heading (`"Unlock the next 20 Sessions!"`), and feature bullets.
-- Focuses the learner on a single 20-key pack purchase (`pack_20`) with direct Paystack checkout CTA (`"PAY {amount} WITH PAYSTACK"`).
-- **Unified Back Navigation**: Has no distracting top-left close/back button. Both the text link `"Maybe later"` and OS-level navigation (Android hardware back button or edge swipe handled via `BackHandler`) consistently transition to the `outOfKeys` interstitial ("Other ways to Proceed"), giving the learner access to the free-trial countdown, subscriptions, or rewarded ads.
+### Nav
 
-#### `KeysOptionsContent.tsx` (New)
-Extracted, reusable presentation component containing the three proceed options:
-1. **Buy Temporary Access Keys** (packs of 20, 40, 80, 120 keys) → `/keys-packs`
-2. **Subscribe for Unlimited** → `/subscription-plans`
-3. **Use Free Trial**:
-   - When the user has keys (`balance > 0` or `isPremium`): Displays `"You have {N} sessions left"`, hiding the countdown timer and reminders toggle.
-   - When `balance === 0`: Shows the live cooldown countdown ticker (`timerText`) and the `"Get reminders when timer resets"` `Toggle` (scheduled via `lib/notifications.ts` and saved to `@play/timer_reminders`).
-Rendered both inside `SessionStateScreen`'s `outOfKeys` flow and as the standalone `app/(tabs)/keys.tsx` tab.
+- `FloatingTabBar` — Reanimated spring pill
+- `AppHeader` — initials avatar, name, gear → `/settings`
+- `ScreenTransition` — web route slide; `lib/navDirection.ts`
 
-#### `SessionStateScreen.tsx` — Interstitial screen
-The multi-purpose interstitial keyed by `SessionStateKind`:
-- In the `outOfKeys` flow, renders `KeysOptionsContent` and an exit interceptor leading to `WatchAdPromptSheet`.
-- Gated login link: the "Existing user, login" link at the bottom is hidden once tabs are unlocked (`areTabsUnlocked()`), since login and restore are centrally managed in Settings.
+### Play
 
-#### `WatchAdPromptSheet.tsx`
-Shown when the learner tries to exit while out of keys. Renders a native `<Modal>` whose content switches between `'prompt'` (watch ad for 1 free session) and `'reward'` (credit session).
+- `SkillsFlow` — stages `landing | learning-style | track-detail | downloading | session`. `standalone` skips landing when `params.skill` is set. Exit → `/(tabs)/home` if tabs unlocked
+- `PlaySession` — spend keys, decks, mode switcher, `XP_PER_CORRECT = 5`, `recordXpEarned` + `recordActivityToday` on topic complete, `markTopicCompleted` / `markTrackCompleted`
 
-#### `KeyRewardSuccessModal.tsx`
-Celebration modal triggered after rewarded ad completion, crediting an ad bonus session and showing an animated key icon.
+### Profile / Reports / Settings / UI
 
-#### `WatchingAdContent.tsx`
-Simulated rewarded video ad experience with a countdown timer, progress bar, and close prevention during playback.
-
-#### `CheckButton.tsx` / `DownloadingScreen.tsx` / `FeedbackSheet.tsx` / `FlagIcon.tsx` / `LearnMoreSheet.tsx` / `QuitConfirmSheet.tsx`
-Unchanged from the prior audit.
-
----
-
-### 6.4 Landing & Home
-
-#### `SkillProgressCard.tsx` (New)
-Rendered on the Home tab (`app/(tabs)/home.tsx`) for every skill with local progress:
-- Displays skill title, topic completion count (`N/Total topics`), and a progress bar with percentage.
-- **Regular Font Completion Label**: The status badge (e.g., `"7% Complete"`) uses `FontFamily.regular` for clean, unforced typographic hierarchy.
-- Dynamic CTA: `CONTINUE` for in-progress skills (resumes straight into `/play`), `START` for not started, or `REVIEW` for 100% completed (routes to Reports tab).
-
-#### `LandingScreen.tsx` — "Skills Corner" grid
-A 2-column grid of `SkillGridCard`s below a "Skills Corner" heading, mapped directly from `LANDING_SKILLS`.
-- **Standardized Headroom**: Configured with `containerContent.paddingTop: Spacing.base` and `heading.lineHeight: 34`, matching the Home tab's "My Skills" headroom 1:1.
-- Gated login link: the bottom "Existing user, login" link is hidden once tabs are unlocked, as account management moves to Settings.
-
-#### `LearningStyleScreen.tsx` — full-page track list
-Back-arrow header ("Choose Learning Style") + a scrollable list of detected learning styles rendered as `ModeCard` rows.
-
-#### `TrackDetailScreen.tsx` — full-page single-track preview
-Full-page single-track preview card + "Start Practice" CTA.
-
-#### `ModeCard.tsx` — shared learning-mode row
-Illustration + title, plus status, highlight, progress segments, and total question count.
-
-#### `ModeSwitcherSheet.tsx` — mid-flow track switcher
-Bottom sheet with `'switch'` and `'trackComplete'` heading states.
-
-#### `SkillGridCard.tsx` / `CarouselDots.tsx` / `LandingIllustration.tsx`
-Unchanged.
-
----
-
-### 6.5 Nav
-
-#### `FloatingTabBar.tsx` (New)
-Pill-style bottom tab bar borrowed from PataSkillsV2, adapted for `play`'s tokens and `lucide-react-native`:
-- Renders 4 tabs: `home` (`Home`), `skills` (`Library`), `keys` (`KeyRound`), `reports` (`PieChart`).
-- Features a spring-animated sliding pill indicator that smoothly glides underneath whichever tab is selected using Reanimated `withSpring`.
-- Completely theme-aware using `selectionActiveTint` and `selectionActiveBorder`.
-
-#### `AppHeader.tsx` (New)
-Header shown at the top of all four tabs once tabs are unlocked:
-- Deterministic initial avatar circle (hash-mapped to a stable color palette).
-- Learner display name (derived from linked email or defaulting to "Learner").
-- Settings gear button navigating directly to `/settings`.
-
-#### `ScreenTransition.tsx`
-Web-only slide-in wrapper for standalone routes in `app/`. Pairs with `lib/navDirection.ts`.
-- Explicit-over-inferred direction tracking avoids browser `popstate` inconsistencies with Expo Router.
-- `peekNavDirection()` is a read-only peek to survive React Strict Mode's double-invoked render.
-
----
-
-### 6.6 Play
-
-#### `SkillsFlow.tsx` (New)
-Extracted, self-contained 4-stage Skills flow:
-- Contains `LandingScreen` (grid) → `LearningStyleScreen` → `TrackDetailScreen` → `DownloadingScreen` → `PlaySession`.
-- Pre-unlock: rendered directly by `app/index.tsx` (no tabs).
-- Post-unlock:
-  - `app/play.tsx`: standalone mode (`standalone={true}`) ensuring zero obstruction from the bottom floating tab bar for all quiz and track screens.
-  - `app/(tabs)/skills.tsx`: embedded mode (`embedded={true}`) displaying strictly the 2-column grid under `AppHeader`.
-
-#### `PlaySession.tsx` — Session Flow Orchestrator
-Core session state machine:
-- Passes `skillId` and `sessionIndex` down to `CardDeck`.
-- **XP & Streak Award**: When a topic finishes (`handleSessionComplete`), calculates `earnedXp = stats.correctCount * XP_PER_CORRECT` (5 XP per correct answer) and invokes `recordXpEarned(skillId, earnedXp)` (`lib/xp.ts`) and `recordActivityToday()` (`lib/streak.ts`).
-- Calls `markTopicCompleted(skillId, sessionIndex, sessions.length)` which triggers `unlockTabsIfNeeded()` on the first topic completed.
-- Calls `markTrackCompleted(track)` when all sessions in a track are finished.
-
----
-
-### 6.7 Profile (`components/profile/`) (New)
-
-Dedicated components supporting user identity and the Leaderboard experience:
-
-#### `Avatar.tsx`
-Round avatar displaying the learner's initial, generated with a deterministic background color from a curated palette based on user email or ID.
-
-#### `LeaderboardRow.tsx`
-Individual user ranking row in `app/leaderboard.tsx`:
-- Rank indicator badge (numeric rank or medal styling for top 3).
-- Learner avatar, display name, and active-today green status dot.
-- Right-aligned XP score formatted with tabular numerals.
-- Highlighting with bright green border/background tint (`#2BD964`) when rendering the current signed-in learner.
-
-#### `LeagueCard.tsx`
-Hero card rendered at the top of the Leaderboard:
-- Shows the current league tier (`"{Tier} League"`), promotion rules, trophy icon, and an Info button that opens `LeagueSheet`.
-
-#### `LeagueSheet.tsx`
-Interactive bottom sheet presenting the 11-tier League ladder (Quartz, Bronze, Silver, Gold, Platinum, Emerald, Ruby, Sapphire, Diamond, Master, Legend):
-- Horizontal paging carousel of 3D trophy artwork.
-- Threshold indicators showing how much weekly XP is required to promote to each tier or maintain rank.
-
----
-
-### 6.8 Reports (`components/reports/`) (New)
-
-Modular components powering the Reports tab (`app/(tabs)/reports.tsx`) and Mistake Overview:
-
-#### `StatCard.tsx`
-Compact 2-column metric cards displaying:
-- Current streak days with flame illustration (`assets/homepage/streak.webp`).
-- Recharges used with lightning/battery illustration (`assets/homepage/recharge.webp`).
-
-#### `WeekCalendarRow.tsx`
-7-day Monday–Sunday activity strip showing:
-- Labeled weekdays (M, T, W, T, F, S, S).
-- Glowing ring indicating today.
-- Activity dots representing completed quiz sessions recorded via `lib/streak.ts`.
-
-#### `LeaguePanel.tsx`
-Profile summary card in Reports:
-- Shows total XP earned, 3D trophy art, current League tier name, and a linear progress bar toward next tier.
-- "View Leaderboard" CTA button navigating to `app/leaderboard.tsx`.
-
-#### `SkillReportCard.tsx`
-Card summarizing progress for an individual skill:
-- Skill name, progress percentage bar, completed topics count, and XP earned in this skill.
-- "Missed Questions" badge linking directly to `app/mistakes.tsx?skillId={slug}` to review questions failed during play.
-
-#### `MistakeCard.tsx`
-Rendered in `app/mistakes.tsx` for per-question error review:
-- Question number tag in coral red.
-- Question prompt.
-- `N MISTAKES` badge pill in `#F77BA0` bg / `#B01030` text.
-- "Correct answer is:" banner with bold correct choice text.
-- "Mastered" badge if the learner later answered correctly during retry.
-
----
-
-### 6.9 Settings (`components/settings/`) (New)
-
-#### `SettingsComponents.tsx`
-Three presentational components used by `app/settings.tsx`:
-- **`SectionHeader`**: Uppercase category label (Account, Preferences, Support, Legal, Actions).
-- **`SettingsRow`**: Icon + label + optional value text + chevron right, with optional `danger` styling.
-- **`SettingsToggleRow`**: Icon + label + `Toggle` switch for preferences (used by the Dark theme toggle and Notifications).
-
----
-
-### 6.10 UI (`components/ui/`)
-
-#### `Button.tsx`
-Single shared CTA pill button for the entire app — `variant: 'solid' | 'gradient' | 'outline'`, uppercase by default, `loading`/`disabled` states. Ensures consistent styling across all primary action buttons.
-
-#### `ConnectionError.tsx`
-Full-screen "App can't connect" state — icon ring (`WifiOff`), title, subtitle, and a RELOAD button calling the caller-supplied `onReload`.
-
-#### `Toggle.tsx`
-Animated switch component (44×26 track, 20px thumb) sliding on Reanimated `withTiming`. Used in Settings for Dark theme and notifications, and in the Out-of-Keys free-trial card for reset reminders.
+Profile: `Avatar`, `LeaderboardRow`, `LeagueCard`, `LeagueSheet` (carousel of `LEAGUES`).  
+Reports: `StatCard`, `WeekCalendarRow` (4 markers), `LeaguePanel`, `SkillReportCard`, `MistakeCard`.  
+Settings: `SectionHeader`, `SettingsRow`, `SettingsToggleRow`.  
+UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install CTA for subscribe / manage / ads).
 
 ---
 
 ## 7. Constants (`constants/`)
 
-### `index.ts`
-Barrel export — unchanged in role, now also re-exporting `trackOptions.ts` and `skills.ts` alongside the previously-documented modules.
+- `colors.ts` / `gradients.ts` / `typography.ts` (Sora) / `spacing.ts` / `icons.ts` — design tokens; `theme/tokens.ts` re-exports
+- `curriculumAssets.ts` — `CurriculumCoverImagePaths` for `driving-theory`, `true-false`, `bible-trivia`, `world-facts`; `CurriculumSlug = string`
+- `skills.ts` — `LANDING_SKILLS` (four skills above) + `getLandingSkill()`
+- `trackOptions.ts` — `getTrackOptionsForSkill` / `getTrackOption` / `groupTrackOptions`
 
-### `colors.ts` / `gradients.ts` / `typography.ts` / `spacing.ts` / `icons.ts` / `curriculumAssets.ts`
-Unchanged from the prior audit (see that revision for the full token tables) — `StaticColors.tealAccent` fix, `BrandGradients.discovery`, the Sora `FontFamily`/`Typography` system, `Spacing`/`Radius` scales, and `CurriculumCoverImagePaths` are all still current.
+**Label resolution:** skill `trackLabels` → JSON `trackDef.title` → `getCachedTrackDefaultLabel()` (`play_track_defaults`) → `DEFAULT_TRACK_LABELS`.
 
-### `skills.ts` (updated)
-```typescript
-export type SimpleTrack = 'reading' | 'full';
-
-export interface LandingSkill {
-  id: CurriculumSlug;
-  title: string;
-  subtitle: string;
-  tracks: SimpleTrack[];
-  trackLabels?: Partial<Record<Track, string>>;
-  trackImages?: Partial<Record<Track, ImageSourcePropType>>;
-}
-
-export const LANDING_SKILLS: LandingSkill[] = [
-  {
-    id: 'driving-theory',
-    title: 'Practice over 1000\nhighway code\nquestions',
-    subtitle: 'Driving theory',
-    tracks: ['reading', 'full'],
-  },
-  {
-    id: 'true-false',
-    title: 'Test yourself with\n150 true or false\nquestions',
-    subtitle: 'True/False',
-    tracks: ['reading', 'full'],
-  },
-  {
-    id: 'bible-trivia',
-    title: 'Test yourself with\n237 Bible trivia\nquestions',
-    subtitle: 'Bible Trivia',
-    tracks: ['reading', 'full'],
-  },
-];
-```
-Defines each skill card shown on the homepage grid. `tracks` provides the synchronous fallback list before runtime detection resolves; `trackLabels` and `trackImages` allow individual curricula to override default track copy and illustration assets without modifying component logic. **`bible-trivia` (new, 2026-09-06)** — converted from a nested `levels/chapters/topics` source export via `json-conversion.md`'s "Bible Trivia" section; 237 of 395 source questions kept (`single`-type only — `multi` and the new `matching` type excluded, same single-answer-engine reasoning as `true-false`'s own conversion). No custom `tracks` declared in its JSON, same as `true-false` — it relies entirely on the compulsory `full`/`reading` synthesis in `detectAvailableTracks()` (§9).
-
-### `trackOptions.ts` (updated)
-Single source of truth for the learning-mode list and illustrations shown across `LearningStyleScreen`, `ModeSwitcherSheet`, and `TrackDetailScreen`:
-```typescript
-export interface TrackOption {
-  track: Track;
-  label: string;
-  image: ImageSourcePropType;
-}
-
-export function getTrackOptionsForSkill(
-  skill: LandingSkill,
-  tracks: Track[],
-  customTrackDefs?: CurriculumTrackDefinition[]
-): TrackOption[];
-
-export function getTrackOption(
-  skill: LandingSkill,
-  track: Track,
-  customTrackDefs?: CurriculumTrackDefinition[]
-): TrackOption;
-```
-- **Title resolution priority** (mirrors `trackImage()`'s DB-then-local chain below, added
-  2026-09-06 (h)):
-  1. `skill.trackLabels?.[track]` (hardcoded app override)
-  2. `customTrackDef?.title` (dynamic JSON-defined custom track title)
-  3. `getCachedTrackDefaultLabel(track)` — `play_track_defaults.label` (§14), e.g. `full` →
-     `"Learn Full Skill"`. Real source of truth for any label shared across every skill; a DB
-     edit changes it everywhere with no redeploy.
-  4. `DEFAULT_TRACK_LABELS[track]` (hardcoded last-resort — only fires for the instant before
-     step 3's fetch resolves, or if a track has no DB row at all)
-  5. Formatted fallback string
-- **Default visuals**: `LOCAL_IMAGES` is intentionally **empty** — the only local track webps that exist (`assets/driving/*.webp`) are driving-theory's own art, not universal, and now live as a per-curriculum override on driving-theory's own JSON instead (see §14). `trackImage()`'s resolution order is: (1) `customTrackDef.image` (curriculum-JSON per-track override, e.g. driving-theory's), (2) `skill.trackImages?.[track]` (code-level per-skill override), (3) `play_track_defaults` DB row for that track id (`lib/trackDefaults.ts`, `getCachedTrackDefaultUrl()`) — currently empty, reserved for genuinely shared/universal art, (4) `LOCAL_IMAGES[track]` — currently empty, instant-render backup only, (5) the skill's own cover image, itself DB-first: `lib/curriculaCatalog.ts`'s cached `play_curricula.cover_image_path` if warm, else the local `CurriculumCoverImagePaths` constant as a pre-fetch backup. `full` has no dedicated icon by design and always resolves via step (5).
-- **Dynamic builder**: `getTrackOptionsForSkill(skill, tracks, customTrackDefs)` maps whichever tracks the caller provides, decorating them with titles and icons from custom definitions or defaults.
-- **Fast lookup**: `getTrackOption(skill, track, customTrackDefs)` provides synchronous-like lookup with fallback defaults.
+**Image resolution:** JSON `tracks[].image` → skill `trackImages` → `getCachedTrackDefaultUrl()` → empty `LOCAL_IMAGES` → skill cover (`getCachedCoverImagePath` then `CurriculumCoverImagePaths`). Driving track webps are **not** local `require()`s; they are uploaded to `play-assets/track-icons/` and referenced from driving-theory JSON.
 
 ---
 
 ## 8. Theme (`theme/`)
 
-Unchanged from the prior audit — `ThemeContext.tsx` (dark/light/auto, AsyncStorage-persisted, `useTheme()` hook) and `tokens.ts` (convenience re-export barrel).
+`ThemeContext.tsx` — `dark` / `light` / `system`, persisted (`@theme_preference`). Settings Dark switch maps on → `dark`, off → `light`. `tokens.ts` barrels colors/spacing/typography.
 
 ---
 
 ## 9. Library / Data Layer (`lib/`)
 
-### `supabase.ts` / `downloadSession.ts` / `signs.ts`
-Unchanged from the prior audit — the Learning Tracks / Reading Mode work (`hydrateSignCatalog`, track-aware `downloadSession`) documented there is still current. `downloadSession` extracts optional `remote.tracks` and forwards them to `deriveTrack(hydrated, signCatalog, track, remote.tracks)`.
+| File | Role |
+|------|------|
+| `supabase.ts` | Client singleton + public URL helper for `play-assets` |
+| `curriculaCatalog.ts` | Cached `play_curricula` (`slug, title, cover_image_path` where `is_active`) |
+| `trackDefaults.ts` | Cached `{ images, labels }` from `play_track_defaults` |
+| `curriculum.ts` | Load JSON, `detectAvailableTracks` (JSON tracks **or** legacy roles; **always** include `full` + `reading`), `deriveTrack`, `loadCurriculumCached` |
+| `downloadSession.ts` | Fetch + hydrate + `deriveTrack`; min load beat is in SkillsFlow (`MIN_LOADING_MS = 2000`) |
+| `signs.ts` | `play_signs` / `play_sign_pairs` |
+| `keys.ts` | Economy (below) |
+| `premium.ts` | `PLANS`, `KEY_PACKS` |
+| `currency.ts` | `KES_PER_USD = 129` |
+| `billing.ts` | Paystack checkout, `getSubscriptionInfo`, `enforceLocalExpiry` / `configureBilling` |
+| `restore.ts` | Email/Google restore; `logoutAccount` |
+| `email.ts` | Validate + truncate |
+| `ads.ts` | Android AdMob rewarded only; non-Android → `'unavailable'` |
+| `webRewardedAd.ts` | `adBreak` rewarded; **unused by WatchAdPromptSheet** |
+| `notifications.ts` | Web Notification API + `public/sw.js` |
+| `progress.ts` | Per-skill topics/tracks + tabs unlock |
+| `mistakes.ts` | `@play/mistakes:${skillId}` + `play_question_attempts` |
+| `xp.ts` | `@play/total_xp`, `@play/xp:${skillId}`, `play_user_stats` |
+| `streak.ts` | `@play/activity_dates` |
+| `leagues.ts` | 11 lifetime-XP bands of 500 |
+| `leaderboard.ts` | Current user + mock peers in-band |
+| `help.ts` | Topics + `help_requests` insert |
+| `navDirection.ts` | `navPush` / `navBack` / `navReplace` |
 
-### `curriculaCatalog.ts` (updated 2026-09-07) — DB-driven skill catalog
-Module-level cache (shared in-flight promise, same shape as `trackDefaults.ts`) over `play_curricula`. `getCurriculaCatalog()` fetches `{ slug, title, cover_image_path }` for every active row, once per app session. `getCachedCurricula()` is a synchronous read of whatever's resolved so far (`[]` before the first fetch lands). `getCachedCoverImagePath(slug)` is what `constants/trackOptions.ts`'s `trackImage()` calls for its final fallback (see §7) — every skill's existence, display name, and cover image now genuinely lives in this table, not in a local constants file; adding or renaming a skill is a DB edit only. `LandingScreen` kicks off the fetch first in the normal user flow, but any screen that might render before it (a `?track=` deep link landing straight on `TrackDetailScreen`) also calls `getCurriculaCatalog()` itself — the shared in-flight promise means this is still only one network round trip. **Fixed 2026-09-07**: Query fetch rewritten with an `async` IIFE to return a true `Promise<CurriculumCatalogRow[]>` resolving the prior `PromiseLike` typecheck error.
+### Keys (`keys.ts`)
 
-### `trackDefaults.ts` (updated 2026-09-06 (h)) — DB-driven universal track icons AND labels
-Same shared-promise cache pattern as `curriculaCatalog.ts`, over `play_track_defaults` (see §14), now selecting `{ track_id, image_path, label }` instead of image-only. The cache shape changed from a flat `Record<string, string>` to `{ images: Record<string, string>, labels: Record<string, string> }`, with two synchronous readers: `getCachedTrackDefaultUrl(trackId)` (unchanged signature, still what `trackImage()` calls) and the new `getCachedTrackDefaultLabel(trackId)` (what `trackLabel()` now calls — see §7). A row with no `image_path` simply doesn't populate `images` for that track id; same for a row with no `label`. The fetch is still kicked off at module-import time so it's usually warm before first render.
+`INITIAL_KEYS = 3`. Cooldowns **5 min → 2 h → 8 h** via `resetCount`.
 
-**Fixed a pre-existing `tsc` error in the same pass**: the fetch used to assign a raw `supabase.from(...).select(...).then(...)` chain directly to the `Promise<T>`-typed `inflight` variable, which doesn't type-check — `supabase-js`'s query builder is only a `PromiseLike`, not a real `Promise` (missing `.catch`/`.finally`/`Symbol.toStringTag`). Rewritten as an `async` IIFE (`inflight = (async () => { ... })()`) so the assignment is a genuine `Promise<TrackDefaultsCache>`. The exact same bug pattern still exists in `lib/curriculaCatalog.ts` (untouched this pass — out of scope, that file belongs to separate uncommitted WIP) and shows up as the only remaining `tsc --noEmit` error after this change.
-
-**No longer permanently empty**: `image_path` and `label` are independently nullable, so a row can carry either alone. As of this pass there's exactly one seeded row — `full` → `label: 'Learn Full Skill'`, no `image_path` — see §14 for the seed SQL and the reasoning for why images stay unseeded while labels don't.
-
-### `curriculum.ts` — Dynamic Track Detection, Cached Fetching, and Session Derivation
-Core curriculum orchestration layer:
-- **JSON-Defined Custom Tracks**: `RemoteCurriculum` parses an optional `tracks?: CurriculumTrackDefinition[]` header. When present, tracks and their filtering logic are driven entirely by the curriculum JSON.
-- **Dynamic Track Availability**: `detectAvailableTracks(questions, signs, customTrackDefs?): Track[]`:
-  - If `customTrackDefs` is defined, each custom definition is checked against questions (`filterRole`, `filterFormat`) or signs (`kind === 'reading'`).
-  - If omitted, falls back to legacy auto-detection: `full` is universal, `reading` is included if signs exist (`signs.length > 0`), and each role track is included only if questions contain that role.
-- **Deduplicated Cache**: `loadCurriculumCached(slug)` stores in-flight and resolved promises in `curriculumCache`. When screens request `getTrackTotals(slug)`, `getAvailableTracks(slug)`, and `getCurriculumTrackDefs(slug)` on mount, they share a single network round-trip.
-- **`getCurriculumTrackDefs(slug)`**: Returns custom track definitions from the curriculum JSON (or undefined if legacy).
-- **`getAvailableTracks(slug)`**: Asynchronous per-skill track detection, backed by `loadCurriculumCached`.
-- **`getTrackTotals(slug)`**: Computes `totalQuestions` and `totalSessions` per track (for both custom and standard tracks), cached in `trackTotalsCache`.
-- **`deriveTrack(questions, signs, track, customTrackDefs?)`**: Builds hydrated `PlaySession[]` for gameplay:
-  - If a matching `CurriculumTrackDefinition` exists, filters questions by `filterRole` or `filterFormat`, or chunks signs if `kind === 'reading'`.
-  - Otherwise dispatches via standard logic (`full` via `deriveFullSessions()`, `reading` via sign chunking, or legacy role matching `q.role === TRACK_ROLE[track]`).
-
-### `navDirection.ts` (previously undocumented — see §6.5 for the full writeup, paired with `components/nav/ScreenTransition.tsx`)
-
-### `keys.ts` — Keys Economy (rebuilt since the prior audit)
-
-The keys system was substantially reworked — the flat "4 keys / 4-minute reset" model documented previously no longer exists.
-
-**`INITIAL_KEYS = 3`** (was 4).
-
-**Escalating reset cooldown** — `RESET_DURATIONS_MS = [5 min, 2 hrs, 8 hrs]`; `resetDurationFor(resetCount)` picks the tier by how many times the free-trial reset has actually completed for this device (capped at the last tier), so repeat depletion gets progressively slower rather than always refilling in a flat window.
-
-**`KeysState`** (changed):
-```typescript
-{
+```ts
+interface KeysState {
   balance: number;
   initialized: boolean;
-  isPremium?: boolean;      // NEW — premium subscribers bypass the whole system
+  isPremium?: boolean;
+  expiresAt?: string | null;
   resetAt: number | null;
-  resetCount?: number;      // NEW — drives the escalating tier
+  resetCount?: number;
 }
 ```
 
-**Cloud sync on every write** — `write(state)` best-effort upserts to `play_accounts` (keyed by the locally-stored `@play/user_email`, if any) after every local AsyncStorage write, so the balance survives logout/login and reinstalls once a device has ever linked an email. Failure here never blocks gameplay (the local write already succeeded).
+`applyReset()` refills when `resetAt` has passed **and** drops premium when `expiresAt` is past. Every `write()` upserts `play_accounts` if `@play/user_email` is set. `getKeyBalance()` returns `999999` when premium (UI often shows `∞`). `grantBonusKey`, `setPremium(flag, expiresAt?)`, `spendKey`, `startResetTimer`.
 
-**New functions:**
-| Function | Purpose |
-|----------|---------|
-| `grantBonusKey(count, reason?, ref?)` | Adds `count` keys and clears any pending `resetAt` — used by both the rewarded-ad flow and post-purchase key-pack grants |
-| `setPremium(isPremium)` | Flips the premium flag — used by `payment-complete.tsx` after a subscription purchase |
+### Billing (`billing.ts`)
 
-**`getKeyBalance()`** now returns `999999` for premium accounts (used as the practical "unlimited" display value, e.g. `keys-packs.tsx` renders it as `∞`).
+Paystack amounts in **KES**. After iframe success, upserts `play_purchases` / `play_accounts` (subscription also writes `@play/premium_expires_at`) then routes to `/payment-complete` with `skill`/`track` if the funnel had them. `getSubscriptionInfo()` reads local premium + optional `play_accounts.is_premium`; `managementURL` is the Play Store subscriptions page.
 
-`applyReset()` and `startResetTimer()` follow the same "timer is the sole source of truth" pattern as before, just parameterized on the new escalating duration and never firing for premium accounts.
+### Ads (current product)
 
-### `premium.ts` (new)
-Defines the two purchasable catalogs:
-- **`PLANS`** — Weekly ($4), Regular ($12/mo, `popular`), Annual ($129.60, i.e. $10.80/mo effective). `planDisplay(plan, currency)` formats price/term/savings-note text per plan shape.
-- **`KEY_PACKS`** — 20 ($2), 40 ($4, `popular`), 80 ($8), 120 ($12). `keyPackById(id)` looks one up (defaults to the 40-pack).
+| Platform | Out of keys → Watch ad |
+|----------|------------------------|
+| Android + AdMob module | Real rewarded unit; grant on reward-screen CTA |
+| Web | `DownloadAppModal` — no Ad Placement / simulated timer |
 
-### `currency.ts` (new)
-`KES_PER_USD = 129` fixed rate. `usdToKES()`, `formatUSDAmount(amount, currency)`, `formatPrice(amountKES, currency)`, and `splitCurrencyAmount(priceString)` (splits a formatted string like `"$4.00"` into `{ currency: '$', amount: '4.00' }` for layouts that style the symbol separately from the number).
+`WatchingAdContent` + `webRewardedAd.ts` remain in the tree as unused/alternate web ad experiments.
 
-### `billing.ts` (new) — Paystack checkout
-**`billingAvailable()`** always returns `true` (no platform gating — Paystack is web-only by nature but this app is Expo-web-capable everywhere).
+### Leagues (`leagues.ts`) — actual names
 
-**`loadPaystackScript()`** injects `https://js.paystack.co/v1/inline.js` once (memoized promise), no-ops on non-web (`typeof window === 'undefined'`).
+Quartz, Topaz, Amber, Jade, Opal, Sapphire, Ruby, Emerald, Obsidian, Diamond, Legend. **Not** Bronze/Silver/Gold. Lifetime XP, 500-XP bands, Legend open-ended.
 
-**`openCheckout(amountKES, email, label, kind, productId, keysCount?, expiresAt?)`** — builds a unique reference (`pataplay_{timestamp}_{random}`), opens `PaystackPop.setup({...}).openIframe()`, resolves the reference on `callback` or `null` on `onClose`. Falls back to returning the reference directly (skipping the actual iframe) when `PaystackPop` isn't available — e.g. mid-script-load or non-web.
+### Progress
 
-**`purchasePlan(packageId, email)`** / **`purchaseKeyPack(packId, email)`** — both: persist the email locally first, compute the KES amount, open checkout, best-effort upsert a `play_purchases` row keyed by the Paystack reference, then `router.replace('/payment-complete', {...})` with the purchase details as params. Return `'purchased' | 'cancelled' | 'unavailable' | 'error'`.
-
-### `restore.ts` (new) — Account restore/link
-**`restoreAccountByEmail(rawEmail)`** — the core restore flow:
-1. Validates the email (`sanitizeAndValidateEmail`).
-2. If a `play_accounts` row already exists for that email, it is the **sole source of truth** from then on — overwrites local state unconditionally (`applyRestoredState`), never merges with whatever balance happens to be sitting on the device. An inline comment is explicit that merging here is exactly the bug this design avoids (a re-login could otherwise re-grant already-spent keys).
-3. Otherwise (first time this email has ever been seen), seeds the account from historical `play_purchases` rows (summing `keys`, OR-ing `is_premium`), defaulting to `INITIAL_KEYS` if none exist, and immediately persists that seed to `play_accounts` so this branch can never fire again for the email.
-4. Calls `syncProgressWithCloud(email)` (from `lib/progress.ts`) in both branches.
-
-**`restoreAccountWithGoogle(idToken)`** — `supabase.auth.signInWithIdToken({ provider: 'google', token: idToken })`, then delegates to `restoreAccountByEmail` with the resulting email.
-
-**`logoutAccount()`** — signs out of Supabase auth and clears the locally-stored email, deliberately leaving local keys/progress caches alone (they're already synced to the cloud record; clearing them would just reset the device to defaults until the next sync).
-
-### `email.ts` (new)
-`sanitizeAndValidateEmail(raw)` — trims, lowercases, strips zero-width characters, RFC-shaped regex check, username-length and TLD checks, returns `{ valid, email, error? }`. `truncateEmailMiddle(email, prefixLength = 6)` — shortens for display (`tonymk...@gmail.com`), leaves short emails untouched.
-
-### `ads.ts` (new) — Rewarded bonus sessions
-`showRewardedForSession()`:
-- **Android with the native module present** — loads and shows a real `RewardedAd` via `react-native-google-mobile-ads` (test unit ID outside production, or `EXPO_PUBLIC_ADMOB_REWARDED_ANDROID` in production), resolves `'earned'` only if the `EARNED_REWARD` event actually fired before close, `'skipped'` otherwise, `'unavailable'` on any load error.
-- **Everywhere else (web, dev, or native module absent)** — resolves `'earned'` after a simulated 1.5s delay.
-
-`adsAvailable()` — `Platform.OS === 'android' && nativeModule() != null` (the module is loaded via a try/catch'd `require()`, so its absence is silent). `configureAds()` — best-effort one-time `initialize()` call.
-
-### `notifications.ts` (updated 2026-09-07) — Web & App-Closed Reset Reminders
-Full notifications subsystem designed to survive browser tab / app closing:
-- **Background Service Worker (`public/sw.js`)**: Automatically registered upon notification permission grant. Listens for `SCHEDULE_RESET_REMINDER` and `CANCEL_RESET_REMINDER` messages. Dispatches native system notifications via `self.registration.showNotification` even if the web page is in the background or closed. Clicking the notification focuses the existing window or opens the app root.
-- **`ensureNotificationPermission()`**: Requests browser/device permissions; registers `/sw.js` immediately if granted.
-- **`scheduleResetReminder(resetAt)`**: Persists target reset time to `@play/scheduled_reset_at`, posts the scheduled task to the Service Worker, and arms a foreground timer fallback.
-- **`cancelResetReminder()`**: Clears local timer, removes stored schedule key, and notifies Service Worker to cancel pending notifications.
-- **`initNotifications()`**: Runs on app mount (`app/_layout.tsx`). Registers the Service Worker and checks whether a reset cooldown elapsed while the app was closed. If keys refilled during user absence, fires `showKeysReadyNotification()` immediately (guarded by `@play/last_notified_reset_at` to prevent duplicates).
-- **`useKeys()` Integration**: When `startResetTimer()` triggers the free trial countdown, it automatically invokes `scheduleResetReminder(resetAt)` if `@play/timer_reminders` is enabled.
-
-### `progress.ts` — Topic progress, tab unlock gate, and track completion (expanded)
-
-- **Topic progress**: `getLocalProgress(skillId)` / `markTopicCompleted(skillId, topicIndex, totalTopics)` / `syncProgressWithCloud(email, skillId)`. Progress is stored per-skill in `@play/progress:${skillId}`.
-- **Tabbed Home Unlock Gate (new 2026-09-07)**:
-  - `areTabsUnlocked(): Promise<boolean>`: Reads `@play/tabs_unlocked`.
-  - `unlockTabsIfNeeded(): Promise<void>`: Fired inside `markTopicCompleted()` the moment a learner hits `topicComplete` for topic 0 on any skill. Sets `@play/tabs_unlocked = 'true'` permanently.
-  - `lockTabs(): Promise<void>`: Debug utility to reset the gate.
-- **Per-track completion**:
-  - `getCompletedTracks(skillId)` reads `@play/completed_tracks:${skillId}`.
-  - `markTrackCompleted(skillId, track)` records track completion.
-
-### `mistakes.ts` (new 2026-09-07) — Missed Questions Tracking
-Tracks every question the learner fails during card deck quiz sessions:
-- **`QuestionAttempt`**: `{ skillId, topicIndex, questionId, questionText, options, correctAnswerText, failCount, attemptCount, solved, lastMissedAt }`.
-- **`recordQuestionFailure(skillId, topicIndex, question)`**: Increments `failCount` and `attemptCount`, sets `solved: false`, and updates `@play/mistakes:${skillId}`. Best-effort mirrors to Supabase `play_question_attempts` when user email is linked.
-- **`recordQuestionSuccess(skillId, questionId)`**: When a previously-missed question is answered correctly on retry, sets `solved: true`.
-- **`getSkillMistakes(skillId)`**: Returns formatted `MistakeItem[]` sorted by mistake count.
-- **`getSkillMistakesCount(skillId)`**: Returns count of unique missed questions for the skill.
-
-### `xp.ts` (new 2026-09-07) — Experience Points Tracking
-- **`recordXpEarned(skillId, amount)`**: Adds `amount` (5 XP per correct answer) to both the skill bucket (`@play/xp:${skillId}`) and lifetime total (`@play/total_xp`). Best-effort syncs to Supabase `play_user_stats`.
-- **`getSkillXp(skillId)`**: Reads per-skill earned XP.
-- **`getTotalXp()`**: Reads lifetime accumulated XP.
-
-### `streak.ts` (new 2026-09-07) — Practice Streaks & Weekly Calendar
-- **`recordActivityToday()`**: Logs today's date (`YYYY-MM-DD`) into `@play/activity_dates`.
-- **`getStreakData()`**: Returns `{ currentStreak, maxStreak, todayActive, weekDays }`. `weekDays` is an array of 7 booleans (Monday through Sunday) indicating active practice days in the current week.
-
-### `leagues.ts` (new 2026-09-07) — XP League Ladder
-Defines the 11-tier XP league system (Quartz to Legend in 500 XP bands up to 5,000 XP):
-- **`LEAGUES`**: Array of 11 tiers (`Quartz`, `Topaz`, `Amber`, `Jade`, `Opal`, `Sapphire`, `Ruby`, `Emerald`, `Obsidian`, `Diamond`, `Legend`).
-- **`leagueFor(xp)`**: Returns the active `LeagueTier` for a learner's lifetime XP.
-- **`nextLeague(xp)`**: Computes the upcoming tier and remaining XP needed (`needed: Math.max(0, next.min - xp)`).
-- **`tierLabel(tier)`**: Generates formatted range labels (e.g., `"Under 500 XP"`, `"500 – 1,000 XP"`, `"5,000+ XP"`).
-
-### `help.ts` (new 2026-09-07) — Help Topics & Feedback Submissions
-Provides support request handling matching PataSkillsV2:
-- **`HELP_TOPICS`**: Array of 6 categorized topics (`premium`, `billing`, `bug`, `account`, `content`, `other`).
-- **`submitHelpRequest(input)`**: Inserts into Supabase `help_requests` with `user_id`, `name`, `email`, `topic`, `custom_topic`, `message`, and `app_version`. Best-effort error handling never throws or disrupts gameplay.
+`@play/progress:${skillId}`, `@play/completed_tracks:${skillId}`, `@play/tabs_unlocked`. First `markTopicCompleted` unlocks tabs permanently. `unlockTabsIfNeeded` is **not** exported (internal).
 
 ---
 
 ## 10. Hooks (`hooks/`)
 
-### `useKeys.ts` — expanded for premium
-Wraps `lib/keys.ts`. Return shape now includes `isPremium: boolean` (mirrors `KeysState.isPremium`) and `balance` reports `999999` for premium accounts rather than the raw stored value. `isOutOfKeys` is `!isPremium && balance !== null && balance <= 0` — premium accounts can never be "out of keys". The 1-second poll-while-depleted behavior is unchanged, just now also skipped entirely while `isPremium`.
+**`useKeys`** — `balance`, `isPremium`, `resetAt`, `isOutOfKeys` (`!isPremium && balance <= 0`). Polls while depleted (skipped if premium).
 
-### `useScrollHint.ts` (new)
-Extracted single-card scroll-hint logic, shared by both `QuizCardDeck` and `ReadingCardDeck` (one hook instance per visible card slot) rather than each deck reimplementing its own bounce animation:
-- Tracks content height vs. viewport height via `onLayout`/`onContentSizeChange`, shows the hint when content exceeds viewport by >4px.
-- Hides on scroll past a 12px threshold, or on tap (`scrollToBottom()`).
-- `resetForNewCard()` clears tracked measurements — needed when a hook instance is reused for a new card (e.g. `ReadingCardDeck` swapping `currentSign`) so a stale measurement from the previous card can't flash the wrong hint state before the new card's `onLayout` fires.
-- Returns `{ scrollRef, scrollViewProps, showHint, hintAnimatedStyle, scrollToBottom, resetForNewCard }` — `scrollViewProps` spreads directly onto the card's `ScrollView`.
+**`useScrollHint`** — content taller than viewport; bouncing chevron.
 
 ---
 
 ## 11. Types (`types/`)
 
-### `quiz.ts`
-Core data types:
-- **`CurriculumTrackDefinition`**: Dynamic track schema declared in curriculum JSON files:
-  ```typescript
-  export interface CurriculumTrackDefinition {
-    id: string;                          // Track ID (e.g., 'differentiation', 'identification')
-    title: string;                       // Display label in learning style list & track detail
-    filterRole?: string | string[];      // Filters questions by q.role — an array lets one track absorb several role values (e.g. driving-theory's 'identification' track covers name+meaning+whereUsed in a single JSON-declared track, no code change)
-    filterFormat?: string | string[];    // Filters questions by format — same array support
-    kind?: 'quiz' | 'reading' | 'full';  // 'quiz' (default, role/format-filtered), 'reading' (chunked signs catalog), or 'full' (all questions, standard session grouping)
-    image?: string;                      // Optional custom asset identifier
-  }
-  ```
-  Matching (`roleMatches()` in `lib/curriculum.ts`) checks array membership when `filterRole`/`filterFormat` is an array, or strict equality when it's a single string — so existing single-string track definitions keep working unchanged.
-- **`Track`**: `StandardTrack | (string & {})` — union of canonical standard tracks (`'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading'`) and arbitrary custom track strings.
-- **`BaseQuestion.role`**: Widened from strict 4-value union to `string` allowing custom roles (e.g., `"explainer"`, `"pair"`, `"name"`).
-- `QuizQuestion` union, `OptionChoice`, and `SignCatalogEntry` interface are all still current.
+`types/quiz.ts`:
+
+- `CurriculumTrackDefinition` — `id`, `title`, `filterRole?`, `filterFormat?`, **`filterTags?`** (AND), `kind?: 'quiz' | 'reading' | 'full'`, **`groupId` / `groupTitle`**, `image?`
+- `QuizQuestion` / format variants, `SignCatalogEntry`
+- `Track` is defined in `lib/curriculum.ts`: `'pairs' | 'names' | 'meanings' | 'whereUsed' | 'full' | 'reading' | (string & {})`
 
 ---
 
 ## 12. Utilities (`utils/`)
 
-### `groupSessions.ts` / `hydrateQuestions.ts` / `shuffleAnswers.ts`
-Unchanged from the prior audit — the `QuizPlaySession`/`ReadingPlaySession` discriminated union, `chunkIntoSessions`/`chunkSignsIntoSessions`, `hydrateSignCatalog`, and Fisher-Yates answer shuffling are all still current. See that revision for full detail.
+- `groupSessions.ts` — `QuizPlaySession` / `ReadingPlaySession`, `chunkIntoSessions`, `chunkSignsIntoSessions`, `groupQuestionsBySession`
+- `hydrateQuestions.ts` — sign keys → URLs; `deriveReadingEntriesFromQuestions` (question-shape aware)
+- `shuffleAnswers.ts` — Fisher–Yates
 
 ---
 
 ## 13. Scripts (`scripts/`)
 
-One-off Node.js (`.mjs`) data-pipeline / DB-setup scripts, run from `play/`. Beyond the scripts already documented in the prior audit (`derive-signs-from-bucket.mjs`, `derive-signs.mjs`, `fix-image-cache-headers.mjs`, `link-signs-to-questions.mjs`, `build-signs-catalog.mjs`), the directory has grown considerably and now also contains (file inventory only — not individually re-audited line-by-line this pass, since none of them touch the app code documented above):
+One-off Node `.mjs` (run from `play/`). Highlights:
 
-`add-role.mjs`, `apply-sign-corrections.mjs`, `dl-by-image-path.mjs`, `fix-bump-image-path.mjs`, `list-low-confidence-images.mjs`, `list-orphaned-signs.mjs`, `populate-pairs.mjs`, `rename-orphaned-signs.mjs`, `rename-used-signs-descriptive.mjs`, `upload-corrected-curriculum.mjs`, `_check_bump.mjs`, `_dl_preview3.ps1`, plus a `.gitignore` scoped to this folder.
+| Script | Purpose |
+|--------|---------|
+| `upload-bible-trivia.mjs` / `upload-world-facts.mjs` / `upload-true-false-v2.mjs` / `upload-football.mjs` | Put converted JSON into `play-assets/curricula/` |
+| `convert-true-false-v2.mjs` / `convert-football.mjs` | Source JSON → curriculum shape |
+| `upload-track-icons.mjs` | Driving track art → `play-assets/track-icons/` |
+| `split-identification-track.mjs` | Driving track split helper |
+| `derive-signs*.mjs`, `link-signs-to-questions.mjs`, `build-signs-catalog.mjs`, `populate-pairs.mjs`, image fix/rename scripts | Signs pipeline |
+| `_check_*.mjs` | Ad-hoc DB checks |
 
-**`upload-bible-trivia.mjs` (new, 2026-09-06)** — one-off uploader for the Bible Trivia conversion: uploads `scripts/_bible-trivia-payload.json` to `play-assets/curricula/bible-trivia.json` (`upsert: true`) and lists `play-assets/curricula/` afterward so a run confirms both the JSON and the (separately, manually uploaded) `bible-trivia.webp` cover landed. Does not touch `play_curricula` — same anon-key RLS restriction as `upload-corrected-curriculum.mjs`, so the insert SQL is handed to the user to run manually instead. `_bible-trivia-payload.json` itself (237 questions, `signs: []`) is the converted output — see `json-conversion.md`'s "Bible Trivia" section for the source schema and conversion rules.
-
-`output/` now also contains `pairs-to-insert.json`, `questions.corrected.json`, `sign-corrections.json`, and two preview subfolders (`preview/`, `preview2/`) alongside the previously-documented artifacts.
+`output/` holds converted JSON, SQL, and image previews. `json-conversion.md` documents world-facts / bible-trivia / true-false rules (`single` kept; `multi` / `matching` dropped).
 
 ---
 
 ## 14. Supabase (`supabase/`)
 
-### `play_sign_pairs.sql`
-Unchanged from the prior audit — `play_sign_pairs` table + 23 seeded pairs (groups A–E) for the DB-level image-resolution layer used by `lib/signs.ts`. See that revision for the full seed breakdown and the note distinguishing this from the curriculum JSON's own 46-pair/92-entry signs catalog.
+### SQL in repo
 
-### `play_track_defaults.sql` (updated 2026-09-06 (h)) — universal per-track fallback icons AND labels
-Defines `play_track_defaults (track_id TEXT PRIMARY KEY, image_path TEXT, label TEXT, updated_at TIMESTAMPTZ)`, anon-select-only RLS, read by `lib/trackDefaults.ts` (see §9). **Both `image_path` and `label` are nullable** — a row can carry either alone, so a label-only default (no universal art to go with it) doesn't force a fake image row. The file is idempotent against a DB that already ran an earlier version: `alter table ... add column if not exists label`, `alter table ... alter column image_path drop not null`.
+- `play_accounts.sql` + `play_accounts_reset_count.sql` — email PK, balance, is_premium, reset_at, reset_count
+- `play_purchases.sql` — `paystack_ref` PK
+- `play_sign_pairs.sql`
+- `play_track_defaults.sql` — nullable `image_path` / `label`; seed `full` → `"Learn Full Skill"` (images unseeded so driving art does not leak)
+- `fix_play_signs_rls.sql`, `reset_signs_fresh.sql`
 
-**Images stay unseeded, for the same reason as before**: it went through a wrong-then-corrected-then-emptied sequence worth recording: first seeded with `differentiation`/`identification`/`reading` (a stale pre-consolidation naming that no curriculum ever actually emits), corrected to the real track ids (`pairs`/`names`/`meanings`/`whereUsed`/`reading`), then emptied entirely once it became clear the only art available (`assets/driving/*.webp`) was driving-theory's own, not universal — seeding it would leak that art onto every other skill's matching track id (e.g. true-false's `reading` track would render driving's reading icon). The file's own `delete from ... where track_id in (...)` statement still cleans up either prior image seed if re-run against an already-migrated DB.
+Other tables (`play_curricula`, `play_signs`, `play_progress`, `play_user_stats`, `play_question_attempts`, `help_requests`) are used in app code; full column inventory is in `userdata.md`.
 
-**Labels have no such restriction, and are now seeded**: unlike per-skill art, a label like `full` → `"Learn Full Skill"` means the same thing for every skill by construction — there's no equivalent "leaking driving-theory's label onto true-false" risk, since the id itself (`full`, `reading`) already only exists as a universal concept. One seeded row as of this pass:
-```sql
-insert into play_track_defaults (track_id, label) values
-  ('full', 'Learn Full Skill')
-on conflict (track_id) do update set label = excluded.label, updated_at = now();
-```
-This replaces `constants/trackOptions.ts`'s old hardcoded `DEFAULT_TRACK_LABELS.full` string as the real source of truth (see §7/§9) — changing it going forward is `update play_track_defaults set label = '...' where track_id = 'full';`, no code change or redeploy.
+### Edge Functions (`supabase/functions/`)
 
-Uploaded via `scripts/upload-track-icons.mjs` to `play-assets/track-icons/` regardless of whether the DB table references them — driving-theory's own curriculum JSON references the uploaded files directly (see §18's storage bucket listing).
+| Function | Role |
+|----------|------|
+| `paystack-webhook` | HMAC-SHA512 (`PATASKILLS_PAYSTACK_SECRET_KEY`); mirrors paid events to Play + V2 purchase tables |
+| `revenuecat-webhook` | Play/App Store via RevenueCat; emails via Resend; updates premium rows |
+| `subscription-reminders` | T-7 / T-3 renewal emails (cron + `REMINDERS_SECRET`) |
 
-### `play_accounts.sql` (new)
-Defines the `play_accounts` table — the durable, email-keyed source of truth for the keys/premium economy once a device has ever linked an email:
-```sql
-play_accounts (
-  email        TEXT PRIMARY KEY,
-  balance      INTEGER,
-  is_premium   BOOLEAN,
-  reset_at     TIMESTAMPTZ,
-  reset_count  INTEGER,
-  updated_at   TIMESTAMPTZ
-)
-```
-Written to by `lib/keys.ts`'s `write()` (every local keys-state change) and read/seeded by `lib/restore.ts`.
-
-### `play_accounts_reset_count.sql` (new)
-A follow-on migration adding the `reset_count` column to `play_accounts` (the escalating-cooldown tier tracker) — implies `play_accounts` shipped once without it and was altered in place.
-
-### `play_purchases.sql` (new)
-Defines `play_purchases` — one row per completed Paystack transaction (`email`, `paystack_ref`, `keys`, `is_premium`, `updated_at`), upserted by `lib/billing.ts` on purchase and summed by `lib/restore.ts` when seeding a brand-new `play_accounts` row from purchase history.
-
-### `fix_play_signs_rls.sql` / `reset_signs_fresh.sql` (new)
-Standalone fix/reset scripts for `play_signs` row-level-security policy and data — one-off maintenance SQL, not part of the app's runtime schema definition.
+Deno; excluded from app `tsc`. Deploy with `supabase functions deploy … --no-verify-jwt`.
 
 ---
 
 ## 15. Assets (`assets/`)
 
-Unchanged categories from the prior audit (`fonts/`, `images/`, `homepage/`) plus:
-
-### `premium/`
-| File | Purpose |
-|------|---------|
-| `key.webp` | Key icon — keys economy UI throughout (balance heroes, reward screens, pack cards) |
-| `unlock.webp` | Unlock illustration for the session-unlocked screen |
-| `crown.webp` | Crown icon — Unlimited Pass / premium UI throughout |
-
-### `driving/` (new)
-Source files for driving-theory's own track illustrations: `differenciate.webp`, `name.webp`, `meaning.webp`, `usage.webp`, `reading.webp`. **Not referenced directly by app code** (`constants/trackOptions.ts`'s `LOCAL_IMAGES` is empty — see §7) — these are the originals `scripts/upload-track-icons.mjs` uploads to `play-assets/track-icons/`, which driving-theory's own curriculum JSON then links to via `tracks[].image` (see §14, §18). Kept here as the source-of-truth files for re-uploading, not as a runtime `require()` target. `full` reuses the remote curriculum cover image instead of a dedicated icon, by design.
+| Path | Use |
+|------|-----|
+| `fonts/` | Sora TTF + subset WOFF2 |
+| `images/` | Icons, favicon, mascot, splash |
+| `homepage/` | `driving.png`, `streak.webp`, `recharge.webp`, `trophy.webp` |
+| `profile/trophy.webp` | League UI |
+| `premium/` | `key.webp`, `unlock.webp`, `crown.webp` |
+| `driving/*.webp` | **Source files for upload**, not runtime `require()` |
 
 ---
 
 ## 16. Docs (`docs/`)
 
-### `learning-tracks-and-reading-mode.md`
-Unchanged from the prior audit — the original feature spec for Learning Tracks + Reading Mode, all 8 implementation steps complete as previously recorded. **No equivalent written spec exists yet for the monetization stack** (keys rework, premium/billing, ads, restore) documented in this update — that work was reconstructed entirely from source, same method noted at the top of this file.
+- `learning-tracks-and-reading-mode.md` — original tracks/reading spec
+- `FirstUpdate.md` — early dynamic-tracks notes (some asset wiring superseded by DB/JSON — see §7)
+
+Root: `json-conversion.md`, `userdata.md`.
 
 ---
 
 ## 17. Miscellaneous Files
 
-### `pataskills-swipe-demo.html` / `Inspos/` / `AGENTS.md` / `LICENSE`
-Unchanged from the prior audit.
-
-### `dist/` (new, not previously listed)
-Static web export output (`expo export -p web`) — a build artifact directory, not source. Not documented further here since its contents are fully derived from `app/`, `components/`, etc.
-
-### `.claude/` (new, not previously listed)
-Claude Code project-level settings for this repo.
+- `public/ads.txt` — AdSense crawler
+- `public/sw.js` — reset-reminder notifications when the tab is backgrounded
+- `jsons/` — raw source exports before conversion
+- `dist/` — web export artifact
+- `.claude/` — Claude Code settings
+- `Inspos/` — screenshots
 
 ---
 
 ## 18. Data Flow & Architecture
 
-### Database Schema (Supabase) — expanded
+### Storage bucket (`play-assets/`)
 
 ```
-┌─────────────────┐  ┌──────────────┐  ┌─────────────────┐  ┌──────────────────────┐  ┌──────────────────┐
-│  play_curricula  │  │  play_signs   │  │ play_sign_pairs │  │    play_accounts      │  │  play_purchases   │
-├─────────────────┤  ├──────────────┤  ├─────────────────┤  ├──────────────────────┤  ├──────────────────┤
-│ slug            │  │ id (uuid)    │  │ pair_id (PK)    │  │ email (PK)            │  │ paystack_ref (PK) │
-│ title           │  │ key          │  │ key_a → signs   │  │ balance               │  │ email             │
-│ cover_image_path│  │ name         │  │ key_b → signs   │  │ is_premium            │  │ keys              │
-│ json_path       │  │ image_path   │  └─────────────────┘  │ reset_at              │  │ is_premium        │
-│ is_active       │  │ created_at   │                       │ reset_count           │  │ updated_at        │
-└─────────────────┘  └──────────────┘                       │ updated_at            │  └──────────────────┘
-                                                              └──────────────────────┘
-                                          (play_progress table also exists — per-email
-                                           completed_topics/total_topics, synced by lib/progress.ts)
-
-Storage Bucket: play-assets/
-├── curricula/questions.sample.json  (driving-theory, json_path in play_curricula)
-│     { tracks: [pairs (filterRole: "pair", image: .../track-icons/pairs.webp), names
-│       (filterRole: "name", image: .../track-icons/names.webp), meanings (filterRole:
-│       "meaning", image: .../track-icons/meanings.webp), whereUsed (filterRole: "whereUsed",
-│       image: .../track-icons/whereUsed.webp), reading (kind: "reading", image:
-│       .../track-icons/reading.webp), full (kind: "full", no image — reuses cover_image_path)],
-│       questions: [...322, role-tagged], signs: [...92 SignCatalogEntry] }
-├── curricula/true-false.json  (true-false, json_path in play_curricula)
-│     { tracks: [full (kind: "full"), reading (kind: "reading")], questions: [...150,
-│       true/false, no role], signs: [] }
-├── curricula/bible-trivia.json  (new, 2026-09-06 — bible-trivia, json_path in play_curricula
-│     once the handed-off insert SQL is run)
-│     { questions: [...237, textChoice, no role, no tracks header — relies on compulsory
-│       full/reading synthesis], signs: [] }
-├── curricula/bible-trivia.webp  (new, 2026-09-06 — cover image, uploaded directly by the user,
-│     not via a script)
-├── track-icons/  (new) pairs.webp, names.webp, meanings.webp, whereUsed.webp, reading.webp
-│     — driving-theory's own per-track art (assets/driving/*.webp source files, uploaded by
-│     scripts/upload-track-icons.mjs). Referenced directly from driving-theory's JSON above,
-│     NOT from play_track_defaults (that table's image_path column is intentionally still
-│     empty for every row, even though it now has a labels-only 'full' row — see §14) — these
-│     files existing in storage doesn't by itself make them "universal", only driving-theory's
-│     JSON linking to them does.
-└── signs/      give_way.webp, stop.webp, ... (60+ sign images)
+curricula/
+  driving-theory JSON (tracks + ~322 questions + signs catalog) + driving.webp
+  true-false.json + true-false.webp
+  bible-trivia.json + bible-trivia.webp
+  world-facts.json + world-facts.webp
+track-icons/   pairs, names, meanings, whereUsed, reading  (driving JSON only)
+signs/         road-sign webps
 ```
 
-`play_accounts` is the durable cross-device source of truth for keys/premium once an email is linked; `play_purchases` is an append-only transaction log used only to seed a brand-new `play_accounts` row the first time an email is ever restored.
-
-### Landing → Session Flow (rebuilt)
+### Landing → play → money
 
 ```
-LandingScreen (Skills Corner grid)
-        │ tap a skill card                              ?track= deep link
-        ▼                                                          │
-LearningStyleScreen (full-page track list)                         │
-        │ tap a track                                              │
-        ▼                                                          ▼
-              TrackDetailScreen (preview + Start Practice) ◄────────┘
-                        │ Start Practice
-                        ▼
-              downloadSession(track)  ── min. 2000ms loading beat
-                        │
-                        ▼
-                  PlaySession
-                        │ topic exhausted in current track
-                        ▼
-              ModeSwitcherSheet ('trackComplete') ── markTrackCompleted(track)
-                        │ pick a different track           OR out of keys
-                        ▼                                          ▼
-              downloadSession(newTrack)                 SessionStateScreen (outOfKeys, scrollable)
-                                                                    │
-                                        ┌───────────────┬───────────┴──────────┬───────────────┐
-                                        ▼               ▼                      ▼               ▼
-                                  keys-packs      subscription-plans    how-free-mode-works  WatchAdPromptSheet
-                                        │               │                                       │
-                                        ▼               ▼                                       ▼
-                                  keys-confirm   subscription-confirm                    KeyRewardContent
-                                        │               │                             (grantBonusKey on tap)
-                                        └───────┬───────┘
-                                                ▼
-                                      lib/billing.ts → Paystack checkout
-                                                │
-                                                ▼
-                                      payment-complete (grantBonusKey / setPremium)
-                                                │
-                                                ▼
-                              router.replace('/', { resume: 'true' }) → auto-resumes session
+LandingScreen
+  → LearningStyleScreen → TrackDetailScreen → downloadSession → PlaySession
+Out of keys:
+  KeysOfferScreen → SessionStateScreen (KeysOptionsContent)
+    → keys-packs / subscription-plans / how-free-mode-works
+    → WatchAdPromptSheet (Android AdMob | web DownloadAppModal)
+Paystack → payment-complete → /?resume=true
 ```
 
-### Keys Economy Flow (rebuilt — escalating cooldown + premium bypass)
+### Keys
 
 ```
-App Start: AsyncStorage → KeysState { balance: 3, resetAt: null, isPremium: false, resetCount: 0 }
-                │
-                ▼
-         Enter/advance Session ── spendKey() → balance: 2, 1, 0   (no-op if isPremium: balance stays 999999)
-                │ (balance hits 0)
-                ▼
-         Out of Keys screen (scrollable) shown ── startResetTimer()
-                │        resetAt = now + resetDurationFor(resetCount)   [5min → 2hr → 8hr, capped]
-                │
-       ┌────────┼─────────────────┬────────────────────┐
-       ▼        ▼                 ▼                     ▼
-  Buy keys  Subscribe      Watch a rewarded ad     Wait for timer
-  (Paystack) (Paystack)   (+1 via grantBonusKey,   (useKeys polls 1s;
-       │        │          tap-gated, see          applyReset() fires
-       ▼        ▼          WatchAdPromptSheet)      once resetAt passes)
-  payment-complete.tsx                                    │
-   grantBonusKey /                                         ▼
-   setPremium(true)                              balance: 3, resetAt: null,
-       │                                          resetCount: +1 (next cooldown
-       ▼                                          tier escalates)
-  resume session
+Start: balance 3
+spendKey on session enter (no-op if premium)
+balance 0 → startResetTimer (5m / 2h / 8h)
+  wait | Paystack pack | Paystack Unlimited | Android rewarded +1
+applyReset → balance 3, resetCount++
+premium expiresAt → setPremium(false), local + play_accounts
 ```
 
-### Component Hierarchy (updated 2026-09-07)
+### XP / mistakes / reports
+
+`PlaySession` awards **5 XP per correct** in the completed topic (`recordXpEarned` + `recordActivityToday`). `CardDeck` writes mistakes live. Reports + leaderboard read XP, streak, leagues, mistakes counts.
+
+### Component hierarchy (runtime)
 
 ```
-RootLayout (_layout.tsx)
-└── ThemeProvider
-    └── RootLayoutInner
-        └── Stack
-            ├── RootGate (index.tsx) — checks areTabsUnlocked()
-            │   ├── [Pre-unlock]: SkillsFlow
-            │   │   ├── LandingScreen (Skills Corner grid)
-            │   │   │   └── SkillGridCard (×N)
-            │   │   ├── LearningStyleScreen (ModeCard ×N)
-            │   │   ├── TrackDetailScreen
-            │   │   ├── DownloadingScreen
-            │   │   └── PlaySession
-            │   │       ├── CardDeck (QuizCardDeck / ReadingCardDeck)
-            │   │       │   ├── TwoImageCard / ReadingCard
-            │   │       │   ├── CheckButton, ScrollHintChevron
-            │   │       │   ├── LearnMoreSheet, FeedbackSheet, QuitConfirmSheet
-            │   │       │   └── [Mistakes Hook]: recordQuestionFailure / recordQuestionSuccess
-            │   │       ├── ModeSwitcherSheet
-            │   │       └── SessionStateScreen
-            │   │           ├── outOfKeys → KeysOptionsContent
-            │   │           └── WatchAdPromptSheet → KeyRewardContent
-            │   │
-            │   └── [Post-unlock]: Redirect → /(tabs)/home
-            │
-            ├── TabsLayout (app/(tabs)/_layout.tsx)
-            │   ├── FloatingTabBar (animated sliding pill: Home, Skills, Keys, Reports)
-            │   ├── HomeTab (home.tsx)
-            │   │   ├── AppHeader
-            │   │   └── SkillProgressCard (×N, resume actions)
-            │   ├── SkillsTab (skills.tsx)
-            │   │   ├── AppHeader
-            │   │   └── SkillsFlow (embedded)
-            │   ├── KeysTab (keys.tsx)
-            │   │   ├── AppHeader
-            │   │   └── KeysOptionsContent (buy keys / subscribe / free-trial timer)
-            │   └── ReportsTab (reports.tsx)
-            │       ├── AppHeader
-            │       ├── StatRow (Day Streak + Total XP)
-            │       ├── WeekCalendarRow (7-day Mon–Sun illuminated dots)
-            │       ├── KeysRow (Balance shortcut)
-            │       ├── LeaguePanel (Bronze/Silver/Gold tier + progress bar)
-            │       └── SkillReportCards (percentage, XP badge, N Missed button)
-            │
-            ├── SettingsScreen (app/settings.tsx)
-            │   ├── AppHeader / Back Header
-            │   ├── SectionHeader, SettingsRow, SettingsToggleRow
-            │   └── RestoreAccountModal
-            │
-            ├── MistakesScreen (app/mistakes.tsx)
-            │   ├── Back Header + Filter Tabs (All vs Unsolved)
-            │   └── MistakeCard (×N, question, mistake count, correct answer, mastered chip)
-            │
-            ├── keys-packs → keys-confirm
-            ├── subscription-plans → subscription-confirm
-            ├── premium-benefits, how-keys-work, how-free-mode-works
-            └── payment-complete
+RootLayout
+└── Stack
+    ├── index RootGate → SkillsFlow  OR  Redirect /(tabs)/home
+    ├── (tabs) + FloatingTabBar
+    │   ├── home: AppHeader + SkillProgressCard*
+    │   ├── skills: AppHeader + LandingScreen
+    │   ├── keys: AppHeader + Premium card | KeysOptionsContent
+    │   └── reports: AppHeader + StatCards + WeekCalendarRow + LeaguePanel + SkillReportCard*
+    ├── play: SkillsFlow standalone
+    ├── settings, manage-subscription, leaderboard, mistakes
+    ├── help, feedback-form
+    ├── keys-* / subscription-* / payment-complete / explainers
+    └── admin/signs
 ```
 
-Every standalone route outside the tab shell renders its body inside `ScreenTransition` — web-only slide-in, paired with `navPush`/`navBack`/`navReplace` from `lib/navDirection.ts` (see §6.5).
+Standalone routes wrap with `ScreenTransition` on web.
 
-### Progress, Analytics & Mistakes Feedback Loop (New 2026-09-07)
+### Animation (three mechanisms)
 
-```
-                       ┌─────────────────────────────────────┐
-                       │        PlaySession (Gameplay)       │
-                       └──────────────────┬──────────────────┘
-                                          │
-                  ┌───────────────────────┴───────────────────────┐
-                  ▼                                               ▼
-     CardDeck: Check Answer                        SessionStateScreen: Topic Complete
-  (records attempts in real-time)                     (advances topic / calculates XP)
-                  │                                               │
-       ┌──────────┴──────────┐                         ┌──────────┴──────────┐
-       ▼                     ▼                         ▼                     ▼
-Wrong Answer           Correct Answer             recordXpEarned()    recordActivityToday()
-recordQuestionFailure recordQuestionSuccess      (adds 5 XP / correct) (adds YYYY-MM-DD to
-(increments failCount (marks solved: true)             │               @play/activity_dates)
- in @play/mistakes)          │                         ▼                     │
-       │                     │                  @play/total_xp &             ▼
-       └──────────┬──────────┘                  @play/xp:${skill}       currentStreak &
-                  │                                    │                7-day week dots
-                  ▼                                    │                     │
-           app/mistakes.tsx                            └──────────┬──────────┘
-       (Mistake Overview drill-down)                              │
-                                                                  ▼
-                                                        app/(tabs)/reports.tsx
-                                                    (Live Streak, XP, League, Reports)
-```
+1. **Stage swap** in `SkillsFlow` — Reanimated enter/exit on `landing` / `learning-style` / `track-detail` / `downloading`
+2. **PlaySession** — `topicComplete` uses the same enter/exit; `outOfKeys` is an unanimated cut
+3. **CardDeck** — one horizontal strip, `withTiming` on Continue/Next (no drag)
 
-### Track Derivation Summary
+### Known doc vs product caveats
 
-Unchanged from the prior audit — see that revision's table (`pairs`/`names`/`meanings`/`whereUsed`/`full`/`reading`, their role filters, grouping functions, and session `kind`).
-
----
-
-### Animation Patterns (three different mechanisms, all called "swipe" colloquially)
-
-The app has three genuinely different ways something slides across the screen. They're easy to conflate because they all look like a horizontal swipe, but the underlying mechanics — and what triggers them — are not the same.
-
-**1. Stage transitions (`index.tsx`) — mount/unmount slide, web-only outer wrapper**
-`LandingScreen` ↔ `LearningStyleScreen` ↔ `TrackDetailScreen` ↔ `DownloadingScreen` are separate components swapped via the `stage` state machine. Each non-`session` stage renders inside one shared `<Animated.View key={stage} entering={SlideInRight/SlideInLeft.duration(280)} exiting={FadeOut.duration(180)}>`. `stageDirection` ('forward'/'backward') decides which edge the new screen enters from. Because the `key` changes, React actually tears down the old component and mounts a new one — the slide is that new component's Reanimated *entrance* animation, playing once, unattended, no gesture involved. Separately, the whole `index.tsx` tree is also wrapped in `<ScreenTransition>` (`components/nav/ScreenTransition.tsx`) — a **web-only** page-level slide keyed to actual route focus (`useFocusEffect`), used for the standalone routes like `/subscription-plans` ↔ `/subscription-confirm`. It's a no-op on native. The two wrappers are independent; PlaySession is deliberately rendered *outside* the inner keyed `Animated.View` (see comment in `index.tsx`) so browser back-nav into `/` doesn't double-animate.
-
-**2. `PlaySession`'s own internal states — same mount/unmount pattern, but inconsistently applied**
-`flowState === 'topicComplete'` uses the identical pattern to #1: wrapped in its own `<Animated.View entering={SlideInRight/SlideInLeft} exiting={FadeOut}>`, direction driven by a local `screenDirection`. But `flowState === 'outOfKeys'` renders `<SessionStateScreen kind="outOfKeys" .../>` with **no Animated.View wrapper at all** — it's a hard, unanimated cut. This is the one state in the whole flow that never got an entrance animation (noted 2026-09-05; not fixed, just documented — the topicComplete slide was flagged as visually "cropped inside its view" on desktop vs. the stage-transition version, which needs a look before touching either).
-
-**3. `CardDeck.tsx` question-to-question advance — one continuous strip, not swap-based, not gesture-driven**
-Both `QuizCardDeck` and `ReadingCardDeck` keep every question/sign card pre-rendered side-by-side in one long horizontal strip (`stripX` shared value, `Animated.View` with `translateX`). Advancing (tapping Continue on the FeedbackSheet, or Next in reading mode) calls `triggerAdvance()`, which runs one scripted `withTiming(targetX, { duration: 320, easing: Easing.out(Easing.cubic) })` to shift the whole strip one card-width left. Nothing mounts or unmounts — the strip itself never resets — and there is **no drag/pan gesture anywhere in this file** despite it visually reading as a "swipe": the "swipe" is entirely the scripted animation firing off a button tap, same as #1/#2. It only ever goes one direction (left) since there's no going back through questions.
-
-**In short:** #1 and #2's `topicComplete` case are the same trick (component swap + Reanimated enter/exit), #2's `outOfKeys` case is a plain unanimated cut, and #3 is a single strip sliding via `withTiming` rather than any component being swapped or dragged.
+- `userdata.md` still says +10 XP in one place; **code is +5** (`XP_PER_CORRECT`)
+- Settings Help URL vs leftover `/help` routes
+- `webRewardedAd` / `WatchingAdContent` / AdSense unit are **not** on the live Watch Ad path
+- Football conversion is **not** a shipped landing skill
+- League names in UI must match `lib/leagues.ts` (gemstone ladder), not a Bronze/Silver/Gold set
 
 ---
 

@@ -14,10 +14,9 @@ import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
 import { showRewardedForSession } from '@/lib/ads';
-import { showWebRewardedAd } from '@/lib/webRewardedAd';
 import { grantBonusKey } from '@/lib/keys';
 import { KeyRewardContent } from './KeyRewardSuccessModal';
-import { WatchingAdContent } from './WatchingAdContent';
+import { DownloadAppModal } from '@/components/ui/DownloadAppModal';
 
 interface WatchAdPromptSheetProps {
   visible: boolean;
@@ -39,9 +38,12 @@ export function WatchAdPromptSheet({
   // Modals and toggling them in the same tick is what caused the reward
   // screen to look squashed/stretched and to get dismissed automatically on
   // Android (the OS was closing both modal windows at once).
-  // 'adsense' = AdSense display-unit fallback (WatchingAdContent), reached
-  // only when the real web rewarded ad reports 'unavailable'.
-  const [step, setStep] = useState<'prompt' | 'adsense' | 'reward'>('prompt');
+  // 'download' = web-only fallback. Rewarded ads aren't a reliable web
+  // product (the Ad Placement API used to require account enrollment, and
+  // adBreakDone sometimes never fires — leaving the WATCH AD button spinning
+  // forever with no timeout). Rather than gamble on that, web goes straight
+  // to prompting an app install, same as the subscribe flow.
+  const [step, setStep] = useState<'prompt' | 'download' | 'reward'>('prompt');
 
   // Reset back to the prompt step whenever the sheet is reopened.
   React.useEffect(() => {
@@ -51,22 +53,11 @@ export function WatchAdPromptSheet({
   }, [visible]);
 
   const handleWatchAd = async () => {
-    // On web, try the real full-screen Ad Placement API rewarded ad first
-    // (lib/webRewardedAd.ts + app/+html.tsx). If it's unavailable (script
-    // blocked, account not enrolled, no fill), fall through to the AdSense
-    // display-unit fallback (WatchingAdContent) rather than giving up.
+    // Rewarded ads are a native-app feature. On web, skip straight to the
+    // install prompt instead of attempting the ad (see the 'download' step
+    // note above for why).
     if (Platform.OS === 'web') {
-      setLoadingAd(true);
-      const webOutcome = await showWebRewardedAd('watch_ad_session');
-      setLoadingAd(false);
-
-      if (webOutcome === 'earned') {
-        setStep('reward');
-      } else if (webOutcome === 'unavailable') {
-        setStep('adsense');
-      } else {
-        onDismissToHome();
-      }
+      setStep('download');
       return;
     }
 
@@ -103,15 +94,12 @@ export function WatchAdPromptSheet({
         visible={visible}
         transparent
         animationType="fade"
-        onRequestClose={step === 'prompt' ? onClose : () => {}}
+        onRequestClose={step === 'prompt' || step === 'download' ? onClose : () => {}}
       >
         {step === 'reward' ? (
           <KeyRewardContent onUnlockNextSession={handleUnlockNextSession} />
-        ) : step === 'adsense' ? (
-          <WatchingAdContent
-            slotId={process.env.EXPO_PUBLIC_ADSENSE_REWARD_SLOT_ID}
-            onComplete={() => setStep('reward')}
-          />
+        ) : step === 'download' ? (
+          <DownloadAppModal visible onClose={onClose} source="ads" />
         ) : (
         <View style={styles.backdrop}>
           <View style={styles.sheetWrapper}>
