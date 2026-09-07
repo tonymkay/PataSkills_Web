@@ -10,6 +10,7 @@ import { ThemeProvider as NavigationThemeProvider, DarkTheme as NavigationDarkTh
 import { fontAssets } from '@/constants/typography';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { initNotifications } from '@/lib/notifications';
+import { configureBilling } from '@/lib/billing';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -35,6 +36,7 @@ function RootLayoutInner() {
   useEffect(() => {
     onLayout();
     void initNotifications();
+    void configureBilling();
   }, [onLayout]);
 
   if (!fontsLoaded) return null;

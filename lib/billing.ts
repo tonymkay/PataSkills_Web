@@ -81,20 +81,38 @@ export async function purchasePlan(packageId: string, email: string, skill?: str
     await AsyncStorage.setItem('@play/user_email', email);
     const reference = await openCheckout(amountKES, email, `PataSkills ${plan.name}`, 'subscription', plan.packageId, undefined, expiresAt);
     if (!reference) return 'cancelled';
-    // Save purchase to Supabase
+
+    // Save purchase & account state to Supabase
     try {
       await supabase.from('play_purchases').upsert(
         { email, paystack_ref: reference, keys: 0, is_premium: true, updated_at: new Date().toISOString() },
         { onConflict: 'paystack_ref' }
       );
+      await supabase.from('play_accounts').upsert(
+        { email, balance: 999999, is_premium: true, reset_at: null, updated_at: new Date().toISOString() },
+        { onConflict: 'email' }
+      );
     } catch {}
+
+    await AsyncStorage.setItem('@play/premium_expires_at', expiresAt);
+
     const { router } = await import('expo-router');
     // skill/track carried through so "Continue Playing" on payment-complete
     // resumes the same skill/track instead of falling back to
     // driving-theory (Bug B fix, §B.2/§C.1 of the multi-skill architecture
     // doc). Both are optional -- this purchase flow can be entered without
     // an active session context.
-    router.replace({ pathname: '/payment-complete', params: { reference, type: 'subscription', email, ...(skill ? { skill } : {}), ...(track ? { track } : {}) } });
+    router.replace({
+      pathname: '/payment-complete',
+      params: {
+        reference,
+        type: 'subscription',
+        email,
+        expiresAt,
+        ...(skill ? { skill } : {}),
+        ...(track ? { track } : {}),
+      },
+    });
     return 'purchased';
   } catch {
     return 'error';
@@ -124,4 +142,113 @@ export async function purchaseKeyPack(packId: string, email: string, skill?: str
   } catch {
     return 'error';
   }
+}
+
+export interface SubscriptionInfo {
+  active: boolean;
+  expiresAt: string | null;
+  startedAt: string | null;
+  willRenew: boolean | null;
+  managementURL: string | null;
+  billingIssueDetectedAt: string | null;
+}
+
+export interface PremiumOverrideInfo {
+  awardedAt: string;
+  expiresAt: string | null;
+  claimed: boolean;
+  permanent: boolean;
+}
+
+export async function getSubscriptionInfo(): Promise<SubscriptionInfo | null> {
+  try {
+    const { getKeysState } = await import('@/lib/keys');
+    const state = await getKeysState();
+    if (!state.isPremium) return null;
+
+    let expiresAt: string | null = state.expiresAt ?? null;
+    if (!expiresAt) {
+      expiresAt = await AsyncStorage.getItem('@play/premium_expires_at');
+    }
+
+    const email = await AsyncStorage.getItem('@play/user_email');
+    if (email) {
+      const { data } = await supabase
+        .from('play_accounts')
+        .select('is_premium')
+        .eq('email', email)
+        .maybeSingle();
+      if (data && data.is_premium === false) {
+        return null;
+      }
+    }
+
+    return {
+      active: true,
+      expiresAt: expiresAt ?? null,
+      startedAt: null,
+      willRenew: null,
+      managementURL: 'https://play.google.com/store/account/subscriptions',
+      billingIssueDetectedAt: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getPremiumOverrideInfo(): Promise<PremiumOverrideInfo | null> {
+  try {
+    const { getKeysState } = await import('@/lib/keys');
+    const state = await getKeysState();
+    if (!state.isPremium) return null;
+    const expiresAt = state.expiresAt ?? (await AsyncStorage.getItem('@play/premium_expires_at'));
+    return {
+      awardedAt: new Date().toISOString(),
+      expiresAt: expiresAt ?? null,
+      claimed: true,
+      permanent: !expiresAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function claimPremiumOverride(): Promise<void> {
+  /* no-op */
+}
+
+export async function enforceLocalExpiry(): Promise<void> {
+  try {
+    const localExpires = await AsyncStorage.getItem('@play/premium_expires_at');
+    if (localExpires) {
+      const expTime = new Date(localExpires).getTime();
+      if (!isNaN(expTime) && Date.now() >= expTime) {
+        const { setPremium } = await import('@/lib/keys');
+        await setPremium(false);
+        await AsyncStorage.removeItem('@play/premium_expires_at');
+        const email = await AsyncStorage.getItem('@play/user_email');
+        if (email) {
+          await supabase.from('play_accounts').update({ is_premium: false, balance: 3, updated_at: new Date().toISOString() }).eq('email', email);
+        }
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+export async function syncPremiumOverride(): Promise<void> {
+  await enforceLocalExpiry();
+}
+
+export async function configureBilling(): Promise<void> {
+  await enforceLocalExpiry();
+}
+
+export async function restorePurchases(): Promise<boolean> {
+  return false;
+}
+
+export async function syncEntitlement(): Promise<boolean> {
+  return false;
 }

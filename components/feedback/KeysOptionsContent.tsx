@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Image } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, Image } from 'react-native';
 import { ChevronRight, Clock, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,6 +8,7 @@ import { FontFamily } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
 import { Toggle } from '@/components/ui/Toggle';
+import { DownloadAppModal } from '@/components/ui/DownloadAppModal';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { navPush } from '@/lib/navDirection';
 import { getKeysState, type KeysState } from '@/lib/keys';
@@ -22,6 +23,10 @@ interface KeysOptionsContentProps {
   /** Override the timer target — when omitted the component reads it from
    *  the keys state in AsyncStorage on mount. */
   resetAt?: number | null;
+  /** Current key balance — when omitted, reads from getKeysState() on mount. */
+  balance?: number | null;
+  /** Whether the account has unlimited premium pass. */
+  isPremium?: boolean;
   /** Optional custom buy-keys handler. Falls back to navigating to /keys-packs. */
   onBuyKeysPress?: () => void;
   /** Optional custom subscribe handler. Falls back to navigating to /subscription-plans. */
@@ -38,6 +43,8 @@ export function KeysOptionsContent({
   skillId,
   track,
   resetAt: resetAtProp,
+  balance: balanceProp,
+  isPremium: isPremiumProp,
   onBuyKeysPress,
   onSubscribePress,
 }: KeysOptionsContentProps) {
@@ -46,16 +53,38 @@ export function KeysOptionsContent({
   const [selectedOption, setSelectedOption] = useState<'keys' | 'unlimited' | 'trial' | null>(null);
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [resetAt, setResetAt] = useState<number | null>(resetAtProp ?? null);
+  const [balance, setBalance] = useState<number | null>(balanceProp ?? null);
+  const [isPremium, setIsPremium] = useState<boolean>(isPremiumProp ?? false);
+  // Web users see a "download the app" modal for subscriptions.
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
-  // Read timer state + reminder pref on mount when no prop override
+  // Read timer state + keys state + reminder pref on mount when no prop override
   useEffect(() => {
-    if (resetAtProp === undefined) {
-      getKeysState().then((ks: KeysState) => setResetAt(ks.resetAt)).catch(() => {});
+    if (resetAtProp === undefined || balanceProp === undefined || isPremiumProp === undefined) {
+      getKeysState()
+        .then((ks: KeysState) => {
+          if (resetAtProp === undefined) setResetAt(ks.resetAt);
+          if (balanceProp === undefined) setBalance(ks.isPremium ? 999999 : ks.balance);
+          if (isPremiumProp === undefined) setIsPremium(!!ks.isPremium);
+        })
+        .catch(() => {});
     }
     AsyncStorage.getItem('@play/timer_reminders').then((val) => {
       const enabled = val === 'true';
       setRemindersEnabled(enabled);
     }).catch(() => {});
+  }, [resetAtProp, balanceProp, isPremiumProp]);
+
+  useEffect(() => {
+    if (balanceProp !== undefined) setBalance(balanceProp);
+  }, [balanceProp]);
+
+  useEffect(() => {
+    if (isPremiumProp !== undefined) setIsPremium(isPremiumProp);
+  }, [isPremiumProp]);
+
+  useEffect(() => {
+    if (resetAtProp !== undefined) setResetAt(resetAtProp);
   }, [resetAtProp]);
 
   // Live countdown tick
@@ -73,7 +102,13 @@ export function KeysOptionsContent({
   const timerText =
     hours > 0
       ? `Resets in ${hours}h ${String(minutes).padStart(2, '0')}m`
-      : `Resets in ${minutes}:${String(seconds).padStart(2, '0')} mins`;
+      : `Resets in ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} mins`;
+
+  const hasKeys = isPremium || (balance !== null && balance > 0);
+
+  const trialSubtitle = hasKeys
+    ? (isPremium ? 'You have unlimited sessions' : `You have ${balance} session${balance === 1 ? '' : 's'} left`)
+    : (resetAt ? timerText : 'Free session timer active');
 
   const handleBuyKeys = () => {
     if (onBuyKeysPress) {
@@ -86,9 +121,15 @@ export function KeysOptionsContent({
   const handleSubscribe = () => {
     if (onSubscribePress) {
       onSubscribePress();
-    } else {
-      navPush(router, { pathname: '/subscription-plans', params: { skill: skillId, track } });
+      return;
     }
+    // On web, subscriptions are only available on the mobile app via
+    // Google Play / RevenueCat. Show the "download the app" modal.
+    if (Platform.OS === 'web') {
+      setShowDownloadModal(true);
+      return;
+    }
+    navPush(router, { pathname: '/subscription-plans', params: { skill: skillId, track } });
   };
 
   const handleToggleReminders = async (val: boolean) => {
@@ -105,6 +146,7 @@ export function KeysOptionsContent({
   };
 
   return (
+    <>
     <View style={styles.options}>
       {/* Option 1: Buy one time keys */}
       <Pressable
@@ -133,12 +175,7 @@ export function KeysOptionsContent({
               <Text style={[styles.cardTitle, { color: colors.onSurface }]}>
                 Buy Temporary Access Keys
               </Text>
-              <Text
-                style={[
-                  styles.cardSubtitle,
-                  { color: selectedOption === 'keys' ? StaticColors.achievementAmber : colors.onSurfaceVariant },
-                ]}
-              >
+              <Text style={[styles.cardSubtitle, { color: colors.onSurfaceVariant }]}>
                 Packs of 20, 40, 80 or 120 keys
               </Text>
             </View>
@@ -177,12 +214,7 @@ export function KeysOptionsContent({
               <Text style={[styles.cardTitle, { color: colors.onSurface }]}>
                 Subscribe for Unlimited
               </Text>
-              <Text
-                style={[
-                  styles.cardSubtitle,
-                  { color: selectedOption === 'unlimited' ? StaticColors.successLime : colors.onSurfaceVariant },
-                ]}
-              >
+              <Text style={[styles.cardSubtitle, { color: StaticColors.successLime, fontFamily: FontFamily.semiBold }]}>
                 Get full experience with premium
               </Text>
             </View>
@@ -202,7 +234,7 @@ export function KeysOptionsContent({
         }}
         style={({ pressed }) => [
           styles.card,
-          styles.trialCard,
+          !hasKeys && styles.trialCard,
           {
             backgroundColor: colors.surfaceContainer,
             borderColor: selectedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.surfaceContainerHigh,
@@ -221,7 +253,7 @@ export function KeysOptionsContent({
                 Use Free trial
               </Text>
               <Text style={[styles.cardSubtitle, { color: colors.tealAccent || '#2BD9C4', fontFamily: FontFamily.semiBold }]}>
-                {resetAt ? timerText : 'Free session timer active'}
+                {trialSubtitle}
               </Text>
             </View>
           </View>
@@ -231,22 +263,32 @@ export function KeysOptionsContent({
           />
         </View>
 
-        {/* Reminders Toggle Subrow */}
-        <View style={[styles.reminderSubrow, { borderTopColor: colors.surfaceContainerHigh }]}>
-          <View style={styles.reminderLeft}>
-            <Bell size={16} color={remindersEnabled ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant} />
-            <Text style={[styles.reminderLabel, { color: colors.onSurfaceVariant }]}>
-              Get reminders when timer resets
-            </Text>
+        {/* Reminders Toggle Subrow - only shown when out of keys and cooldown timer is active */}
+        {!hasKeys && (
+          <View style={[styles.reminderSubrow, { borderTopColor: colors.surfaceContainerHigh }]}>
+            <View style={styles.reminderLeft}>
+              <Bell size={16} color={remindersEnabled ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant} />
+              <Text style={[styles.reminderLabel, { color: colors.onSurfaceVariant }]}>
+                Get reminders when timer resets
+              </Text>
+            </View>
+            <Toggle
+              value={remindersEnabled}
+              onValueChange={handleToggleReminders}
+              activeColor={colors.tealAccent || '#2BD9C4'}
+            />
           </View>
-          <Toggle
-            value={remindersEnabled}
-            onValueChange={handleToggleReminders}
-            activeColor={colors.tealAccent || '#2BD9C4'}
-          />
-        </View>
+        )}
       </Pressable>
     </View>
+
+    {/* Web-only: "Download the app" redirect for subscriptions */}
+    <DownloadAppModal
+      visible={showDownloadModal}
+      onClose={() => setShowDownloadModal(false)}
+      source="subscribe"
+    />
+    </>
   );
 }
 

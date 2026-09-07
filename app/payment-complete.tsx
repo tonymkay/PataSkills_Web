@@ -19,7 +19,7 @@ export default function PaymentCompleteScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ type?: string; count?: string; reference?: string; email?: string; skill?: string; track?: string }>();
+  const params = useLocalSearchParams<{ type?: string; count?: string; reference?: string; email?: string; skill?: string; track?: string; expiresAt?: string }>();
 
   const isKeys = params.type === 'keys' || (!params.type && !!params.count);
   const keysCount = Number(params.count || 20);
@@ -30,7 +30,7 @@ export default function PaymentCompleteScreen() {
     if (isKeys) {
       void grantBonusKey(keysCount, 'key_pack_purchase', paystackRef);
     } else {
-      void setPremium(true);
+      void setPremium(true, params.expiresAt);
     }
 
     if (!userEmail) {

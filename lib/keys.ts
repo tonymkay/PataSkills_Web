@@ -26,6 +26,7 @@ export interface KeysState {
   balance: number;
   initialized: boolean;
   isPremium?: boolean;
+  expiresAt?: string | null;
   /** Epoch ms when balance refills. Set the moment balance hits 0; null
    *  whenever balance is > 0. */
   resetAt: number | null;
@@ -40,7 +41,7 @@ async function read(): Promise<KeysState> {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as KeysState;
   } catch {}
-  return { balance: INITIAL_KEYS, initialized: false, resetAt: null, isPremium: false };
+  return { balance: INITIAL_KEYS, initialized: false, resetAt: null, isPremium: false, expiresAt: null };
 }
 
 async function write(state: KeysState): Promise<void> {
@@ -72,8 +73,17 @@ async function write(state: KeysState): Promise<void> {
 
 /** The timer is the source of truth: once `resetAt` has passed, the balance
  *  refills as soon as anything reads state — no separate "day changed"
- *  check, no UI action required. */
+ *  check, no UI action required. Also checks for subscription expiration. */
 function applyReset(state: KeysState): KeysState {
+  if (state.isPremium && state.expiresAt && Date.now() >= new Date(state.expiresAt).getTime()) {
+    return {
+      ...state,
+      isPremium: false,
+      expiresAt: null,
+      balance: state.balance > 0 && state.balance < 999999 ? state.balance : INITIAL_KEYS,
+      resetAt: null,
+    };
+  }
   if (state.balance <= 0 && state.resetAt !== null && Date.now() >= state.resetAt) {
     return {
       ...state,
@@ -129,10 +139,19 @@ export async function grantBonusKey(count: number, _reason?: string, _ref?: stri
   return next.balance;
 }
 
-export async function setPremium(isPremium: boolean): Promise<void> {
+export async function setPremium(isPremium: boolean, expiresAt?: string | null): Promise<void> {
   const state = await getKeysState();
-  const next: KeysState = { ...state, isPremium };
+  const next: KeysState = {
+    ...state,
+    isPremium,
+    expiresAt: isPremium ? (expiresAt !== undefined ? expiresAt : state.expiresAt ?? null) : null,
+  };
   await write(next);
+  if (isPremium && expiresAt) {
+    await AsyncStorage.setItem('@play/premium_expires_at', expiresAt).catch(() => {});
+  } else if (!isPremium) {
+    await AsyncStorage.removeItem('@play/premium_expires_at').catch(() => {});
+  }
 }
 
 /** Starts the reset countdown — call this when the "out of keys" screen is

@@ -1,6 +1,14 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-07 (l) — Shipped the **Dedicated Full-Screen Learning Route (`app/play.tsx`)**, **Skills Tab Isolation**, **Keys Offer Navigation Alignment**, **Settings Dark Theme Toggle**, and **Header/Typography Polish**:
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-07 (m) — Shipped the **Unlimited Subscription Flow**, **Keys Tab Active Premium State**, **Manage Subscription Screen**, **Background Reset Reminders**, and **Supabase Edge Functions Mirroring**:
+> **(1) Keys Tab Active Premium Screen (`app/(tabs)/keys.tsx`)**: When `isPremium` is true (Unlimited subscription active), the keys tab transforms into the active Premium card matching PataSkillsV2. Features the 3D crown graphic (`assets/premium/crown.webp`, 168x168), "You're on Premium" headline, active expiry date or unlimited access subtitle, a "Manage subscription" button routing to `/manage-subscription`, and a "Premium benefits" shortcut row. If not premium, cleanly shows key count hero, "N keys left", and session unlock options.
+> **(2) Dedicated Manage Subscription Screen (`app/manage-subscription.tsx`)**: Screen accessible from Settings or Keys Tab with plan state card (active Premium badge or Free upgrade prompt), direct management action (Play Store subscriptions / management URL), and Help section with public FAQ links.
+> **(3) Settings Integration (`app/settings.tsx`)**: Added "Manage Subscriptions" row under Account with live `Premium` or `Free` badge, routing directly to `/manage-subscription`.
+> **(4) Billing & Keys Sync Layer (`lib/billing.ts`, `lib/keys.ts`)**: Added `SubscriptionInfo` and `PremiumOverrideInfo` types, `getSubscriptionInfo()`, `enforceLocalExpiry()`, and `configureBilling()`. Supports `expiresAt` timestamps in `KeysState` and `AsyncStorage` (`@play/premium_expires_at`), automatically expiring subscriptions locally and remotely once the valid duration ends.
+> **(5) Supabase Edge Functions (`supabase/functions/`)**: Added `paystack-webhook`, `revenuecat-webhook`, and `subscription-reminders` edge functions to `pataproducts/play/supabase/functions/`. Configured `paystack-webhook` to verify HMAC-SHA512 signatures and mirror successful payments to both `web_purchases`/`user_premium` and `play_purchases`/`play_accounts`.
+> **(6) Environment & Auth Keys Sync (`.env`)**: Added missing keys from PataSkillsV2 to `play/.env`: `EXPO_PUBLIC_RC_ANDROID_KEY`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`, `EXPO_PUBLIC_APP_ENV`, and `EXPO_PUBLIC_APP_VERSION`.
+>
+> **Last updated**: 2026-09-07 (l) — Shipped the **Dedicated Full-Screen Learning Route (`app/play.tsx`)**, **Skills Tab Isolation**, **Keys Offer Navigation Alignment**, **Settings Dark Theme Toggle**, and **Header/Typography Polish**:
 > **(1) Dedicated Full-Screen Learning Route (`app/play.tsx`)**: Created `/play` outside the `(tabs)` group so no bottom floating tab bar is rendered during learning-style selection, track detail preview, downloading, quiz card play, and payment flows. Buttons like "PAY WITH PAYSTACK", choice pills, and continue buttons have full unobstructed viewport height and safe area insets.
 > **(2) Skills Tab Isolation (`app/(tabs)/skills.tsx`)**: Refactored to strictly display the 2-column grid (`LandingScreen`) under `AppHeader`. Tapping any skill or restoring progress navigates to `/play`. Added `bottomPadding` support so the bottom-most cards clear the floating tab bar during scroll.
 > **(3) Headroom & Typography Polish**: Matched the headroom above "Skills Corner" on `LandingScreen` with "My Skills" on the Home tab by standardizing `containerContent.paddingTop: Spacing.base` (8px) and `lineHeight: 34`. Updated `SkillProgressCard.tsx` so the green completion percentage label (e.g. `7% Complete`) uses regular font (`FontFamily.regular`) instead of bold. Centered "My Skills" on Home tab and "Unlock more sessions" on Keys tab (removed secondary text).
@@ -507,12 +515,14 @@ Renders `<Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={
 #### `(tabs)/keys.tsx` — Keys Tab
 - The standalone, permanent home for key management.
 - **Keys Count Hero**: Prominent large key balance number (`useKeys()`, displaying `∞` if premium) paired with the golden 3D key asset (`assets/premium/key.webp`).
-- Regular font sub-heading: `"Unlock more sessions"` (`FontFamily.regular`).
-- Balanced spacing: compact headroom below `AppHeader` and dynamic bottom inset padding (`paddingBottom: insets.bottom + 88`) ensuring the full options content (including the free-trial reminder toggle) can be scrolled into view without obstruction or cropping from `FloatingTabBar`.
+- **Greyed Subtitle**: Directly below the hero, shows `"{N} keys left"` in small greyed text (`FontFamily.medium`, `colors.onSurfaceVariant`).
+- **Heading**: `"Unlock more sessions"` in regular text weight (`FontFamily.regular`).
+- **Dynamic Free Trial State**: Forwards `balance` and `isPremium` to `KeysOptionsContent`. When the user has keys (`balance > 0`), the Free Trial card displays `"You have {N} sessions left"`, hiding the cooldown timer and reset reminders toggle. When `balance === 0`, the live timer and reset reminders toggle are activated.
+- Balanced spacing: compact headroom below `AppHeader` and dynamic bottom inset padding (`paddingBottom: insets.bottom + 88`) ensuring the full options content can be scrolled into view without obstruction or cropping from `FloatingTabBar`.
 - Renders `KeysOptionsContent` (`components/feedback/KeysOptionsContent.tsx`), offering:
   1. **Buy Temporary Access Keys** (packs of 20/40/80/120) → `/keys-packs`
   2. **Subscribe for Unlimited** (Weekly/Monthly/Annual) → `/subscription-plans`
-  3. **Use Free Trial** with live countdown ticker and notifications reminder toggle.
+  3. **Use Free Trial** (displays sessions remaining when keys > 0, or live countdown + reminders toggle when keys == 0).
 
 #### `(tabs)/reports.tsx` — Reports Tab
 - Redesigned 1:1 to match PataSkillsV2's Profile tab design:
@@ -699,7 +709,9 @@ The first-look key upsell screen presented when a learner runs out of sessions m
 Extracted, reusable presentation component containing the three proceed options:
 1. **Buy Temporary Access Keys** (packs of 20, 40, 80, 120 keys) → `/keys-packs`
 2. **Subscribe for Unlimited** → `/subscription-plans`
-3. **Use Free Trial** with live ticking countdown and reminders `Toggle` (scheduled via `lib/notifications.ts` and saved to `@play/timer_reminders`).
+3. **Use Free Trial**:
+   - When the user has keys (`balance > 0` or `isPremium`): Displays `"You have {N} sessions left"`, hiding the countdown timer and reminders toggle.
+   - When `balance === 0`: Shows the live cooldown countdown ticker (`timerText`) and the `"Get reminders when timer resets"` `Toggle` (scheduled via `lib/notifications.ts` and saved to `@play/timer_reminders`).
 Rendered both inside `SessionStateScreen`'s `outOfKeys` flow and as the standalone `app/(tabs)/keys.tsx` tab.
 
 #### `SessionStateScreen.tsx` — Interstitial screen

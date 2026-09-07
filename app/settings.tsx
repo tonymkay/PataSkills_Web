@@ -14,6 +14,7 @@ import {
   FileText,
   LogOut,
   Moon,
+  Crown,
 } from 'lucide-react-native';
 import { useTheme, Spacing, Radius, Typography, IconSize, StaticColors } from '@/theme/tokens';
 import { FontFamily } from '@/constants/typography';
@@ -23,6 +24,7 @@ import { getStoredEmail, truncateEmailMiddle } from '@/lib/email';
 import { logoutAccount } from '@/lib/restore';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { getKeysState } from '@/lib/keys';
+import { useKeys } from '@/hooks/useKeys';
 import type { CurrencyCode } from '@/lib/currency';
 
 const CURRENCY_STORAGE_KEY = '@play/currency';
@@ -40,6 +42,7 @@ export default function SettingsScreen() {
   const { colors, scheme, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { isPremium } = useKeys();
 
   const [email, setEmail] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -122,6 +125,12 @@ export default function SettingsScreen() {
           icon={<Mail size={IconSize.inline} color={iconColor} />}
           label={email ? truncateEmailMiddle(email) : 'Sign in / Restore account'}
           onPress={() => setRestoreModalVisible(true)}
+        />
+        <SettingsRow
+          icon={<Crown size={IconSize.inline} color={iconColor} />}
+          label="Manage Subscriptions"
+          value={isPremium ? 'Premium' : 'Free'}
+          onPress={() => router.push('/manage-subscription')}
         />
 
         {/* ── Preferences ── */}

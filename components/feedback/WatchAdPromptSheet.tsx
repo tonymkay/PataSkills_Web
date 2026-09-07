@@ -19,8 +19,6 @@ import { grantBonusKey } from '@/lib/keys';
 import { KeyRewardContent } from './KeyRewardSuccessModal';
 import { WatchingAdContent } from './WatchingAdContent';
 
-const WEB_REWARD_AD_SLOT_ID = process.env.EXPO_PUBLIC_ADSENSE_REWARD_SLOT_ID?.trim();
-
 interface WatchAdPromptSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -36,37 +34,38 @@ export function WatchAdPromptSheet({
 }: WatchAdPromptSheetProps) {
   const { colors } = useTheme();
   const [loadingAd, setLoadingAd] = useState(false);
-  // 'prompt' = "watch an ad?" sheet, 'watching' = web-only real AdSense
-  // unit + mandatory countdown, 'reward' = key reward screen. All three
-  // render inside the SAME <Modal> below — mounting separate native
+  // 'prompt' = "watch an ad?" sheet, 'reward' = key reward screen.
+  // Both render inside the SAME <Modal> below — mounting separate native
   // Modals and toggling them in the same tick is what caused the reward
   // screen to look squashed/stretched and to get dismissed automatically on
   // Android (the OS was closing both modal windows at once).
-  const [step, setStep] = useState<'prompt' | 'watching' | 'reward'>('prompt');
+  // 'adsense' = AdSense display-unit fallback (WatchingAdContent), reached
+  // only when the real web rewarded ad reports 'unavailable'.
+  const [step, setStep] = useState<'prompt' | 'adsense' | 'reward'>('prompt');
 
   // Reset back to the prompt step whenever the sheet is reopened.
   React.useEffect(() => {
-    if (visible) setStep('prompt');
+    if (visible) {
+      setStep('prompt');
+    }
   }, [visible]);
 
   const handleWatchAd = async () => {
+    // On web, try the real full-screen Ad Placement API rewarded ad first
+    // (lib/webRewardedAd.ts + app/+html.tsx). If it's unavailable (script
+    // blocked, account not enrolled, no fill), fall through to the AdSense
+    // display-unit fallback (WatchingAdContent) rather than giving up.
     if (Platform.OS === 'web') {
-      // Primary path: a real full-screen rewarded ad via the Ad Placement
-      // API (window.adBreak — lib/webRewardedAd.ts). Must be called
-      // synchronously from this press handler (user-gesture requirement),
-      // so no `await` happens before this call.
       setLoadingAd(true);
-      const outcome = await showWebRewardedAd('bonus_session');
+      const webOutcome = await showWebRewardedAd('watch_ad_session');
       setLoadingAd(false);
-      if (outcome === 'earned') {
+
+      if (webOutcome === 'earned') {
         setStep('reward');
-      } else if (outcome === 'skipped') {
-        onDismissToHome();
+      } else if (webOutcome === 'unavailable') {
+        setStep('adsense');
       } else {
-        // 'unavailable' — no ad was offered (script blocked, or the
-        // account isn't enrolled for Ad Placement ads yet). Fall back to
-        // the plain AdSense display-unit + countdown step.
-        setStep('watching');
+        onDismissToHome();
       }
       return;
     }
@@ -100,85 +99,88 @@ export function WatchAdPromptSheet({
   // 'reward' step gets its full-screen opaque look from a solid background
   // on the content itself, not from the Modal's `transparent` prop.
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={step === 'prompt' ? onClose : () => {}}
-    >
-      {step === 'reward' ? (
-        <KeyRewardContent onUnlockNextSession={handleUnlockNextSession} />
-      ) : step === 'watching' ? (
-        <WatchingAdContent slotId={WEB_REWARD_AD_SLOT_ID} onComplete={() => setStep('reward')} />
-      ) : (
-      <View style={styles.backdrop}>
-        <View style={styles.sheetWrapper}>
-        <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.surfaceContainer || '#1C2029',
-              borderColor: colors.surfaceContainerHigh || '#2A2E38',
-            },
-          ]}
-        >
-          {/* Close button — dismisses the sheet only, cancels the exit intent */}
-          <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
-            <X size={20} color={colors.onSurfaceVariant} />
-          </Pressable>
-
-          {/* Hero Icon */}
-          <View style={styles.iconWrap}>
-            <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
-              <Tv size={32} color={StaticColors.achievementAmber} strokeWidth={2.2} />
-            </View>
-            <View style={styles.sparkleBadge}>
-              <Sparkles size={14} color="#000" />
-            </View>
-          </View>
-
-          {/* Title & Description */}
-          <Text style={[styles.title, { color: colors.onSurface }]}>
-            Watch an ad for an extra session?
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-            Get 1 instant bonus session right now without waiting for the cooldown timer.
-          </Text>
-
-          {/* Primary Action */}
-          <Pressable
-            onPress={handleWatchAd}
-            disabled={loadingAd}
-            style={({ pressed }) => [
-              styles.watchBtn,
-              { backgroundColor: StaticColors.achievementAmber },
-              (pressed || loadingAd) && { opacity: 0.85 },
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={step === 'prompt' ? onClose : () => {}}
+      >
+        {step === 'reward' ? (
+          <KeyRewardContent onUnlockNextSession={handleUnlockNextSession} />
+        ) : step === 'adsense' ? (
+          <WatchingAdContent
+            slotId={process.env.EXPO_PUBLIC_ADSENSE_REWARD_SLOT_ID}
+            onComplete={() => setStep('reward')}
+          />
+        ) : (
+        <View style={styles.backdrop}>
+          <View style={styles.sheetWrapper}>
+          <View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.surfaceContainer || '#1C2029',
+                borderColor: colors.surfaceContainerHigh || '#2A2E38',
+              },
             ]}
           >
-            {loadingAd ? (
-              <ActivityIndicator color="#000" size="small" />
-            ) : (
-              <Text style={styles.watchBtnText}>WATCH AD (+1 SESSION)</Text>
-            )}
-          </Pressable>
+            {/* Close button — dismisses the sheet only, cancels the exit intent */}
+            <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
+              <X size={20} color={colors.onSurfaceVariant} />
+            </Pressable>
 
-          {/* Secondary Action */}
-          <Pressable
-            onPress={onDismissToHome}
-            style={({ pressed }) => [
-              styles.dismissBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <Text style={[styles.dismissBtnText, { color: colors.onSurfaceVariant }]}>
-              Go to Home
+            {/* Hero Icon */}
+            <View style={styles.iconWrap}>
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
+                <Tv size={32} color={StaticColors.achievementAmber} strokeWidth={2.2} />
+              </View>
+              <View style={styles.sparkleBadge}>
+                <Sparkles size={14} color="#000" />
+              </View>
+            </View>
+
+            {/* Title & Description */}
+            <Text style={[styles.title, { color: colors.onSurface }]}>
+              Watch an ad for an extra session?
             </Text>
-          </Pressable>
+            <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
+              Get 1 instant bonus session right now without waiting for the cooldown timer.
+            </Text>
+
+            {/* Primary Action */}
+            <Pressable
+              onPress={handleWatchAd}
+              disabled={loadingAd}
+              style={({ pressed }) => [
+                styles.watchBtn,
+                { backgroundColor: StaticColors.achievementAmber },
+                (pressed || loadingAd) && { opacity: 0.85 },
+              ]}
+            >
+              {loadingAd ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <Text style={styles.watchBtnText}>WATCH AD (+1 SESSION)</Text>
+              )}
+            </Pressable>
+
+            {/* Secondary Action */}
+            <Pressable
+              onPress={onDismissToHome}
+              style={({ pressed }) => [
+                styles.dismissBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[styles.dismissBtnText, { color: colors.onSurfaceVariant }]}>
+                Go to Home
+              </Text>
+            </Pressable>
+          </View>
+          </View>
         </View>
-        </View>
-      </View>
-      )}
-    </Modal>
+        )}
+      </Modal>
   );
 }
 
