@@ -160,12 +160,13 @@ const styles = StyleSheet.create({
   containerContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.marginMobile,
-    paddingTop: Spacing.xl,
+    paddingTop: Spacing.base,
     paddingBottom: Spacing.lg,
   },
   heading: {
     fontFamily: FontFamily.bold,
     fontSize: 28,
+    lineHeight: 34,
     textAlign: 'center',
     marginBottom: Spacing.lg,
   },

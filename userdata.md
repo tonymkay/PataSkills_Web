@@ -38,6 +38,8 @@ The app employs an **Offline-First & Local-First** architecture:
 | **Paystack Reference** | `paystack_ref` | **String** (e.g. `"pataplay_178877_a1b2c3"`) | Transient URL query param | `play_purchases.paystack_ref` | Unique transaction ID generated for Paystack Pop checkout |
 | **Keys Purchased** | `keys` | **Numerical** (Integer, e.g. `20`, `50`, `120`) | Transient URL query param | `play_purchases.keys` | Key count granted upon payment verification |
 | **Notification Reminder** | `timer_reminders` | **Boolean as String** (`"true"` / `"false"`) | `@play/timer_reminders` | Local device state | User toggle in Settings or out-of-keys timer prompt |
+| **Scheduled Reset Time** | `scheduled_reset_at` | **String (Epoch ms)** (`"1788775000000"`) | `@play/scheduled_reset_at` | Local device state | Survives app close so background/reopen checks fire accurately |
+| **Last Notified Reset** | `last_notified_reset_at` | **String (Epoch ms)** (`"1788775000000"`) | `@play/last_notified_reset_at` | Local device state | Prevents duplicate notifications for the same cooldown period |
 | **Display Currency** | `currency` | **String** (`"USD"` or `"KES"`) | `@play/currency` | Local device state | User selection in Settings |
 | **Theme Mode** | `theme` | **String** (`"dark"`, `"light"`, or `"system"`) | `@theme_preference` | Local device state | User theme selection |
 
@@ -90,6 +92,17 @@ Stores immutable purchase records from Paystack:
 - `keys` (integer) — Number of keys purchased (e.g. `20`)
 - `is_premium` (boolean) — `true` if this was an Unlimited subscription
 - `updated_at` (timestamptz)
+
+### 6. `help_requests`
+Stores support, billing, bug, and feedback submissions from Settings → Help → Feedback Form:
+- `user_id` (uuid, nullable) — Supabase Auth UID if signed in
+- `name` (text) — Learner display name or email handle
+- `email` (text, nullable) — Contact email for response
+- `topic` (text) — Selected category (`premium`, `bug`, `billing`, `account`, `content`, `other`)
+- `custom_topic` (text, nullable) — Optional short summary when topic is `other`
+- `message` (text) — User message description
+- `app_version` (text) — App version string (e.g. `1.0.0`)
+- `created_at` (timestamptz)
 
 ---
 

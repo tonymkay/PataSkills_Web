@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Image, TextInput, Platform, ScrollView } from 'react-native';
-import { ArrowLeft, Mail } from 'lucide-react-native';
+import { BackHandler, Pressable, StyleSheet, Text, View, Image, TextInput, Platform, ScrollView } from 'react-native';
+import { Mail } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
@@ -30,19 +30,15 @@ interface KeysOfferScreenProps {
   track?: Track;
   /** "Maybe later" — dismisses to the existing outOfKeys screen. */
   onMaybeLater: () => void;
-  /** Top-left back button. If omitted, falls back to onMaybeLater. */
-  onBack?: () => void;
 }
 
 /**
  * First-look keys upsell — shown once, automatically, the moment a
  * learner runs out of keys (PlaySession's 'entry'/'advance' out-of-keys
  * paths), before SessionStateScreen's "Choose how to proceed" list.
- * Dismissing via "Maybe later" falls through to that screen; paying
- * follows the exact same purchaseKeyPack() → Paystack → payment-complete
- * flow as the regular keys-packs → keys-confirm path.
+ * Dismissing via "Maybe later" or OS back navigation opens that screen.
  */
-export function KeysOfferScreen({ skillId, track, onMaybeLater, onBack }: KeysOfferScreenProps) {
+export function KeysOfferScreen({ skillId, track, onMaybeLater }: KeysOfferScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const pack = keyPackById(OFFER_PACK_ID)!;
@@ -56,6 +52,16 @@ export function KeysOfferScreen({ skillId, track, onMaybeLater, onBack }: KeysOf
       if (stored) setEmail(stored);
     }).catch(() => {});
   }, []);
+
+  // Intercept OS-based back navigation (hardware back button / system back gestures)
+  // to open the out-of-keys ("Other ways to Proceed") screen, matching "Maybe later"
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onMaybeLater();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onMaybeLater]);
 
   const priceFormatted = formatUSDAmount(pack.priceUSD, 'USD');
   const { currency, amount } = splitCurrencyAmount(priceFormatted);
@@ -76,31 +82,17 @@ export function KeysOfferScreen({ skillId, track, onMaybeLater, onBack }: KeysOf
     }
   };
 
-  const handleBack = onBack ?? onMaybeLater;
-
   return (
     <View
       style={[
         styles.container,
         {
           backgroundColor: colors.background,
-          paddingTop: Math.max(insets.top, Spacing.base),
+          paddingTop: Math.max(insets.top, Spacing.xl),
           paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.md),
         },
       ]}
     >
-      <View style={styles.headerRow}>
-        <Pressable
-          onPress={busy ? undefined : handleBack}
-          hitSlop={12}
-          style={styles.backBtn}
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.4} />
-        </Pressable>
-      </View>
-
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} bounces={false}>
         <Text style={styles.headingWrap}>
           <Text style={[styles.heading, { color: colors.onSurface }]}>Unlock the next{'\n'}</Text>
@@ -205,18 +197,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.marginMobile,
     justifyContent: 'space-between',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.xs,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   body: {
     flexGrow: 1,

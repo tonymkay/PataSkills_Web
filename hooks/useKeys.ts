@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getKeysState,
   spendKey as spendKeyLib,
   startResetTimer as startResetTimerLib,
 } from '@/lib/keys';
+import { scheduleResetReminder } from '@/lib/notifications';
 
 export function useKeys() {
   const [balance, setBalance] = useState<number | null>(null);
@@ -45,6 +47,13 @@ export function useKeys() {
     setIsPremium(!!state.isPremium);
     setBalance(state.isPremium ? 999999 : state.balance);
     setResetAt(state.resetAt);
+    if (state.resetAt) {
+      AsyncStorage.getItem('@play/timer_reminders').then((val) => {
+        if (val === 'true') {
+          void scheduleResetReminder(state.resetAt);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   return {

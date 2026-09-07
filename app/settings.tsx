@@ -20,6 +20,9 @@ import { FontFamily } from '@/constants/typography';
 import { SectionHeader, SettingsRow, SettingsToggleRow } from '@/components/settings/SettingsComponents';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { getStoredEmail, truncateEmailMiddle } from '@/lib/email';
+import { logoutAccount } from '@/lib/restore';
+import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
+import { getKeysState } from '@/lib/keys';
 import type { CurrencyCode } from '@/lib/currency';
 
 const CURRENCY_STORAGE_KEY = '@play/currency';
@@ -56,8 +59,24 @@ export default function SettingsScreen() {
   }, []);
 
   const handleToggleNotifications = async (val: boolean) => {
-    setNotificationsEnabled(val);
-    await AsyncStorage.setItem('@play/timer_reminders', val ? 'true' : 'false').catch(() => {});
+    if (val) {
+      const granted = await ensureNotificationPermission();
+      if (granted) {
+        setNotificationsEnabled(true);
+        await AsyncStorage.setItem('@play/timer_reminders', 'true').catch(() => {});
+        const ks = await getKeysState();
+        if (ks.resetAt) {
+          scheduleResetReminder(ks.resetAt);
+        }
+      } else {
+        setNotificationsEnabled(false);
+        await AsyncStorage.setItem('@play/timer_reminders', 'false').catch(() => {});
+      }
+    } else {
+      setNotificationsEnabled(false);
+      await AsyncStorage.setItem('@play/timer_reminders', 'false').catch(() => {});
+      cancelResetReminder();
+    }
   };
 
   const handleToggleCurrency = () => {
@@ -68,7 +87,7 @@ export default function SettingsScreen() {
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.removeItem('@play/user_email');
+      await logoutAccount();
       setEmail(null);
     } catch {}
   };
@@ -133,7 +152,7 @@ export default function SettingsScreen() {
         <SettingsRow
           icon={<HelpCircle size={IconSize.inline} color={iconColor} />}
           label="Help"
-          onPress={() => Linking.openURL('mailto:support@pataskills.com')}
+          onPress={() => router.push('/help')}
         />
         <SettingsRow
           icon={<Info size={IconSize.inline} color={iconColor} />}

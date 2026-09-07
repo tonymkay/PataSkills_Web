@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider as NavigationThemeProvider, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
 import { fontAssets } from '@/constants/typography';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
+import { initNotifications } from '@/lib/notifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -33,6 +34,7 @@ function RootLayoutInner() {
 
   useEffect(() => {
     onLayout();
+    void initNotifications();
   }, [onLayout]);
 
   if (!fontsLoaded) return null;

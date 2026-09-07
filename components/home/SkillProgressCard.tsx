@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrowUpRight } from 'lucide-react-native';
-import { useTheme, Spacing, Radius, Typography, StaticColors } from '@/theme/tokens';
+import { useTheme, Spacing, Radius, Typography, FontFamily, StaticColors } from '@/theme/tokens';
 
 export type SkillProgressState = 'not-started' | 'in-progress' | 'completed';
 
@@ -61,7 +61,7 @@ export function SkillProgressCard({ title, completedTopics, totalTopics, onPress
       ]}
     >
       <View style={styles.topRow}>
-        <Text style={[Typography.labelLarge, { color: accent }]}>{statusLabel}</Text>
+        <Text style={[Typography.labelLarge, styles.statusLabel, { color: accent }]}>{statusLabel}</Text>
         <View style={styles.arrowBtn}>
           <ArrowUpRight size={18} color="#1A1A1A" strokeWidth={2.4} />
         </View>
@@ -91,6 +91,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     borderWidth: 1,
     padding: Spacing.gutter,
+  },
+  statusLabel: {
+    fontFamily: FontFamily.regular,
   },
   topRow: {
     flexDirection: 'row',
