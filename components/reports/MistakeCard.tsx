@@ -1,13 +1,50 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { CheckCircle2, AlertCircle } from 'lucide-react-native';
-import { useTheme, Spacing, Radius, Typography, StaticColors, FontFamily } from '@/theme/tokens';
+import { useTheme, Radius, Spacing, StaticColors, FontFamily } from '@/theme/tokens';
 import type { MistakeItem } from '@/lib/mistakes';
 
-interface MistakeCardProps {
+export interface MistakeCardProps {
   item: MistakeItem;
 }
 
+function MistakeCountBadge({ count }: { count: number }) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.badgeWrap}>
+      <View style={[styles.badgeLine, { backgroundColor: colors.outlineVariant }]} />
+      <View
+        style={[
+          styles.badgePill,
+          { backgroundColor: StaticColors.wrongChipBg },
+        ]}
+      >
+        <Text style={[styles.badgeText, { color: StaticColors.wrongChipLetterBg }]}>
+          {`${count} MISTAKE${count === 1 ? '' : 'S'}`}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function MistakeAnswerBody({ item }: { item: MistakeItem }) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.answerWrap}>
+      <Text style={[styles.answerLabel, { color: colors.onSurfaceVariant }]}>
+        Correct answer is:
+      </Text>
+      <Text style={[styles.answerText, { color: colors.primary || StaticColors.tealAccent }]}>
+        {item.correctAnswer}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * One missed question card — matches PataSkillsV2's MistakeCard 1:1.
+ */
 export function MistakeCard({ item }: MistakeCardProps) {
   const { colors } = useTheme();
 
@@ -16,125 +53,82 @@ export function MistakeCard({ item }: MistakeCardProps) {
       style={[
         styles.card,
         {
+          borderColor: colors.outlineVariant,
           backgroundColor: colors.surfaceContainerLow,
-          borderColor: item.solved ? (colors.outlineVariant || '#2B313E') : '#422428',
         },
       ]}
     >
-      {/* Header: Question number + Solved / Mistake status */}
-      <View style={styles.headerRow}>
-        <View style={styles.qNumRow}>
-          <Text style={[styles.qNumText, { color: colors.onSurfaceVariant }]}>
-            Question {item.number}
-          </Text>
-          {item.solved && (
-            <View style={styles.solvedBadge}>
-              <CheckCircle2 size={13} color={StaticColors.successLime} />
-              <Text style={styles.solvedText}>Mastered</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={[styles.mistakeBadge, { backgroundColor: 'rgba(242, 39, 76, 0.14)' }]}>
-          <Text style={styles.mistakeBadgeText}>
-            {item.mistakeCount} {item.mistakeCount === 1 ? 'MISTAKE' : 'MISTAKES'}
-          </Text>
-        </View>
-      </View>
-
-      {/* Question prompt */}
-      <Text style={[styles.questionText, { color: colors.onSurface }]}>
+      <Text style={[styles.questionNum, { color: StaticColors.wrongChipBg }]}>
+        {`Question ${item.number}`}
+      </Text>
+      <Text style={[styles.questionPrompt, { color: colors.onSurface }]} numberOfLines={3}>
         {item.question}
       </Text>
 
-      {/* Correct answer section */}
-      <View
-        style={[
-          styles.answerBanner,
-          {
-            backgroundColor: colors.surfaceContainer,
-            borderColor: colors.outlineVariant,
-          },
-        ]}
-      >
-        <Text style={[styles.answerLabel, { color: colors.onSurfaceVariant }]}>
-          Correct answer:
-        </Text>
-        <Text style={[styles.answerValue, { color: StaticColors.tealAccent }]}>
-          {item.correctAnswer}
-        </Text>
-      </View>
+      <MistakeCountBadge count={item.mistakeCount} />
+      <MistakeAnswerBody item={item} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     borderWidth: 1.5,
-    padding: Spacing.base,
-    gap: Spacing.sm,
-  },
-  headerRow: {
-    flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    gap: Spacing.md,
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  qNumRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  qNumText: {
+  questionNum: {
     fontFamily: FontFamily.bold,
-    fontSize: 12,
-    textTransform: 'uppercase',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  questionPrompt: {
+    fontFamily: FontFamily.medium,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  badgeWrap: {
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    marginVertical: Spacing.xs,
+  },
+  badgeLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    height: 1,
+    marginTop: -0.5,
+  },
+  badgePill: {
+    alignSelf: 'center',
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  badgeText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+    lineHeight: 16,
     letterSpacing: 0.5,
   },
-  solvedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(43, 217, 196, 0.14)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    gap: 3,
-  },
-  solvedText: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 10,
-    color: StaticColors.successLime,
-  },
-  mistakeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-  mistakeBadgeText: {
-    fontFamily: FontFamily.bold,
-    fontSize: 10,
-    color: '#F2274C',
-    letterSpacing: 0.4,
-  },
-  questionText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  answerBanner: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: 2,
+  answerWrap: {
+    gap: 4,
+    alignSelf: 'stretch',
   },
   answerLabel: {
     fontFamily: FontFamily.regular,
-    fontSize: 11,
+    fontSize: 13,
+    textAlign: 'center',
   },
-  answerValue: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 14,
-    lineHeight: 20,
+  answerText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
   },
 });

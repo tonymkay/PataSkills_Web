@@ -1,6 +1,43 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated**: 2026-09-01 · **Last updated**: 2026-09-07 (i) — Shipped the **Tabbed Home Shell**,
+> **Generated**: 2026-09-01 · **Last updated**: 2026-09-07 (k) — Built the full **Leaderboard**
+> and aligned the **Mistakes** screen to match PataSkillsV2 1:1:
+> **(1) Leaderboard Screen (`app/leaderboard.tsx`)**: Reached from the Reports tab's `LeaguePanel`
+> ("View Leaderboard" button). Features a top header with `ChevronLeft` back navigation, full-height
+> `LeagueCard` (`components/profile/LeagueCard.tsx`) showing current league tier (`{Tier} League`),
+> information button opening `LeagueSheet` modal carousel (`components/profile/LeagueSheet.tsx`),
+> and automatic scrolling to the learner's middle position.
+> **(2) Leaderboard Profile Components (`components/profile/`)**: `Avatar.tsx` (deterministic colored initial
+> avatar circles or profile image), `LeaderboardRow.tsx` (rank, avatar, learner name, dot, and XP with tabular numbers,
+> highlighted in green for the signed-in learner), `LeagueCard.tsx` (header bar with Info icon and scrollable
+> ranked rows), and `LeagueSheet.tsx` (swipeable trophy carousel across all 11 tiers from Quartz to Legend).
+> **(3) Leaderboard Data Layer (`lib/leaderboard.ts`)**: `fetchLeaderboard(myXp)` and `fetchLeagueBoard(tier, myXp)`
+> querying user stats or populating competitive tier bands with realistic peers, correctly ranking the active user.
+> **(4) Mistakes Screen 1:1 Alignment (`app/mistakes.tsx`, `components/reports/MistakeCard.tsx`)**:
+> Updated header with `ChevronLeft` and centered "Mistake Overview", clean empty state, and redesigned
+> `MistakeCard` featuring centered question text, horizontal divider with centered mistake count pill
+> (`N MISTAKE(S)` in `#F77BA0` bg / `#B01030` text), and "Correct answer is:" with highlighted answer.
+>
+> **Last updated**: 2026-09-07 (j) — Redesigned the **Reports Tab**
+> to 1:1 match PataSkillsV2's Profile tab design, imported 3D assets, and polished tab transitions:
+> **(1) Reports Tab Alignment (`app/(tabs)/reports.tsx`)**: Replaced the previous report layout
+> with PataSkillsV2's Profile layout: 2-column `StatCard` row displaying Max Streak (`assets/homepage/streak.webp`)
+> and Recharges (`assets/homepage/recharge.webp`), followed by `WeekCalendarRow` (4-day strip with today
+> highlighted and horizontal progress track), full-width `Keys and Quest(N)` pressable link, `LeaguePanel`
+> (amber XP, 3-league trophy preview using `assets/profile/trophy.webp` with `lib/leagues.ts` 11-tier scale,
+> and band progress bar), and per-skill `SkillReportCard` list with progress bars and "Missed Questions"
+> buttons routing to `app/mistakes.tsx`.
+> **(2) Components & Assets (`components/reports/`)**: Created modular `StatCard.tsx`, `WeekCalendarRow.tsx`,
+> `LeaguePanel.tsx`, and `SkillReportCard.tsx` in `components/reports/` (barrel-exported in `index.ts`).
+> Copied `streak.webp`, `recharge.webp`, and `trophy.webp` into `play/assets/`.
+> **(3) Skills Entrance Animation Fix (`components/play/SkillsFlow.tsx`)**: Removed `<ScreenTransition>`
+> wrapper that previously caused a full-screen sliding animation on web whenever entering or focusing
+> the Skills tab. Disabled entrance/exit slide animations for the `landing` catalog stage so it renders
+> statically and instantly like the other tabs.
+> **(4) Exit-to-Home Routing**: Fixed `handleExit` in `SkillsFlow.tsx` and `app/index.tsx` to inspect
+> `areTabsUnlocked()` and replace the route to `/(tabs)/home` instead of resetting in-memory to the pre-unlock landing page.
+>
+> **Last updated**: 2026-09-07 (i) — Shipped the **Tabbed Home Shell**,
 > **Progress Gate**, and full **Reports & Missed Questions System**:
 > **(1) Progressive Unlock & Root Gate**: `lib/progress.ts` gained `areTabsUnlocked()` and
 > `unlockTabsIfNeeded()` (`@play/tabs_unlocked`). Pre-unlock, `app/index.tsx` acts as a root gate

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { SlideInRight, SlideInLeft, FadeOut } from 'react-native-reanimated';
 import { useTheme } from '@/theme/ThemeContext';
@@ -10,10 +10,10 @@ import { LearningStyleScreen } from '@/components/landing/LearningStyleScreen';
 import { TrackDetailScreen } from '@/components/landing/TrackDetailScreen';
 import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
 import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
+import { areTabsUnlocked } from '@/lib/progress';
 import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
-import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { LANDING_SKILLS } from '@/constants/skills';
 
@@ -61,6 +61,7 @@ interface SkillsFlowProps {
 }
 
 export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
+  const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ resume?: string; track?: string; skill?: string; topic?: string }>();
@@ -167,14 +168,21 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
     void runDownload(urlTrack ?? 'full', trackIsDeepLinked);
   }, [runDownload, urlTrack, trackIsDeepLinked]);
 
-  const handleExit = useCallback(() => {
-    setStageDirection('backward');
-    setStage('landing');
+  const handleExit = useCallback(async () => {
     setSessions([]);
     setSignCatalog([]);
     setError(null);
     setProgress(null);
-  }, []);
+
+    const unlocked = await areTabsUnlocked();
+    if (unlocked) {
+      router.replace('/(tabs)/home');
+      return;
+    }
+
+    setStageDirection('backward');
+    setStage('landing');
+  }, [router]);
 
   useEffect(() => {
     // Resolve skill before dispatching either mount-time flow below.
@@ -203,7 +211,6 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
   }, [params.resume, params.skill, params.track, params.topic]);
 
   return (
-    <ScreenTransition>
     <View
       style={[
         styles.container,
@@ -239,8 +246,14 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
         <Animated.View
           key={stage}
           style={styles.stageContainer}
-          entering={stageDirection === 'forward' ? SlideInRight.duration(280) : SlideInLeft.duration(280)}
-          exiting={FadeOut.duration(180)}
+          entering={
+            stage === 'landing'
+              ? undefined
+              : stageDirection === 'forward'
+                ? SlideInRight.duration(280)
+                : SlideInLeft.duration(280)
+          }
+          exiting={stage === 'landing' ? undefined : FadeOut.duration(180)}
         >
           {stage === 'downloading' ? (
             <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
@@ -263,7 +276,6 @@ export function SkillsFlow({ embedded = false }: SkillsFlowProps = {}) {
         </Animated.View>
       )}
     </View>
-    </ScreenTransition>
   );
 }
 

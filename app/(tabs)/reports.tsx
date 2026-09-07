@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { ChevronRight } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Flame, Zap, KeyRound, Trophy, ChevronRight, BarChart3, AlertCircle } from 'lucide-react-native';
-import { useTheme, Spacing, Radius, Typography, IconSize, StaticColors } from '@/theme/tokens';
-import { FontFamily } from '@/constants/typography';
+import { useTheme, Spacing, Radius, Typography, FontFamily, StaticColors } from '@/theme/tokens';
 import { AppHeader } from '@/components/nav/AppHeader';
+import { StatCard, WeekCalendarRow, LeaguePanel, SkillReportCard, type SkillReportItem, type DayMark } from '@/components/reports';
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { getLocalProgress } from '@/lib/progress';
 import { getKeyBalance } from '@/lib/keys';
@@ -15,52 +16,59 @@ import { getSkillMistakesCount } from '@/lib/mistakes';
 import { LANDING_SKILLS } from '@/constants/skills';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
-// Days-of-week labels for the calendar strip (Mon to Sun)
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
-
-interface SkillReportEntry {
-  slug: string;
-  title: string;
-  completedTopics: number;
-  totalTopics: number;
-  xp: number;
-  missedCount: number;
-}
+const streakArt = require('@/assets/homepage/streak.webp');
+const rechargeArt = require('@/assets/homepage/recharge.webp');
 
 /**
- * "Reports" tab — displays live learner analytics:
- * - Day Streak & Total XP stat cards
- * - 7-day Monday–Sunday activity calendar
- * - Keys balance linking to the Keys tab
- * - League Tier panel based on XP
- * - Per-skill progress report cards with XP and Missed Questions drill-down
+ * "Reports" tab — matches the layout, design system, and assets of
+ * PataSkillsV2's Profile tab:
+ *  - AppHeader (Avatar + learner name + settings gear)
+ *  - 2-column StatCard row (Max Streak with streak.webp, Recharges with recharge.webp)
+ *  - WeekCalendarRow (4-day strip with today highlighted and progress track)
+ *  - "Keys and Quest(N)" full-width link row
+ *  - LeaguePanel (amber XP + 3-tier trophy row + progress bar)
+ *  - Per-skill progress report cards with XP, progress bar & Missed Questions drill-down
  */
 export default function ReportsTab() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [keyBalance, setKeyBalance] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [weekDays, setWeekDays] = useState<boolean[]>([false, false, false, false, false, false, false]);
+  const [keyBadge, setKeyBadge] = useState<string>('0');
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [weekMarks, setWeekMarks] = useState<DayMark[]>(['active', 'future', 'future', 'future', 'future', 'future', 'future']);
+  const [todayIndex, setTodayIndex] = useState(0);
   const [totalXp, setTotalXp] = useState(0);
-  const [skills, setSkills] = useState<SkillReportEntry[]>([]);
+  const [skills, setSkills] = useState<SkillReportItem[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      // Refresh key balance
-      getKeyBalance().then(setKeyBalance).catch(() => {});
+      // 1. Refresh key balance
+      getKeyBalance()
+        .then((balance) => setKeyBadge(balance === Infinity ? '∞' : String(balance)))
+        .catch(() => {});
 
-      // Refresh streak and week activity
+      // 2. Refresh streak & calendar
       getStreakData().then((data) => {
-        setStreak(data.currentStreak);
-        setWeekDays(data.weekDays);
+        setMaxStreak(data.maxStreak || data.currentStreak);
+
+        const now = new Date();
+        const tIdx = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6
+        setTodayIndex(tIdx);
+
+        const marks: DayMark[] = data.weekDays.map((active, i) => {
+          if (active) return 'done';
+          if (i === tIdx) return data.todayActive ? 'done' : 'active';
+          if (i > tIdx) return 'future';
+          return 'none';
+        });
+        setWeekMarks(marks);
       }).catch(() => {});
 
-      // Refresh total XP
+      // 3. Refresh total XP
       getTotalXp().then(setTotalXp).catch(() => {});
 
-      // Refresh skill reports
+      // 4. Refresh skill reports
       (async () => {
         const catalogRows = await getCurriculaCatalog().catch(() => []);
         const staticIds = new Set(LANDING_SKILLS.map((s) => s.id));
@@ -91,339 +99,125 @@ export default function ReportsTab() {
           }),
         );
 
-        // Show skills with progress or with XP/misses recorded
-        setSkills(withProgress.filter((s) => s.completedTopics > 0 || s.xp > 0 || s.missedCount > 0));
+        const progressed = withProgress.filter((s) => s.completedTopics > 0 || s.xp > 0 || s.missedCount > 0);
+        // If learner has no progress yet, show first 2 skills so cards are visible
+        setSkills(progressed.length > 0 ? progressed : withProgress.slice(0, 2));
       })();
     }, []),
   );
 
-  const pctFor = (s: SkillReportEntry) =>
-    s.totalTopics > 0 ? Math.min(100, Math.round((s.completedTopics / s.totalTopics) * 100)) : 0;
-
-  // League tier based on XP
-  const leagueTier = totalXp >= 750 ? 'Gold' : totalXp >= 250 ? 'Silver' : 'Bronze';
-  const tierColor = totalXp >= 750 ? StaticColors.achievementAmber : totalXp >= 250 ? '#C0C0C0' : '#CD7F32';
-  const targetXp = totalXp >= 750 ? 1500 : totalXp >= 250 ? 750 : 250;
-  const leaguePct = Math.min(100, Math.round((totalXp / targetXp) * 100));
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <AppHeader />
+
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 120 },
+        ]}
       >
-        {/* ─── Two stat cards side-by-side ─── */}
-        <View style={styles.statRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.surfaceContainerLow }]}>
-            <Flame size={28} color={StaticColors.achievementAmber} />
-            <Text style={[styles.statNumber, { color: colors.onSurface }]}>{streak}</Text>
-            <Text style={[styles.statCaption, { color: colors.onSurfaceVariant }]}>
-              {streak === 1 ? 'Day Streak' : 'Day Streak'}
-            </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surfaceContainerLow }]}>
-            <Zap size={28} color={StaticColors.successLime} />
-            <Text style={[styles.statNumber, { color: colors.onSurface }]}>{totalXp}</Text>
-            <Text style={[styles.statCaption, { color: colors.onSurfaceVariant }]}>Total XP</Text>
-          </View>
+        {/* Stat Cards Row */}
+        <View style={styles.statsRow}>
+          <StatCard
+            icon={<Image source={streakArt} style={styles.streakImage} contentFit="contain" />}
+            value={String(maxStreak)}
+            suffix="DAYS"
+            label="Max Streak"
+            accent={StaticColors.successLime}
+          />
+          <StatCard
+            icon={<Image source={rechargeArt} style={styles.rechargeImage} contentFit="contain" />}
+            value={keyBadge}
+            label="Recharges"
+            accent={StaticColors.achievementAmber}
+          />
         </View>
 
-        {/* ─── 7-day calendar strip ─── */}
-        <View style={[styles.weekRow, { backgroundColor: colors.surfaceContainerLow }]}>
-          {DAY_LABELS.map((day, i) => {
-            const isActive = weekDays[i];
-            return (
-              <View key={i} style={styles.dayCell}>
-                <Text style={[styles.dayLabel, { color: colors.onSurfaceVariant }]}>{day}</Text>
-                <View
-                  style={[
-                    styles.dayDot,
-                    {
-                      backgroundColor: isActive ? StaticColors.successLime : 'rgba(255, 255, 255, 0.08)',
-                      borderColor: isActive ? StaticColors.successLime : colors.outlineVariant,
-                      borderWidth: isActive ? 0 : 1,
-                    },
-                  ]}
-                />
-              </View>
-            );
-          })}
-        </View>
+        {/* 4-Day Calendar Strip */}
+        <WeekCalendarRow week={weekMarks} todayIndex={todayIndex} />
 
-        {/* ─── Keys balance row ─── */}
+        {/* Keys and Quest Entry Row */}
         <Pressable
           onPress={() => router.push('/(tabs)/keys')}
           style={({ pressed }) => [
-            styles.keysRow,
-            { backgroundColor: colors.surfaceContainerLow },
-            pressed && { opacity: 0.85 },
+            styles.keysQuestRow,
+            {
+              borderColor: colors.outlineVariant,
+              backgroundColor: colors.surfaceContainerLow,
+            },
+            pressed && { opacity: 0.8 },
           ]}
         >
-          <View style={styles.keysLeft}>
-            <KeyRound size={IconSize.header} color={StaticColors.achievementAmber} />
-            <Text style={[Typography.titleMedium, { color: colors.onSurface }]}>
-              {keyBalance} Keys
-            </Text>
-          </View>
-          <ChevronRight size={20} color={colors.onSurfaceVariant} />
+          <Text style={[styles.keysQuestText, { color: colors.onSurface }]}>
+            {`Keys and Quest(${keyBadge})`}
+          </Text>
+          <ChevronRight size={24} color={colors.onSurface} strokeWidth={2.6} />
         </Pressable>
 
-        {/* ─── League / XP panel ─── */}
-        <View style={[styles.leaguePanel, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
-          <View style={styles.leagueHeader}>
-            <Trophy size={24} color={tierColor} />
-            <Text style={[Typography.titleMedium, { color: colors.onSurface, marginLeft: Spacing.base }]}>
-              {leagueTier} League
-            </Text>
-            <Text style={[Typography.labelSmall, { color: tierColor, marginLeft: 'auto' }]}>
-              {totalXp} / {targetXp} XP
-            </Text>
-          </View>
+        {/* XP League Panel with Trophies */}
+        <LeaguePanel
+          xp={totalXp}
+          onViewLeaderboard={() => router.push('/leaderboard')}
+        />
 
-          <View style={[styles.progressTrack, { backgroundColor: colors.outlineVariant, marginVertical: Spacing.xs }]}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${leaguePct}%`,
-                  backgroundColor: tierColor,
-                },
-              ]}
+        {/* Per-Skill Progress & Mistake Drill-Down Cards */}
+        <View style={styles.skillsSection}>
+          {skills.map((item) => (
+            <SkillReportCard
+              key={item.slug}
+              item={item}
+              onOpenMistakes={() =>
+                router.push({
+                  pathname: '/mistakes',
+                  params: { skillId: item.slug, skillName: item.title },
+                })
+              }
             />
-          </View>
-
-          <Text style={[Typography.bodySmall, { color: colors.onSurfaceVariant }]}>
-            {totalXp >= 750
-              ? 'You have reached the premier Gold tier!'
-              : `Earn ${targetXp - totalXp} more XP to advance to ${leagueTier === 'Bronze' ? 'Silver' : 'Gold'} league.`}
-          </Text>
+          ))}
         </View>
-
-        {/* ─── Per-skill report cards ─── */}
-        {skills.length > 0 && (
-          <>
-            <Text style={[styles.sectionHeading, { color: colors.onSurface }]}>
-              Skill Reports
-            </Text>
-            {skills.map((skill) => {
-              const pct = pctFor(skill);
-              return (
-                <View
-                  key={skill.slug}
-                  style={[styles.reportCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}
-                >
-                  <View style={styles.reportCardTop}>
-                    <BarChart3 size={20} color={StaticColors.tealAccent} />
-                    <Text style={[Typography.titleMedium, { color: colors.onSurface, flex: 1, marginLeft: Spacing.base }]} numberOfLines={1}>
-                      {skill.title}
-                    </Text>
-                    <Text style={[styles.skillXpBadge, { color: StaticColors.achievementAmber }]}>
-                      {skill.xp} XP
-                    </Text>
-                  </View>
-
-                  {/* Progress bar */}
-                  <View style={[styles.progressTrack, { backgroundColor: colors.outlineVariant }]}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${pct}%`,
-                          backgroundColor: pct >= 100 ? StaticColors.tealAccent : StaticColors.successLime,
-                        },
-                      ]}
-                    />
-                  </View>
-
-                  <View style={styles.reportCardStats}>
-                    <Text style={[Typography.bodySmall, { color: colors.onSurfaceVariant }]}>
-                      {skill.completedTopics}/{skill.totalTopics} topics ({pct}%)
-                    </Text>
-                    <Pressable
-                      style={[
-                        styles.missedBtn,
-                        skill.missedCount > 0 && { borderColor: 'rgba(242, 39, 76, 0.4)' },
-                      ]}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/mistakes',
-                          params: { skillId: skill.slug, skillName: skill.title },
-                        })
-                      }
-                    >
-                      <AlertCircle
-                        size={14}
-                        color={skill.missedCount > 0 ? '#F2274C' : colors.onSurfaceVariant}
-                      />
-                      <Text
-                        style={[
-                          Typography.labelSmall,
-                          {
-                            color: skill.missedCount > 0 ? '#F2274C' : colors.onSurfaceVariant,
-                            marginLeft: 4,
-                          },
-                        ]}
-                      >
-                        {skill.missedCount > 0
-                          ? `${skill.missedCount} Missed`
-                          : 'Mistakes'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })}
-          </>
-        )}
-
-        {skills.length === 0 && (
-          <View style={styles.emptyState}>
-            <BarChart3 size={48} color={colors.outlineVariant} />
-            <Text style={[Typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: 'center', marginTop: Spacing.md }]}>
-              Complete sessions in Skills to see your reports and mistakes here.
-            </Text>
-          </View>
-        )}
       </ScrollView>
     </View>
   );
 }
-
-const DAY_DOT_SIZE = 28;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
   content: {
+    paddingTop: Spacing.xs,
     paddingHorizontal: Spacing.marginMobile,
-    paddingTop: Spacing.base,
-    paddingBottom: Spacing.xxl,
     gap: Spacing.md,
   },
-
-  /* ─── Stat cards ─── */
-  statRow: {
+  statsRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
-  statCard: {
-    flex: 1,
-    borderRadius: Radius.lg,
-    padding: Spacing.base,
-    alignItems: 'center',
-    gap: Spacing.xs,
+  streakImage: {
+    width: 72,
+    height: 72,
   },
-  statNumber: {
-    fontFamily: FontFamily.bold,
-    fontSize: 28,
-    lineHeight: 34,
+  rechargeImage: {
+    width: 64,
+    height: 64,
   },
-  statCaption: {
-    fontFamily: FontFamily.medium,
-    fontSize: 12,
-  },
-
-  /* ─── 7-day calendar strip ─── */
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
-  },
-  dayCell: {
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  dayLabel: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 12,
-  },
-  dayDot: {
-    width: DAY_DOT_SIZE,
-    height: DAY_DOT_SIZE,
-    borderRadius: DAY_DOT_SIZE / 2,
-  },
-
-  /* ─── Keys balance row ─── */
-  keysRow: {
+  keysQuestRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
+    borderRadius: Radius.xl,
+    borderWidth: 1.5,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
-  keysLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.base,
-  },
-
-  /* ─── League / XP panel ─── */
-  leaguePanel: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.base,
-    gap: Spacing.xs,
-  },
-  leagueHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  /* ─── Skill reports ─── */
-  sectionHeading: {
+  keysQuestText: {
     fontFamily: FontFamily.bold,
-    fontSize: 18,
-    lineHeight: 24,
-    marginTop: Spacing.xs,
+    fontSize: 16,
+    lineHeight: 22,
   },
-  reportCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.base,
+  skillsSection: {
     gap: Spacing.md,
-  },
-  reportCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  skillXpBadge: {
-    fontFamily: FontFamily.bold,
-    fontSize: 14,
-    marginLeft: Spacing.sm,
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  reportCardStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  missedBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-
-  /* ─── Empty state ─── */
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.xxl,
   },
 });

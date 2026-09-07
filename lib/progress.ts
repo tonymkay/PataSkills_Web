@@ -103,7 +103,7 @@ export async function markTopicCompleted(
     // moment for unlocking the tabbed home shell, see the comment above
     // TABS_UNLOCKED_KEY. A no-op after the first call, for this skill or
     // any other.
-    void unlockTabsIfNeeded();
+    await unlockTabsIfNeeded();
   } catch {}
 
   // Sync to Supabase if email is known

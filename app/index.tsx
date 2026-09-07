@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, useFocusEffect } from 'expo-router';
 import { areTabsUnlocked } from '@/lib/progress';
 import { SkillsFlow } from '@/components/play/SkillsFlow';
 import { useTheme } from '@/theme/ThemeContext';
@@ -17,15 +17,17 @@ export default function RootGate() {
   const { colors } = useTheme();
   const [unlocked, setUnlocked] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    areTabsUnlocked().then((value) => {
-      if (mounted) setUnlocked(value);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      areTabsUnlocked().then((value) => {
+        if (mounted) setUnlocked(value);
+      });
+      return () => {
+        mounted = false;
+      };
+    }, [])
+  );
 
   // Still checking AsyncStorage — render a plain themed background rather
   // than either branch below, so there's no flash of the wrong one.
