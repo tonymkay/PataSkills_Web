@@ -42,7 +42,7 @@ export function ChallengeCornerCard() {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     paddingVertical: Spacing.base,
     paddingLeft: Spacing.lg,
     paddingRight: Spacing.gutter,
