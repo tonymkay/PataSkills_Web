@@ -75,17 +75,17 @@ function Card({ def }: { def: CardDef }) {
   return (
     <LinearGradient colors={def.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
       <View style={styles.cardTopRow}>
-        <Text style={styles.cardBadge}>{def.badge}</Text>
-        <Text style={styles.cardTag}>{def.tag}</Text>
+        <Text style={styles.cardBadge} numberOfLines={1}>{def.badge}</Text>
+        <Text style={styles.cardTag} numberOfLines={1}>{def.tag}</Text>
       </View>
-      <Text style={styles.cardQuestion}>{def.question}</Text>
+      <Text style={styles.cardQuestion} numberOfLines={4}>{def.question}</Text>
       <View style={styles.optionsList}>
         {def.options.map((opt) => (
           <View key={opt.letter} style={styles.optionRow}>
             <View style={styles.optionLetter}>
               <Text style={[styles.optionLetterText, { color: def.colors[1] }]}>{opt.letter}</Text>
             </View>
-            <Text style={styles.optionLabel}>{opt.label}</Text>
+            <Text style={styles.optionLabel} numberOfLines={1}>{opt.label}</Text>
           </View>
         ))}
       </View>
@@ -161,35 +161,39 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     borderRadius: Radius.xl,
-    padding: Spacing.md,
+    padding: Spacing.gutter,
+    overflow: 'hidden',
   },
   cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 4,
   },
   cardBadge: {
     fontFamily: FontFamily.bold,
-    fontSize: 9,
+    fontSize: 7,
     letterSpacing: 0.3,
     color: 'rgba(255,255,255,0.85)',
+    flexShrink: 1,
   },
   cardTag: {
     fontFamily: FontFamily.bold,
-    fontSize: 9,
+    fontSize: 7,
     letterSpacing: 0.3,
     color: 'rgba(255,255,255,0.85)',
+    flexShrink: 1,
   },
   cardQuestion: {
     fontFamily: FontFamily.bold,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: '#FFFFFF',
-    marginTop: Spacing.sm,
+    marginTop: Spacing.base,
   },
   optionsList: {
-    marginTop: Spacing.md,
-    gap: Spacing.xs,
+    marginTop: Spacing.base,
+    gap: 3,
   },
   optionRow: {
     flexDirection: 'row',
@@ -197,8 +201,8 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: Radius.md,
-    paddingVertical: 8,
-    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.base,
   },
   optionLetter: {
     width: 18,

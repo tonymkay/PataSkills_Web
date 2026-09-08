@@ -249,7 +249,7 @@ export default function ChallengeResultsScreen() {
     );
   }
 
-  const headline = isMultiplayer && myPositionLabel ? 'My Rank' : 'Complete!';
+  const headline = isMultiplayer ? 'My Rank' : 'Complete!';
   const exitLabel = rewardKeys > 0 ? 'See Reward' : 'Exit';
 
   return (
@@ -263,6 +263,8 @@ export default function ChallengeResultsScreen() {
           <Text style={[Typography.headlineLg, { color: colors.onSurface, fontWeight: 'bold' }]}>{headline}</Text>
           {isMultiplayer && myPositionLabel ? (
             <Text style={[Typography.displayLg, { color: colors.onSurface, fontWeight: 'bold' }]}>{myPositionLabel}</Text>
+          ) : isMultiplayer ? (
+            <Text style={[Typography.displayLg, { color: colors.onSurfaceVariant }]}>…</Text>
           ) : (
             <Text style={[Typography.displayLg, { color: colors.onSurface }]}>{run.score}/{run.total}</Text>
           )}
@@ -288,39 +290,62 @@ export default function ChallengeResultsScreen() {
                 nestedScrollEnabled
               >
                 <View>
-                  {sortedRows.map((r, i) => (
-                    <View
-                      key={r.id}
-                      style={{
-                        gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
-                        borderBottomWidth: i === sortedRows.length - 1 ? 0 : 1,
-                        borderBottomColor: colors.outlineVariant,
-                        backgroundColor: r.isMe ? StaticColors.selection.activeTint : 'transparent',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-                        <Text style={[Typography.bodyMd, { color: colors.onSurface, width: 34, textAlign: 'center', fontWeight: 'bold' }]}>
-                          {i + 1}
-                        </Text>
-                        <Avatar name={r.name} size={32} imageUrl={null} />
-                        <Text style={[Typography.bodyMd, { color: colors.onSurface, flex: 1 }]} numberOfLines={1}>{r.isMe ? 'You' : r.name}</Text>
+                  {sortedRows.length === 0 ? (
+                    /* Loading placeholder while online state is being fetched */
+                    [0, 1, 2].map((idx) => (
+                      <View
+                        key={`placeholder-${idx}`}
+                        style={{
+                          gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
+                          borderBottomWidth: idx === 2 ? 0 : 1,
+                          borderBottomColor: colors.outlineVariant,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                          <View style={{ width: 34, height: 14, borderRadius: Radius.sm, backgroundColor: colors.surfaceContainerHigh }} />
+                          <View style={{ width: 32, height: 32, borderRadius: Radius.full, backgroundColor: colors.surfaceContainerHigh }} />
+                          <View style={{ flex: 1, height: 14, borderRadius: Radius.sm, backgroundColor: colors.surfaceContainerHigh }} />
+                        </View>
+                        <View style={{ paddingLeft: 34 + 32 + Spacing.sm * 2 }}>
+                          <View style={{ width: '60%', height: 10, borderRadius: Radius.sm, backgroundColor: colors.surfaceContainerHigh }} />
+                        </View>
                       </View>
-                      <View style={{ paddingLeft: 34 + 32 + Spacing.sm * 2 }}>
-                        {r.finished ? (
-                          <Text style={[Typography.caption, { color: colors.onSurfaceVariant }]}>
-                            {r.score}/{r.total} • {formatTime(r.timeMs)}
+                    ))
+                  ) : (
+                    sortedRows.map((r, i) => (
+                      <View
+                        key={r.id}
+                        style={{
+                          gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
+                          borderBottomWidth: i === sortedRows.length - 1 ? 0 : 1,
+                          borderBottomColor: colors.outlineVariant,
+                          backgroundColor: r.isMe ? StaticColors.selection.activeTint : 'transparent',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                          <Text style={[Typography.bodyMd, { color: colors.onSurface, width: 34, textAlign: 'center', fontWeight: 'bold' }]}>
+                            {i + 1}
                           </Text>
-                        ) : (
-                          <ProgressPill
-                            current={r.currentQuestionIndex}
-                            total={r.total}
-                            trackColor={colors.surfaceContainerHigh}
-                            fillColor={GREEN}
-                          />
-                        )}
+                          <Avatar name={r.name} size={32} imageUrl={null} />
+                          <Text style={[Typography.bodyMd, { color: colors.onSurface, flex: 1 }]} numberOfLines={1}>{r.isMe ? 'You' : r.name}</Text>
+                        </View>
+                        <View style={{ paddingLeft: 34 + 32 + Spacing.sm * 2 }}>
+                          {r.finished ? (
+                            <Text style={[Typography.caption, { color: colors.onSurfaceVariant }]}>
+                              {r.score}/{r.total} • {formatTime(r.timeMs)}
+                            </Text>
+                          ) : (
+                            <ProgressPill
+                              current={r.currentQuestionIndex}
+                              total={r.total}
+                              trackColor={colors.surfaceContainerHigh}
+                              fillColor={GREEN}
+                            />
+                          )}
+                        </View>
                       </View>
-                    </View>
-                  ))}
+                    ))
+                  )}
                 </View>
               </ScrollView>
             </View>
@@ -454,7 +479,8 @@ const reviewStyles = StyleSheet.create({
   sheetWrapper: {
     width: '100%',
     maxWidth: 480,
-    alignItems: 'center',
+    maxHeight: '85%',
+    justifyContent: 'flex-end',
   },
   sheetContainer: {
     width: '100%',
@@ -463,7 +489,6 @@ const reviewStyles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.sm,
-    maxHeight: '85%',
   },
   handleRow: {
     alignItems: 'center',

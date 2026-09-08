@@ -132,7 +132,7 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <Text style={[styles.heading, { color: colors.onSurface }]}>Skills Corner</Text>
+        <Text style={[styles.heading, { color: colors.onSurface }]}>Choose a skill</Text>
 
         <View style={styles.grid}>
           {gridSkills.map((skill) => (
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.lg,
   },
   heading: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.regular,
     fontSize: 28,
     lineHeight: 34,
     textAlign: 'center',
