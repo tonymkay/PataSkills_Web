@@ -27,8 +27,10 @@ import {
   startCompanionRace,
   stopCompanionSession,
 } from '@/lib/challengeCompanionSession';
+import { sendScoutFinish, sendScoutProgress, startScoutRace } from '@/lib/challengeScoutSession';
 import { submitChallengeResult } from '@/lib/challenges';
 import { useChallengeCompanionSession } from '@/hooks/useChallengeCompanionSession';
+import { useChallengeScoutSession } from '@/hooks/useChallengeScoutSession';
 
 const GREEN = StaticColors.selection.activeBorder;
 const AUTO_ADVANCE_DELAY_MS = 260;
@@ -96,7 +98,9 @@ export default function ChallengeRunScreen() {
 
   const current = questions[qIndex];
   const isCompanion = !!pending?.isCompanion;
+  const isScout = !!pending?.isScout;
   const companionSession = useChallengeCompanionSession();
+  const scoutSession = useChallengeScoutSession();
   const notifiedFinishRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
