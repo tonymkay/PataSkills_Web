@@ -11,7 +11,7 @@ import { TrackDetailScreen } from '@/components/landing/TrackDetailScreen';
 import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
 import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
 import { areTabsUnlocked } from '@/lib/progress';
-import { trackSessionStarted } from '@/lib/deviceAnalytics';
+import { trackSessionStarted, trackTopicLoadingStarted } from '@/lib/deviceAnalytics';
 import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
@@ -97,6 +97,7 @@ export function SkillsFlow({ embedded = false, standalone = false }: SkillsFlowP
     setProgress(null);
     setCurrentTrack(track);
     setTrackIsDeepLinked(deepLinked);
+    void trackTopicLoadingStarted(skill, track);
     const startedAt = Date.now();
     const result = await downloadSession(track, skill, (p) => setProgress(p));
     const elapsed = Date.now() - startedAt;

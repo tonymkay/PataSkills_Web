@@ -4,10 +4,18 @@ import { getDeviceId, getDevicePlatform } from '@/lib/deviceId';
 import { getKeysState } from '@/lib/keys';
 
 const EMAIL_STORAGE_KEY = '@play/user_email';
+const QUEUE_STORAGE_KEY = '@play/device_events_queue';
 
-type DeviceEventType = 'landing_page_seen' | 'session_started' | 'topic_complete';
+type DeviceEventType =
+  | 'landing_page_seen'
+  | 'topic_loading_started'
+  | 'session_started'
+  | 'topic_complete';
 
-const COUNT_COLUMN: Record<DeviceEventType, string> = {
+// topic_loading_started deliberately has no counter column on play_devices
+// -- it's a funnel/timeline signal for play_device_events, not a running
+// total anyone needs at-a-glance the way landing/session/topic counts are.
+const COUNT_COLUMN: Partial<Record<DeviceEventType, string>> = {
   landing_page_seen: 'landing_views_count',
   session_started: 'sessions_count',
   topic_complete: 'topics_completed_count',
@@ -21,61 +29,134 @@ interface CheckpointOptions {
   questionsMissed?: number;
 }
 
-// Fire-and-forget checkpoint: upserts play_devices' running counters +
-// last-seen/skill/track/balance snapshot, then appends one
-// play_device_events row. Same read/apply/write + swallow-errors shape
-// every other sync*ToCloud() in this app already uses (keys.ts, xp.ts,
-// streak.ts) -- a flaky connection never blocks gameplay.
-async function recordCheckpoint(
-  eventType: DeviceEventType,
-  options: CheckpointOptions = {},
-): Promise<void> {
+// A checkpoint captured while offline (or that otherwise failed to write),
+// queued to AsyncStorage for a later flush. Carries everything
+// writeCheckpoint needs to replay the write once connectivity is back --
+// the device/key-balance snapshot is re-read fresh at flush time (not
+// stored here), same as a live call would, so a queued event reflects the
+// balance/email present at flush time, not at capture time.
+interface QueuedCheckpoint {
+  eventType: DeviceEventType;
+  options: CheckpointOptions;
+  queuedAt: string;
+}
+
+async function readQueue(): Promise<QueuedCheckpoint[]> {
   try {
-    const [deviceId, keysState, email] = await Promise.all([
-      getDeviceId(),
-      getKeysState(),
-      AsyncStorage.getItem(EMAIL_STORAGE_KEY),
-    ]);
+    const raw = await AsyncStorage.getItem(QUEUE_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as QueuedCheckpoint[]) : [];
+  } catch {
+    return [];
+  }
+}
 
-    const keyBalance = keysState.isPremium ? 999999 : keysState.balance;
-    const now = new Date().toISOString();
-    const countColumn = COUNT_COLUMN[eventType];
+async function writeQueue(queue: QueuedCheckpoint[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(queue));
+  } catch {}
+}
 
+async function enqueue(eventType: DeviceEventType, options: CheckpointOptions): Promise<void> {
+  const queue = await readQueue();
+  queue.push({ eventType, options, queuedAt: new Date().toISOString() });
+  await writeQueue(queue);
+}
+
+// The actual Supabase write, shared by both the live path (recordCheckpoint)
+// and the queue-replay path (flushQueuedDeviceEvents). Throws on failure --
+// unlike the old single-function version, this one doesn't swallow errors
+// itself, so each caller can decide what "failed" means for it: the live
+// path queues on failure, the flush path leaves the item queued and moves
+// on to the next one instead of losing the whole batch to one bad item.
+async function writeCheckpoint(eventType: DeviceEventType, options: CheckpointOptions): Promise<void> {
+  const [deviceId, keysState, email] = await Promise.all([
+    getDeviceId(),
+    getKeysState(),
+    AsyncStorage.getItem(EMAIL_STORAGE_KEY),
+  ]);
+
+  const keyBalance = keysState.isPremium ? 999999 : keysState.balance;
+  const now = new Date().toISOString();
+  const countColumn = COUNT_COLUMN[eventType];
+
+  let nextCount: number | undefined;
+  if (countColumn) {
     const { data: existing } = await supabase
       .from('play_devices')
       .select(countColumn)
       .eq('device_id', deviceId)
       .maybeSingle<Record<string, number>>();
+    nextCount = (existing?.[countColumn] ?? 0) + 1;
+  }
 
-    const nextCount = (existing?.[countColumn] ?? 0) + 1;
-
-    await supabase.from('play_devices').upsert(
-      {
-        device_id: deviceId,
-        platform: getDevicePlatform(),
-        last_seen_at: now,
-        [countColumn]: nextCount,
-        key_balance: keyBalance,
-        is_premium: !!keysState.isPremium,
-        ...(options.skillId ? { last_skill_id: options.skillId } : {}),
-        ...(options.track ? { last_track: options.track } : {}),
-        ...(email ? { email } : {}),
-        updated_at: now,
-      },
-      { onConflict: 'device_id' },
-    );
-
-    await supabase.from('play_device_events').insert({
+  const { error: upsertError } = await supabase.from('play_devices').upsert(
+    {
       device_id: deviceId,
-      event_type: eventType,
-      skill_id: options.skillId ?? null,
-      track: options.track ?? null,
-      topic_index: options.topicIndex ?? null,
-      questions_answered: options.questionsAnswered ?? null,
-      questions_missed: options.questionsMissed ?? null,
+      platform: getDevicePlatform(),
+      last_seen_at: now,
+      ...(countColumn && nextCount !== undefined ? { [countColumn]: nextCount } : {}),
       key_balance: keyBalance,
-    });
-  } catch {}
+      is_premium: !!keysState.isPremium,
+      ...(options.skillId ? { last_skill_id: options.skillId } : {}),
+      ...(options.track ? { last_track: options.track } : {}),
+      ...(email ? { email } : {}),
+      updated_at: now,
+    },
+    { onConflict: 'device_id' },
+  );
+  if (upsertError) throw upsertError;
+
+  const { error: insertError } = await supabase.from('play_device_events').insert({
+    device_id: deviceId,
+    event_type: eventType,
+    skill_id: options.skillId ?? null,
+    track: options.track ?? null,
+    topic_index: options.topicIndex ?? null,
+    questions_answered: options.questionsAnswered ?? null,
+    questions_missed: options.questionsMissed ?? null,
+    key_balance: keyBalance,
+  });
+  if (insertError) throw insertError;
+}
+
+// Fire-and-forget checkpoint: tries the write immediately; if it fails
+// (offline, flaky connection, a dropped request, etc.) the event is
+// queued to AsyncStorage instead of being silently dropped, and gets
+// replayed by flushQueuedDeviceEvents() on the next reconnect. Same
+// read/apply/write shape every other sync*ToCloud() in this app uses --
+// a flaky connection never blocks gameplay, and now it doesn't silently
+// lose the event either.
+async function recordCheckpoint(
+  eventType: DeviceEventType,
+  options: CheckpointOptions = {},
+): Promise<void> {
+  try {
+    await writeCheckpoint(eventType, options);
+  } catch {
+    await enqueue(eventType, options);
+  }
+}
+
+// Replays every queued checkpoint in capture order. Each item is removed
+// from the queue only once its write actually succeeds -- a failed item
+// (still offline, or a real error) stays queued for the next flush rather
+// than being dropped. Wired into the same offline->online transition
+// listener that already drives initAutoBackupOnReconnect() (app/_layout.tsx),
+// so device-analytics events and the mistakes/progress/XP/streak/keys
+// backup flush on the same reconnect signal.
+export async function flushQueuedDeviceEvents(): Promise<void> {
+  const queue = await readQueue();
+  if (queue.length === 0) return;
+
+  const remaining: QueuedCheckpoint[] = [];
+  for (const item of queue) {
+    try {
+      await writeCheckpoint(item.eventType, item.options);
+    } catch {
+      remaining.push(item);
+    }
+  }
+  await writeQueue(remaining);
 }
 
 // Called right when a payment succeeds (lib/billing.ts) or an account is
@@ -111,6 +192,16 @@ export async function linkDeviceToEmail(email: string): Promise<void> {
 
 export async function trackLandingPageSeen(): Promise<void> {
   await recordCheckpoint('landing_page_seen');
+}
+
+// Fires the moment a topic's loading/download screen appears -- the
+// bouncing-dots moment, before the questions have actually arrived. See
+// docs/device-tracking-plan.md's Phase 2 discussion: this is the
+// checkpoint that turns "landed on homepage, then nothing" into a
+// distinguishable "landed, tapped a topic, and bounced during load"
+// signal, instead of both cases looking identical in play_device_events.
+export async function trackTopicLoadingStarted(skillId: string, track: string): Promise<void> {
+  await recordCheckpoint('topic_loading_started', { skillId, track });
 }
 
 export async function trackSessionStarted(skillId: string, track: string): Promise<void> {

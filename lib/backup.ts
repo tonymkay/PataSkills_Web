@@ -6,6 +6,7 @@ import { pushAllProgressToCloud } from '@/lib/progress';
 import { pushXpToCloud } from '@/lib/xp';
 import { pushStreakToCloud } from '@/lib/streak';
 import { pushKeysToCloud } from '@/lib/keys';
+import { flushQueuedDeviceEvents } from '@/lib/deviceAnalytics';
 
 export interface BackupResult {
   hasEmail: boolean;
@@ -87,6 +88,17 @@ async function maybeAutoBackup(): Promise<void> {
   } catch {}
 }
 
+// Unlike maybeAutoBackup(), queued device-analytics checkpoints (device
+// tracking plan, Phase 2) aren't throttled -- they're a small, bounded
+// queue of events that failed to write live, not a full re-push of every
+// local data category, so there's no cost concern to rate-limiting here.
+// Runs on every reconnect + once on launch, same as maybeAutoBackup.
+async function maybeFlushDeviceEvents(): Promise<void> {
+  try {
+    await flushQueuedDeviceEvents();
+  } catch {}
+}
+
 /**
  * Gap 2 (docs/sync-gaps-fix-plan.md) — the previous gap: every sync in this
  * app fires once, at the moment a local action happens, and simply drops
@@ -103,6 +115,7 @@ async function maybeAutoBackup(): Promise<void> {
  */
 export function initAutoBackupOnReconnect(): () => void {
   void maybeAutoBackup();
+  void maybeFlushDeviceEvents();
 
   let wasOffline = false;
   const unsubscribe = NetInfo.addEventListener((state) => {
@@ -114,6 +127,7 @@ export function initAutoBackupOnReconnect(): () => void {
     if (wasOffline) {
       wasOffline = false;
       void maybeAutoBackup();
+      void maybeFlushDeviceEvents();
     }
   });
 
