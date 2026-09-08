@@ -42,7 +42,7 @@ export default function SettingsScreen() {
   const { colors, scheme, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { isPremium } = useKeys();
+  const { isPremium, refresh: refreshKeys } = useKeys();
 
   const [email, setEmail] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -203,6 +203,11 @@ export default function SettingsScreen() {
         onSuccess={(result) => {
           setEmail(result.email);
           setRestoreModalVisible(false);
+          // restoreAccountByEmail already wrote the restored balance/premium
+          // flag to AsyncStorage — this screen's useKeys() instance was
+          // mounted before that happened, so its own state (the "Premium"/
+          // "Free" value above) is stale until told to re-read it.
+          void refreshKeys();
         }}
         currentEmail={email}
         onLoggedOut={() => setEmail(null)}

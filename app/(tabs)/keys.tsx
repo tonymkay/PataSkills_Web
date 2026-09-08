@@ -21,8 +21,20 @@ export default function KeysTab() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { balance, isPremium } = useKeys();
+  const { balance, isPremium, refresh } = useKeys();
   const [subInfo, setSubInfo] = useState<SubscriptionInfo | null>(null);
+
+  // Re-read the balance/premium flag from storage every time this tab
+  // regains focus. useKeys() only reads AsyncStorage on its own mount, so
+  // without this, restoring an account elsewhere (Settings, the landing
+  // screen's restore link) leaves this already-mounted tab showing
+  // whatever balance existed before the restore — storage is correct,
+  // this screen just never re-reads it. See CODEBASE.md / restore sync fix.
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
 
   useFocusEffect(
     useCallback(() => {

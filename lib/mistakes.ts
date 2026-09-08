@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { getDeviceId } from '@/lib/deviceId';
 import type { QuizQuestion, OptionChoice } from '@/types/quiz';
-
-const EMAIL_STORAGE_KEY = '@play/user_email';
 
 export interface QuestionAttempt {
   skillId: string;
@@ -158,25 +157,24 @@ export async function getSkillMistakesCount(skillId: string): Promise<number> {
 }
 
 /**
- * Cloud sync mirror to Supabase if table exists and email is known.
+ * Cloud sync mirror to Supabase, keyed by device_id via the
+ * upsert_question_attempt RPC (matches PataSkillsV2 sql/46_question_attempts.sql
+ * — table is public.question_attempts, PK (device_id, question_id), no email
+ * column, writes go through this SECURITY DEFINER RPC granted to anon/authenticated).
  */
 async function syncAttemptToCloud(attempt: QuestionAttempt): Promise<void> {
   try {
-    const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
-    if (!email) return;
+    const deviceId = await getDeviceId();
+    if (!deviceId) return;
 
-    await supabase.from('play_question_attempts').upsert(
-      {
-        email,
-        skill_id: attempt.skillId,
-        question_id: attempt.questionId,
-        topic_index: attempt.topicIndex,
-        fail_count: attempt.failCount,
-        attempt_count: attempt.attemptCount,
-        solved: attempt.solved,
-        last_missed_at: attempt.lastMissedAt,
-      },
-      { onConflict: 'email,question_id' }
-    );
+    await supabase.rpc('upsert_question_attempt', {
+      p_device_id: deviceId,
+      p_skill_id: attempt.skillId,
+      p_topic_id: String(attempt.topicIndex),
+      p_question_id: attempt.questionId,
+      p_fail_count: attempt.failCount,
+      p_attempt_count: attempt.attemptCount,
+      p_solved: attempt.solved,
+    });
   } catch {}
 }
