@@ -3,7 +3,7 @@ import { PLANS, keyPackById } from '@/lib/premium';
 import { usdToKES } from '@/lib/currency';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDeviceId } from '@/lib/deviceId';
-import { linkDeviceToEmail } from '@/lib/deviceAnalytics';
+import { linkDeviceToEmail, trackPurchaseInterested, trackPurchaseSuccess } from '@/lib/deviceAnalytics';
 
 const PAYSTACK_PUBLIC_KEY = process.env.EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder';
 
@@ -81,6 +81,9 @@ export async function purchasePlan(packageId: string, email: string, skill?: str
   try {
     // Save email locally before payment
     await AsyncStorage.setItem('@play/user_email', email);
+    // Interested the moment they've entered an email and tapped Pay --
+    // fires whether or not they go on to complete checkout.
+    void trackPurchaseInterested(plan.packageId, skill, track);
     const reference = await openCheckout(amountKES, email, `PataSkills ${plan.name}`, 'subscription', plan.packageId, undefined, expiresAt);
     if (!reference) return 'cancelled';
 
@@ -88,6 +91,7 @@ export async function purchasePlan(packageId: string, email: string, skill?: str
     // the next tracking checkpoint to carry it (see docs/device-tracking-plan.md).
     const deviceId = await getDeviceId();
     await linkDeviceToEmail(email);
+    void trackPurchaseSuccess(plan.packageId, skill, track);
 
     // Save purchase & account state to Supabase
     try {
@@ -133,12 +137,16 @@ export async function purchaseKeyPack(packId: string, email: string, skill?: str
   try {
     // Save email locally before payment
     await AsyncStorage.setItem('@play/user_email', email);
+    // Interested the moment they've entered an email and tapped Pay --
+    // fires whether or not they go on to complete checkout.
+    void trackPurchaseInterested(pack.id, skill, track);
     const reference = await openCheckout(amountKES, email, `PataSkills ${pack.keys} keys`, 'keys', pack.productId, pack.keys);
     if (!reference) return 'cancelled';
 
     // Join the device to this email right away -- same as purchasePlan().
     const deviceId = await getDeviceId();
     await linkDeviceToEmail(email);
+    void trackPurchaseSuccess(pack.id, skill, track);
 
     // Save purchase to Supabase
     try {

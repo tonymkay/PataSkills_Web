@@ -11,7 +11,9 @@ type DeviceEventType =
   | 'topic_loading_started'
   | 'session_started'
   | 'topic_complete'
-  | 'paywall_seen';
+  | 'paywall_seen'
+  | 'purchase_interested'
+  | 'purchase_success';
 
 // topic_loading_started deliberately has no counter column on play_devices
 // -- it's a funnel/timeline signal for play_device_events, not a running
@@ -28,6 +30,7 @@ interface CheckpointOptions {
   topicIndex?: number;
   questionsAnswered?: number;
   questionsMissed?: number;
+  productId?: string;
 }
 
 // A checkpoint captured while offline (or that otherwise failed to write),
@@ -115,6 +118,7 @@ async function writeCheckpoint(eventType: DeviceEventType, options: CheckpointOp
     topic_index: options.topicIndex ?? null,
     questions_answered: options.questionsAnswered ?? null,
     questions_missed: options.questionsMissed ?? null,
+    product_id: options.productId ?? null,
     key_balance: keyBalance,
   });
   if (insertError) throw insertError;
@@ -226,6 +230,41 @@ export async function trackPaywallSeen(
     skillId,
     track,
     ...(topicIndex !== null ? { topicIndex } : {}),
+  });
+}
+
+// Fires from lib/billing.ts right after a valid email is captured and
+// "Pay with Paystack" is tapped -- before checkout even opens. productId
+// is the exact keys pack id (e.g. 'pack_20') or subscription packageId
+// (e.g. 'plan_monthly') they clicked on; play_accounts.email doesn't
+// carry this, so pricing.ts's KEY_PACKS/PLANS tables are how the
+// dashboard maps it back to a human label. Fires again on every retry --
+// play_device_events is append-only, so re-attempts naturally show up as
+// a 2nd/3rd "interested" row without any dedup logic needed here.
+export async function trackPurchaseInterested(
+  productId: string,
+  skillId?: string,
+  track?: string,
+): Promise<void> {
+  await recordCheckpoint('purchase_interested', {
+    productId,
+    ...(skillId ? { skillId } : {}),
+    ...(track ? { track } : {}),
+  });
+}
+
+// Fires from lib/billing.ts right after Paystack's checkout callback
+// confirms payment -- same moment the app already grants keys/premium
+// client-side, before any webhook involvement.
+export async function trackPurchaseSuccess(
+  productId: string,
+  skillId?: string,
+  track?: string,
+): Promise<void> {
+  await recordCheckpoint('purchase_success', {
+    productId,
+    ...(skillId ? { skillId } : {}),
+    ...(track ? { track } : {}),
   });
 }
 

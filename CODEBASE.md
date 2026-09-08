@@ -395,7 +395,7 @@ UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install C
 | `leaderboard.ts` | Current user + mock peers in-band |
 | `help.ts` | Topics + `help_requests` insert |
 | `deviceId.ts` | Anonymous per-device UUID, persisted in `AsyncStorage` -- not a hardware fingerprint/IDFA/GAID; see `userdata.md` §5 |
-| `deviceAnalytics.ts` | Anonymous pre-email checkpoints (`landing_page_seen` / `session_started` / `topic_complete`) -> `play_devices` + `play_device_events`; see `userdata.md` §5 and `docs/device-tracking-plan.md` |
+| `deviceAnalytics.ts` | Anonymous pre-email checkpoints (`landing_page_seen` / `topic_loading_started` / `session_started` / `topic_complete` / `paywall_seen`) -> `play_devices` + `play_device_events`; offline queue (`AsyncStorage`) when writes fail, flushed on reconnect via `backup.ts`'s NetInfo listener; see `userdata.md` §5 and `docs/device-tracking-plan.md` |
 | `navDirection.ts` | `navPush` / `navBack` / `navReplace` |
 
 ### Keys (`keys.ts`)
@@ -490,6 +490,8 @@ One-off Node `.mjs` (run from `play/`). Highlights:
 - `play_sign_pairs.sql`
 - `play_track_defaults.sql` — nullable `image_path` / `label`; seed `full` → `"Learn Full Skill"` (images unseeded so driving art does not leak)
 - `play_devices.sql` / `play_device_events.sql` — anonymous pre-email device tracking (device state + append-only checkpoint log); see `userdata.md` §5
+- `play_device_events_add_loading_started.sql` — adds `topic_loading_started` to the `event_type` check constraint (fires at the bouncing-dots/download moment, before `session_started`)
+- `play_device_events_add_paywall_seen.sql` — adds `paywall_seen` to the `event_type` check constraint (fires once per paywall encounter — out-of-keys or free-trial-timer-not-reset — from `PlaySession.tsx`'s `showPaywall`)
 - `fix_play_signs_rls.sql`, `reset_signs_fresh.sql`
 
 Other tables (`play_curricula`, `play_signs`, `play_progress`, `play_user_stats`, `play_question_attempts`, `play_devices`, `play_device_events`, `help_requests`) are used in app code; full column inventory is in `userdata.md`.
