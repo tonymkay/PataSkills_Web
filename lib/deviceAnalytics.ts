@@ -78,11 +78,22 @@ async function recordCheckpoint(
   } catch {}
 }
 
-// Direct join, called right when a payment succeeds (see lib/billing.ts).
-// Unlike the email field getting carried along inside recordCheckpoint --
-// which only happens on the *next* landing/session/topic event -- this
-// upserts play_devices.email immediately, so the device<->email link
-// doesn't depend on another checkpoint firing afterward.
+// Called right when a payment succeeds (lib/billing.ts) or an account is
+// signed in/restored (lib/restore.ts). Unlike the email field getting
+// carried along inside recordCheckpoint -- which only happens on the
+// *next* landing/session/topic event -- this upserts play_devices.email
+// immediately, so the device<->email link doesn't depend on another
+// checkpoint firing afterward.
+//
+// Also the reconciliation moment for Gap 3 (docs/sync-gaps-fix-plan.md):
+// everything this device holds locally (mistakes, progress, XP, streak,
+// keys) was device-keyed and syncing fine on its own, but nothing had
+// ever pushed it specifically *under this email* until now -- an
+// anonymous learner who plays for a while and then signs up would
+// otherwise have their pre-signup activity stranded, visible only by
+// device_id, never joined to the account they just created. Fire-and-
+// forget, same fail-silently shape as every other sync call in this file
+// -- never blocks the sign-in/purchase flow that called this.
 export async function linkDeviceToEmail(email: string): Promise<void> {
   try {
     const deviceId = await getDeviceId();
@@ -90,6 +101,11 @@ export async function linkDeviceToEmail(email: string): Promise<void> {
       { device_id: deviceId, email, updated_at: new Date().toISOString() },
       { onConflict: 'device_id' },
     );
+  } catch {}
+
+  try {
+    const { runManualBackup } = await import('@/lib/backup');
+    void runManualBackup();
   } catch {}
 }
 

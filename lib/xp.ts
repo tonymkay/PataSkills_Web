@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { getDeviceId } from '@/lib/deviceId';
 
 const EMAIL_STORAGE_KEY = '@play/user_email';
 const TOTAL_XP_STORAGE_KEY = '@play/total_xp';
@@ -49,7 +50,7 @@ export async function recordXpEarned(
     await AsyncStorage.setItem(TOTAL_XP_STORAGE_KEY, String(nextTotal));
   } catch {}
 
-  // Sync to Supabase if email is present
+  // Sync to Supabase, device-keyed (email carried along if linked)
   void syncXpToCloud(nextTotal);
 
   return { skillXp: nextSkill, totalXp: nextTotal };
@@ -57,16 +58,17 @@ export async function recordXpEarned(
 
 async function syncXpToCloud(totalXp: number): Promise<boolean> {
   try {
+    const deviceId = await getDeviceId();
     const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
-    if (!email) return false;
 
     const { error } = await supabase.from('play_user_stats').upsert(
       {
-        email,
+        device_id: deviceId,
+        ...(email ? { email } : {}),
         total_xp: totalXp,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'email' }
+      { onConflict: 'device_id' }
     );
     return !error;
   } catch {
@@ -77,7 +79,8 @@ async function syncXpToCloud(totalXp: number): Promise<boolean> {
 /**
  * Manual "Backup now" entry point (Settings). Re-pushes current lifetime XP
  * regardless of whether the live sync at recordXpEarned time succeeded.
- * Returns false (no-op) if no email is linked — play_user_stats is email-keyed.
+ * Device-keyed, so it works with or without a linked email — see
+ * docs/sync-gaps-fix-plan.md Gap 1.
  */
 export async function pushXpToCloud(): Promise<boolean> {
   const totalXp = await getTotalXp();

@@ -11,6 +11,7 @@ import { fontAssets } from '@/constants/typography';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { initNotifications } from '@/lib/notifications';
 import { configureBilling } from '@/lib/billing';
+import { initAutoBackupOnReconnect } from '@/lib/backup';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -37,6 +38,8 @@ function RootLayoutInner() {
     onLayout();
     void initNotifications();
     void configureBilling();
+    const unsubscribeAutoBackup = initAutoBackupOnReconnect();
+    return unsubscribeAutoBackup;
   }, [onLayout]);
 
   if (!fontsLoaded) return null;

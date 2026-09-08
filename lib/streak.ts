@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { getDeviceId } from '@/lib/deviceId';
 
 const EMAIL_STORAGE_KEY = '@play/user_email';
 const ACTIVITY_DATES_KEY = '@play/activity_dates';
@@ -40,7 +41,7 @@ export async function recordActivityToday(): Promise<void> {
       await AsyncStorage.setItem(ACTIVITY_DATES_KEY, JSON.stringify(updated));
     } catch {}
 
-    // Cloud sync streak summary if email is known
+    // Cloud sync streak summary, device-keyed (email carried along if linked)
     void syncStreakToCloud(updated);
   }
 }
@@ -120,17 +121,18 @@ export async function getStreakData(): Promise<StreakData> {
 
 async function syncStreakToCloud(dates: string[]): Promise<boolean> {
   try {
+    const deviceId = await getDeviceId();
     const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
-    if (!email) return false;
 
     const { error } = await supabase.from('play_user_stats').upsert(
       {
-        email,
+        device_id: deviceId,
+        ...(email ? { email } : {}),
         active_days_count: dates.length,
         last_active_date: dates[dates.length - 1],
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'email' }
+      { onConflict: 'device_id' }
     );
     return !error;
   } catch {
@@ -141,8 +143,9 @@ async function syncStreakToCloud(dates: string[]): Promise<boolean> {
 /**
  * Manual "Backup now" entry point (Settings). Re-pushes the current
  * activity-dates summary regardless of whether the live sync at
- * recordActivityToday time succeeded. Returns false if no email is linked
- * or there's no activity recorded yet — play_user_stats is email-keyed.
+ * recordActivityToday time succeeded. Device-keyed, so it works with or
+ * without a linked email — see docs/sync-gaps-fix-plan.md Gap 1. Still
+ * returns false if there's no activity recorded yet (nothing to push).
  */
 export async function pushStreakToCloud(): Promise<boolean> {
   const dates = await readDates();

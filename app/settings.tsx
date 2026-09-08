@@ -98,11 +98,9 @@ export default function SettingsScreen() {
       const result = await runManualBackup();
       const lines = [
         `Mistakes: ${result.mistakesPushed}/${result.mistakesTotal} pushed`,
-        result.hasEmail
-          ? `Progress: ${result.progressSkillsPushed}/${result.progressSkillsFound} skills pushed`
-          : 'Progress: skipped (no account linked)',
-        `XP: ${result.xpSynced ? 'synced' : result.hasEmail ? 'failed' : 'skipped (no account linked)'}`,
-        `Streak: ${result.streakSynced ? 'synced' : result.hasEmail ? 'failed or no activity yet' : 'skipped (no account linked)'}`,
+        `Progress: ${result.progressSkillsPushed}/${result.progressSkillsFound} skills pushed`,
+        `XP: ${result.xpSynced ? 'synced' : 'failed'}`,
+        `Streak: ${result.streakSynced ? 'synced' : 'failed or no activity yet'}`,
         `Keys: ${result.keysSynced ? 'synced' : 'skipped (no account linked)'}`,
       ];
       Alert.alert('Backup complete', lines.join('\n'));

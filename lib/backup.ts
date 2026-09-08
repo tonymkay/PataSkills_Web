@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { getStoredEmail } from '@/lib/email';
 import { pushAllMistakesToCloud } from '@/lib/mistakes';
 import { pushAllProgressToCloud } from '@/lib/progress';
@@ -41,9 +42,10 @@ async function discoverLocalSkillIds(): Promise<string[]> {
  * record-time sync for any of it actually succeeded. This exists because
  * "the deployed build was stale" or "record-time sync silently failed" are
  * real, recurring failure modes here — not deploy status, not whether an
- * email is linked. Mistakes push works device-only (no email needed);
- * progress/XP/streak/keys need a linked email since those tables are
- * email-keyed today.
+ * email is linked. Mistakes, progress, XP, and streak all push device-only
+ * now — see docs/sync-gaps-fix-plan.md Gaps 1 and 3. Only keys still needs
+ * a linked email (play_accounts is email-keyed by design — it's the
+ * account balance, not a per-device stat).
  */
 export async function runManualBackup(): Promise<BackupResult> {
   const email = await getStoredEmail();
@@ -51,7 +53,7 @@ export async function runManualBackup(): Promise<BackupResult> {
 
   const [mistakesResult, progressPushed, xpSynced, streakSynced, keysSynced] = await Promise.all([
     pushAllMistakesToCloud(),
-    email ? pushAllProgressToCloud(email, skillIds) : Promise.resolve(0),
+    pushAllProgressToCloud(email, skillIds),
     pushXpToCloud(),
     pushStreakToCloud(),
     pushKeysToCloud(),
@@ -67,4 +69,53 @@ export async function runManualBackup(): Promise<BackupResult> {
     streakSynced,
     keysSynced,
   };
+}
+
+const LAST_AUTO_BACKUP_KEY = '@play/last_auto_backup_at';
+// Skip an auto-flush if the last one landed under this long ago — a flaky
+// connection can flap online/offline repeatedly within seconds, and this
+// keeps that from hammering Supabase with a full backup every time.
+const AUTO_BACKUP_THROTTLE_MS = 2 * 60 * 1000;
+
+async function maybeAutoBackup(): Promise<void> {
+  try {
+    const lastRaw = await AsyncStorage.getItem(LAST_AUTO_BACKUP_KEY);
+    const last = lastRaw ? parseInt(lastRaw, 10) : 0;
+    if (Date.now() - last < AUTO_BACKUP_THROTTLE_MS) return;
+    await AsyncStorage.setItem(LAST_AUTO_BACKUP_KEY, String(Date.now()));
+    await runManualBackup();
+  } catch {}
+}
+
+/**
+ * Gap 2 (docs/sync-gaps-fix-plan.md) — the previous gap: every sync in this
+ * app fires once, at the moment a local action happens, and simply drops
+ * if the device is offline right then; nothing retried it until either
+ * another qualifying action happened while online, or the person manually
+ * tapped "Back up now." This is the actual "does it submit when I go
+ * online" answer: called once from app/_layout.tsx on launch, it (a) does
+ * one throttled flush immediately — covers a device that was offline last
+ * session and is opened while already back online — and (b) watches for
+ * the offline→online transition for as long as the app stays open, firing
+ * the same throttled flush each time. Silent by design (no Alert) — this
+ * is the background path; "Back up now" in Settings stays the only one
+ * that reports results to the person.
+ */
+export function initAutoBackupOnReconnect(): () => void {
+  void maybeAutoBackup();
+
+  let wasOffline = false;
+  const unsubscribe = NetInfo.addEventListener((state) => {
+    const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+    if (!isOnline) {
+      wasOffline = true;
+      return;
+    }
+    if (wasOffline) {
+      wasOffline = false;
+      void maybeAutoBackup();
+    }
+  });
+
+  return unsubscribe;
 }

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { KeysState, INITIAL_KEYS } from '@/lib/keys';
 import { sanitizeAndValidateEmail } from '@/lib/email';
 import { syncProgressWithCloud } from '@/lib/progress';
+import { linkDeviceToEmail } from '@/lib/deviceAnalytics';
 
 const STORAGE_KEY = '@play/keys';
 
@@ -38,6 +39,14 @@ async function applyRestoredState(
   };
 
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(restoredState));
+
+  // Join this device to the account immediately (previously only
+  // lib/billing.ts's purchase flow did this -- a plain sign-in/restore,
+  // the far more common path, never linked play_devices.email at all, and
+  // never reconciled this device's pre-login local activity into the
+  // account either). Fire-and-forget, doesn't block the login UI -- see
+  // docs/sync-gaps-fix-plan.md Gap 3.
+  void linkDeviceToEmail(email);
 }
 
 /**

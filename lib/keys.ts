@@ -44,7 +44,16 @@ async function read(): Promise<KeysState> {
   return { balance: INITIAL_KEYS, initialized: false, resetAt: null, isPremium: false, expiresAt: null };
 }
 
-async function write(state: KeysState): Promise<void> {
+/**
+ * Local write always happens and is never blocked by the cloud leg below.
+ * Returns whether the cloud leg specifically succeeded (false if no email
+ * is linked, or the Supabase upsert errored/threw) — callers that only
+ * care about local persistence (the vast majority) can ignore the return
+ * value; pushKeysToCloud() is the one caller that needs it, since it was
+ * previously reporting "synced" without ever checking this — see
+ * docs/sync-gaps-fix-plan.md Gap 4.
+ */
+async function write(state: KeysState): Promise<boolean> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {}
@@ -55,34 +64,35 @@ async function write(state: KeysState): Promise<void> {
   // never blocks gameplay; the local write above already succeeded.
   try {
     const email = await AsyncStorage.getItem(EMAIL_KEY);
-    if (email) {
-      await supabase.from('play_accounts').upsert(
-        {
-          email,
-          balance: state.balance,
-          is_premium: !!state.isPremium,
-          reset_at: state.resetAt ? new Date(state.resetAt).toISOString() : null,
-          reset_count: state.resetCount ?? 0,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'email' },
-      );
-    }
-  } catch {}
+    if (!email) return false;
+    const { error } = await supabase.from('play_accounts').upsert(
+      {
+        email,
+        balance: state.balance,
+        is_premium: !!state.isPremium,
+        reset_at: state.resetAt ? new Date(state.resetAt).toISOString() : null,
+        reset_count: state.resetCount ?? 0,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'email' },
+    );
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Manual "Backup now" entry point (Settings). Re-pushes the current key
- * balance/premium state regardless of whether the live sync in write()
- * succeeded earlier. No-op (returns false) if no email is linked —
- * play_accounts is email-keyed.
+ * balance/premium state and returns whether it actually landed — no
+ * longer hardcoded to true regardless of the write() result (Gap 4). Still
+ * a no-op (false) if no email is linked — play_accounts is email-keyed.
  */
 export async function pushKeysToCloud(): Promise<boolean> {
   const email = await AsyncStorage.getItem(EMAIL_KEY);
   if (!email) return false;
   const state = await read();
-  await write(state);
-  return true;
+  return write(state);
 }
 
 /** The timer is the source of truth: once `resetAt` has passed, the balance

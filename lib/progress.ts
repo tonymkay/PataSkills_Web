@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { Track } from '@/lib/curriculum';
+import { getDeviceId } from '@/lib/deviceId';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 const EMAIL_STORAGE_KEY = '@play/user_email';
@@ -106,25 +107,28 @@ export async function markTopicCompleted(
     await unlockTabsIfNeeded();
   } catch {}
 
-  // Sync to Supabase if email is known -- scoped by (email, skill_id) so
-  // this skill's row never collides with another skill's progress for the
-  // same learner (see docs/progress-restore-fix-plan.md Bug B).
+  // Sync to Supabase, device-keyed (email carried along if linked) --
+  // scoped by (device_id, skill_id) so this skill's row never collides
+  // with another skill's progress for the same device (see
+  // docs/progress-restore-fix-plan.md Bug B and docs/sync-gaps-fix-plan.md
+  // Gap 3 -- this used to be email-only, so an anonymous device never got
+  // progress backed up at all).
   try {
+    const deviceId = await getDeviceId();
     const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
-    if (email) {
-      const tracks = await getCompletedTracks(skillId);
-      await supabase.from('play_progress').upsert(
-        {
-          email,
-          skill_id: skillId,
-          completed_topics: updated.completedTopics,
-          total_topics: updated.totalTopics,
-          completed_tracks: tracks,
-          updated_at: updated.lastUpdated,
-        },
-        { onConflict: 'email,skill_id' }
-      );
-    }
+    const tracks = await getCompletedTracks(skillId);
+    await supabase.from('play_progress').upsert(
+      {
+        device_id: deviceId,
+        ...(email ? { email } : {}),
+        skill_id: skillId,
+        completed_topics: updated.completedTopics,
+        total_topics: updated.totalTopics,
+        completed_tracks: tracks,
+        updated_at: updated.lastUpdated,
+      },
+      { onConflict: 'device_id,skill_id' }
+    );
   } catch {}
 
   return updated;
@@ -160,6 +164,10 @@ export async function syncProgressWithCloud(
  * Every Supabase call here fails silently (try/catch, same pattern as
  * deviceAnalytics.ts) -- offline just means local progress is left as-is,
  * no connectivity check needed.
+ *
+ * Matches by device_id OR email (Gap 3 -- docs/sync-gaps-fix-plan.md), so a
+ * returning anonymous device recovers its own prior progress even before
+ * any email has ever been linked, not just rows already tied to `email`.
  */
 export async function syncAllProgressWithCloud(
   email: string,
@@ -175,10 +183,11 @@ export async function syncAllProgressWithCloud(
   }[] = [];
 
   try {
+    const deviceId = await getDeviceId();
     const { data, error } = await supabase
       .from('play_progress')
       .select('skill_id, completed_topics, total_topics, completed_tracks')
-      .eq('email', email);
+      .or(`email.eq.${email},device_id.eq.${deviceId}`);
     if (!error && data) cloudRows = data as typeof cloudRows;
   } catch {}
 
@@ -221,32 +230,36 @@ export async function syncAllProgressWithCloud(
 /**
  * Manual "Backup now" entry point (Settings). Pushes every locally recorded
  * skill's progress straight to play_progress, regardless of whether the
- * live upsert at markTopicCompleted/markTrackCompleted time actually landed
- * — recovery path for a device that's been playing while syncing was
- * broken or the build was stale. Requires email (play_progress has no
- * device_id column — see docs/progress-restore-fix-plan.md); returns 0 if
- * none is linked. Local values win outright (no merge) since this is an
- * explicit "push what's on this device" action, not a background restore.
+ * live upsert at markTopicCompleted/markTrackCompleted time actually
+ * landed — recovery path for a device that's been playing while syncing
+ * was broken or the build was stale. Device-keyed (Gap 3 —
+ * docs/sync-gaps-fix-plan.md), so it works with or without a linked email;
+ * `email` is still accepted and carried along when present so the pushed
+ * rows stay joinable to the account. Local values win outright (no merge)
+ * since this is an explicit "push what's on this device" action, not a
+ * background restore.
  */
 export async function pushAllProgressToCloud(
-  email: string,
+  email: string | null,
   skillIds: (CurriculumSlug | string)[]
 ): Promise<number> {
   let pushed = 0;
+  const deviceId = await getDeviceId();
   for (const skillId of skillIds) {
     try {
       const local = await getLocalProgress(skillId);
       const tracks = await getCompletedTracks(skillId);
       const { error } = await supabase.from('play_progress').upsert(
         {
-          email,
+          device_id: deviceId,
+          ...(email ? { email } : {}),
           skill_id: skillId,
           completed_topics: local.completedTopics,
           total_topics: local.totalTopics,
           completed_tracks: tracks,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'email,skill_id' }
+        { onConflict: 'device_id,skill_id' }
       );
       if (!error) pushed += 1;
     } catch {}
@@ -291,25 +304,26 @@ export async function markTrackCompleted(
     await AsyncStorage.setItem(completedTracksStorageKey(skillId), JSON.stringify(updated));
   } catch {}
 
-  // Sync to Supabase if email is known -- same upsert shape as
-  // markTopicCompleted, so a track finished on this device is visible to
-  // syncAllProgressWithCloud() on any other device without a separate table.
+  // Sync to Supabase, device-keyed -- same upsert shape as
+  // markTopicCompleted (Gap 3), so a track finished on this device is
+  // visible to syncAllProgressWithCloud() on any other device/email
+  // without a separate table.
   try {
+    const deviceId = await getDeviceId();
     const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
-    if (email) {
-      const progress = await getLocalProgress(skillId);
-      await supabase.from('play_progress').upsert(
-        {
-          email,
-          skill_id: skillId,
-          completed_topics: progress.completedTopics,
-          total_topics: progress.totalTopics,
-          completed_tracks: updated,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'email,skill_id' }
-      );
-    }
+    const progress = await getLocalProgress(skillId);
+    await supabase.from('play_progress').upsert(
+      {
+        device_id: deviceId,
+        ...(email ? { email } : {}),
+        skill_id: skillId,
+        completed_topics: progress.completedTopics,
+        total_topics: progress.totalTopics,
+        completed_tracks: updated,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'device_id,skill_id' }
+    );
   } catch {}
 
   return updated;
