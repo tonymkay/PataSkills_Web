@@ -158,22 +158,29 @@ export async function getSkillMistakesCount(skillId: string): Promise<number> {
 
 /**
  * Cloud sync mirror to Supabase, keyed by device_id via the
- * upsert_question_attempt RPC (matches PataSkillsV2 sql/46_question_attempts.sql
- * — table is public.question_attempts, PK (device_id, question_id), no email
- * column, writes go through this SECURITY DEFINER RPC granted to anon/authenticated).
- * Returns whether the write actually landed, so callers that need to know
- * (bulk backup) can count real successes instead of just firing and forgetting.
+ * upsert_play_question_attempt RPC against play_question_attempts
+ * (play's own device_id-first table -- see
+ * supabase/play_question_attempts.sql). Previously this called
+ * PataSkillsV2's public.question_attempts RPC, which declares skill_id
+ * as uuid with a foreign key to PataSkillsV2's own skills table; play's
+ * skill ids are text slugs, so every call failed silently on the uuid
+ * cast and nothing ever reached Supabase. Returns whether the write
+ * actually landed, so callers that need to know (bulk backup) can count
+ * real successes instead of just firing and forgetting.
  */
 async function syncAttemptToCloud(attempt: QuestionAttempt): Promise<boolean> {
   try {
     const deviceId = await getDeviceId();
     if (!deviceId) return false;
 
-    const { error } = await supabase.rpc('upsert_question_attempt', {
+    const { error } = await supabase.rpc('upsert_play_question_attempt', {
       p_device_id: deviceId,
       p_skill_id: attempt.skillId,
       p_topic_id: String(attempt.topicIndex),
       p_question_id: attempt.questionId,
+      p_question_text: attempt.questionText,
+      p_options: attempt.options,
+      p_correct_answer_text: attempt.correctAnswerText,
       p_fail_count: attempt.failCount,
       p_attempt_count: attempt.attemptCount,
       p_solved: attempt.solved,
