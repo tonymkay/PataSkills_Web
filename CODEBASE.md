@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated from source**: 2026-09-07 · Root: `desktop/platform/PataProducts/play/`  
+> **Generated from source**: 2026-09-08 · Root: `desktop/platform/PataProducts/play/`  
 > Companion specs: `userdata.md` (storage keys + tables), `json-conversion.md` (content pipeline).
 
 ---
@@ -56,10 +56,18 @@ Pre-unlock (first launch until first topic complete):
 Post-unlock (every later launch):
   app/index.tsx Redirect → /(tabs)/home
     home     My Skills + SkillProgressCard resume → /play?resume=true&skill=
+             ChallengeCornerCard → /challenge-corner
     skills   Skills Corner grid only; tap → /play?skill=
     keys     Key packs / subscribe / free trial  OR  Premium card → /manage-subscription
     reports  Streak, recharges, 4-day strip, league, per-skill reports → /mistakes, /leaderboard
   app/play.tsx   Full-screen SkillsFlow (standalone) — no FloatingTabBar
+
+Challenge Corner (reward-driven side loop):
+  /challenge-corner → Add | Online | Offline | Tournaments
+    /challenge-create     → create challenge → /challenge-online (waiting)
+    /challenge-online     → search → scout-room → /challenge-start → run → results → reward
+    /challenge-offline    → companion carousel → join → /challenge-start → run → results → reward
+    /challenge-tournament → search → found → join → /challenge-tournament-room → start → run → results → promotion/elimination/win
 ```
 
 Deep links: `?track=` skips to track detail; `?resume=true` (and optional `skill` / `track`) auto-starts a session. Payment success still `navReplace`s to `/` with `resume=true` (`app/payment-complete.tsx`).
@@ -91,6 +99,17 @@ play/
 │   ├── +html.tsx                # Web HTML shell (fonts, AdSense, phone frame CSS)
 │   ├── +not-found.tsx
 │   ├── (tabs)/                  # home, skills, keys, reports + FloatingTabBar
+│   ├── challenge-corner.tsx          # Challenge Corner menu (4 rows)
+│   ├── challenge-create.tsx          # Create a challenge form
+│   ├── challenge-offline.tsx         # Offline companion challenge carousel
+│   ├── challenge-online.tsx          # Online global challenge search + waiting room
+│   ├── challenge-scout-room.tsx      # Scout waiting room (globe pulse + join reveal)
+│   ├── challenge-tournament.tsx      # Tournament story (search → found → promotion/elimination/win)
+│   ├── challenge-tournament-room.tsx # Tournament stage waiting room
+│   ├── challenge-start.tsx           # Pre-race countdown screen
+│   ├── challenge-run.tsx             # Active challenge race
+│   ├── challenge-results.tsx         # Post-race scoreboard
+│   ├── challenge-reward.tsx          # Key reward claim
 │   ├── settings.tsx
 │   ├── manage-subscription.tsx
 │   ├── leaderboard.tsx
@@ -103,11 +122,12 @@ play/
 │   └── admin/signs.tsx
 │
 ├── components/
-│   ├── ads/                     # AdSenseDisplayUnit (+ .web.tsx)
+│   ├── ads/                     # AdSenseDisplayUnit (+ .web.tsx), BottomBannerAd
 │   ├── auth/                    # RestoreAccountModal, GoogleWebButton (+ .web.tsx)
 │   ├── cards/                   # CardDeck, TwoImageCard, ReadingCard, ScrollHintChevron
+│   ├── challenge/               # StoryCarousel, AvatarStack
 │   ├── feedback/                # Keys/session/ad sheets, CheckButton, etc.
-│   ├── home/                    # SkillProgressCard only
+│   ├── home/                    # SkillProgressCard, ChallengeCornerCard
 │   ├── landing/                 # LandingScreen, LearningStyle, TrackDetail, ModeCard, …
 │   ├── nav/                     # AppHeader, FloatingTabBar, ScreenTransition
 │   ├── play/                    # SkillsFlow, PlaySession
@@ -120,13 +140,14 @@ play/
 │                                # skills, trackOptions, curriculumAssets
 ├── theme/                       # ThemeContext, tokens barrel
 ├── lib/                         # See §9
-├── hooks/                       # useKeys, useScrollHint
+├── hooks/                       # useKeys, useScrollHint, useChallengeSearch, useChallengeCompanionSession,
+│                                # useChallengeScoutSession, useOnline
 ├── types/quiz.ts
 ├── utils/                       # groupSessions, hydrateQuestions, shuffleAnswers
 ├── data/questions.sample.json   # Local driving-theory sample
 ├── jsons/                       # Source dumps: football.json, true-false_v2.json
 ├── scripts/                     # Content/DB pipeline .mjs (+ output/)
-├── supabase/                    # SQL + Edge Functions
+├── supabase/                    # SQL + Edge Functions + play_*_rpcs.sql
 ├── public/                      # ads.txt, sw.js (web notifications)
 ├── assets/                      # fonts, images, homepage, premium, driving, profile
 ├── docs/                        # Feature notes
@@ -229,7 +250,7 @@ On mount: hide splash when fonts load; `initNotifications()`; `configureBilling(
 
 `FloatingTabBar`: Home, Skills (`Library`), Keys (`KeyRound`), Reports (`PieChart`). Spring pill. `headerShown: false`.
 
-**`home.tsx`** — “My Skills”. Skills with `completedTopics > 0` from catalog ∪ `LANDING_SKILLS`. `SkillProgressCard`; tap in-progress → `/play?resume=true&skill=`; 100% → reports. `useFocusEffect` refresh.
+**`home.tsx`** — "My Skills". Skills with `completedTopics > 0` from catalog ∪ `LANDING_SKILLS`. `SkillProgressCard`; tap in-progress → `/play?resume=true&skill=`; 100% → reports. `ChallengeCornerCard` links to `/challenge-corner`. `useFocusEffect` refresh.
 
 **`skills.tsx`** — Grid only (`LandingScreen` under `AppHeader`). Tap → `/play?skill=`. `bottomPadding` clears the tab bar. Learning/download/quiz never run inside this tab.
 
@@ -286,6 +307,22 @@ Viewport, `ScrollViewStyleReset`, Sora WOFF2+TTF `@font-face`, driving cover pre
 
 Grid of `play_signs`; tap to swap `image_path`.
 
+### Challenge Corner screens
+
+| Route | File | Role |
+|-------|------|------|
+| `/challenge-corner` | `challenge-corner.tsx` | Static 4-row menu: Add, Online Challenge, Offline Challenge, Tournaments. No Live row. |
+| `/challenge-create` | `challenge-create.tsx` | Create Challenge form: curriculum picker, topic count, deadline, global toggle, invite by email/nickname. Calls `createChallenge()` from `lib/challenges.ts`. |
+| `/challenge-offline` | `challenge-offline.tsx` | Companion-owned offline races. `StoryCarousel` of `CompanionChallenge` cards, join → FlagPulse waiting room → `initCompanionSession` → `challenge-start`. |
+| `/challenge-online` | `challenge-online.tsx` | Online global challenge. `useChallengeSearch` hook polls for open challenges + scout gap-filler injection. GlobePulse waiting room → AvatarStack roster → realtime handoff to `challenge-start`. Offline fallback to `/challenge-offline`. |
+| `/challenge-scout-room` | `challenge-scout-room.tsx` | Scout waiting room. GlobePulse animation, trickle-reveal of scout joins via `initScoutSession` timeline, auto-handoff to `/challenge-start` after last join + buffer. |
+| `/challenge-tournament` | `challenge-tournament.tsx` | Tournament story screen. Searching (TournamentSearchPulse) → Found (avatars + reward preview) → Join → promotion/elimination/final_win bodies. Supports both online (`getTournamentState`) and offline (`getLocalTournamentState`). Auto-search timer with 5–20s random delay. |
+| `/challenge-tournament-room` | `challenge-tournament-room.tsx` | Tournament stage waiting room. TrophyPulse animation, scout join reveal (local) or poll stage state (online). Auto-proceeds to `/challenge-start`. |
+| `/challenge-start` | `challenge-start.tsx` | Pre-race countdown. Receives `pendingChallengeRun` from `lib/challengeRuntime.ts`. |
+| `/challenge-run` | `challenge-run.tsx` | Active challenge race. Timer, question deck, live progress tracking via `updateChallengeProgress`. |
+| `/challenge-results` | `challenge-results.tsx` | Post-race scoreboard. Rank, score, time. Continue to tournament next stage or reward claim. |
+| `/challenge-reward` | `challenge-reward.tsx` | Key reward claim screen. Calls `claimChallengeReward` or `claimTournamentReward`. |
+
 ---
 
 ## 6. Components (`components/`)
@@ -319,6 +356,11 @@ Used by `WatchingAdContent.tsx` (display-ad fallback). **Current out-of-keys pro
 - `WatchingAdContent` — in-page AdSense + timer; **not wired** from WatchAdPromptSheet today
 - `CheckButton`, `DownloadingScreen`, `FeedbackSheet`, `FlagIcon`, `LearnMoreSheet`, `QuitConfirmSheet`
 
+### Challenge
+
+- `StoryCarousel.tsx` — Horizontal swipeable story cards for challenge browsing (offline/online). Handles pagination dots and auto-advance.
+- `AvatarStack.tsx` — Overlapping avatar row with `+N` overflow. Used in challenge/tournament waiting rooms.
+
 ### Landing / Home
 
 Landing lives in `components/landing/` (not `home/`):
@@ -328,6 +370,8 @@ Landing lives in `components/landing/` (not `home/`):
 - `LearningStyleScreen`, `ModeCard`, `TrackDetailScreen`, `ModeSwitcherSheet` (`groupTrackOptions` for `groupId`/`groupTitle`)
 
 `components/home/SkillProgressCard.tsx` — Home tab only. `% Complete` uses `FontFamily.regular`.
+
+`components/home/ChallengeCornerCard.tsx` — Home tab card linking to `/challenge-corner`. Reward-driven copy ("Want extra keys?").
 
 ### Nav
 
@@ -385,6 +429,7 @@ UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install C
 | `restore.ts` | Email/Google restore; `logoutAccount` |
 | `email.ts` | Validate + truncate |
 | `ads.ts` | Android AdMob rewarded only; non-Android → `'unavailable'` |
+| `adSettings.ts` | Ad frequency/cooldown config for challenge screens |
 | `webRewardedAd.ts` | `adBreak` rewarded; **unused by WatchAdPromptSheet** |
 | `notifications.ts` | Web Notification API + `public/sw.js` |
 | `progress.ts` | Per-skill topics/tracks + tabs unlock; `play_progress` keyed `(email, skill_id)`; `syncAllProgressWithCloud()` batches every skill into one query, max-wins merge, called from `LandingScreen`'s mount effect when an email is already linked |
@@ -397,6 +442,16 @@ UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install C
 | `deviceId.ts` | Anonymous per-device UUID, persisted in `AsyncStorage` -- not a hardware fingerprint/IDFA/GAID; see `userdata.md` §5 |
 | `deviceAnalytics.ts` | Anonymous pre-email checkpoints (`landing_page_seen` / `topic_loading_started` / `session_started` / `topic_complete` / `paywall_seen`) -> `play_devices` + `play_device_events`; offline queue (`AsyncStorage`) when writes fail, flushed on reconnect via `backup.ts`'s NetInfo listener; see `userdata.md` §5 and `docs/device-tracking-plan.md` |
 | `navDirection.ts` | `navPush` / `navBack` / `navReplace` |
+| **`challenges.ts`** | **Online challenges — device-id RPCs on `play_challenges` / `play_challenge_members`. Create, join, start, leave, submit results, claim rewards, subscribe to status changes, get open global challenges.** |
+| **`tournaments.ts`** | **Tournaments — device-id RPCs on `play_tournaments` / `play_tournament_members`. Create, join, poll state (lazy bracket advance), claim podium rewards. `play_`-prefixed RPCs mirror `challenges.ts` pattern.** |
+| **`challengeCompanions.ts`** | **Offline companion challenge generation. Deterministic persona pool, topic-weighted matchmaking, 3-challenge batches per `StoryCarousel` page.** |
+| **`challengeCompanionSession.ts`** | **Module-level singleton for an active companion race session. Init/start/stop lifecycle, simulated opponent progress, join timeline for waiting-room reveals.** |
+| **`challengeScouts.ts`** | **Scout persona pool + generation. `generateScoutChallenge()` picks a curriculum topic, assigns scout opponents with randomized difficulty. `pickRandomScouts()` for field-fill.** |
+| **`challengeScoutSession.ts`** | **Module-level singleton for an active scout race session. Same init/start/stop pattern as companion session but for scout opponents.** |
+| **`challengeScoutTournamentSession.ts`** | **Fully OFFLINE scout-sourced tournament bracket. `createLocalScoutTournament()`, stage pool management, `recordLocalStageResult()` for bracket advancement, `claimLocalTournamentReward()`. `pickHeadlineTopicTitle()` shared by both online and offline tournament creation.** |
+| **`challengeQuestions.ts`** | **`buildChallengeQuestions()` — loads curriculum JSON, filters by topic index, shuffles with seed for deterministic question sets across all challenge participants.** |
+| **`challengeRuntime.ts`** | **`setPendingChallengeRun()` / `getFinishedChallengeRun()` — bridge between waiting rooms and the race screen. Stores questions, origin, difficulty, curriculum info.** |
+| **`challengeTimerSettings.ts`** | **Per-question timer config for challenge races. Difficulty-based defaults.** |
 
 ### Keys (`keys.ts`)
 
@@ -444,6 +499,14 @@ Quartz, Topaz, Amber, Jade, Opal, Sapphire, Ruby, Emerald, Obsidian, Diamond, Le
 
 **`useScrollHint`** — content taller than viewport; bouncing chevron.
 
+**`useChallengeSearch`** — Polls `getOpenGlobalChallenges()` on interval. Injects scout gap-filler challenges when no real ones appear after a configurable delay. Returns `{ challenges, loading, refresh }` for the online challenge screen.
+
+**`useChallengeCompanionSession`** — Subscribes to `challengeCompanionSession`'s module-level state changes. Returns snapshot of active session for UI rendering.
+
+**`useChallengeScoutSession`** — Subscribes to `challengeScoutSession`'s module-level state changes. Returns snapshot.
+
+**`useOnline`** — Simple connectivity check hook (`NetInfo`). Returns `isOnline` boolean used by challenge screens to decide online vs offline paths.
+
 ---
 
 ## 11. Types (`types/`)
@@ -490,9 +553,22 @@ One-off Node `.mjs` (run from `play/`). Highlights:
 - `play_sign_pairs.sql`
 - `play_track_defaults.sql` — nullable `image_path` / `label`; seed `full` → `"Learn Full Skill"` (images unseeded so driving art does not leak)
 - `play_devices.sql` / `play_device_events.sql` — anonymous pre-email device tracking (device state + append-only checkpoint log); see `userdata.md` §5
-- `play_device_events_add_loading_started.sql` — adds `topic_loading_started` to the `event_type` check constraint (fires at the bouncing-dots/download moment, before `session_started`)
-- `play_device_events_add_paywall_seen.sql` — adds `paywall_seen` to the `event_type` check constraint (fires once per paywall encounter — out-of-keys or free-trial-timer-not-reset — from `PlaySession.tsx`'s `showPaywall`)
+- `play_device_events_add_loading_started.sql` — adds `topic_loading_started` to the `event_type` check constraint
+- `play_device_events_add_paywall_seen.sql` — adds `paywall_seen` to the `event_type` check constraint
 - `fix_play_signs_rls.sql`, `reset_signs_fresh.sql`
+
+#### Challenge Corner tables + RPCs
+
+| SQL file | Purpose |
+|----------|--------|
+| `play_challenges.sql` | `play_challenges` table — uuid PK, `curriculum_slug`, `seed`, `question_count`, `is_global`, `tournament_id` FK, `status` check, `deadline_at`. RLS enabled, deny-all direct access. |
+| `play_challenge_members.sql` | `play_challenge_members` table — composite PK `(challenge_id, device_id)`, `status`, `is_creator`, `display_name`, `score`/`time_ms`/`finished_at`, `reward_keys`, `claimed`. |
+| `play_tournaments.sql` | `play_tournaments` table — uuid PK, `curriculum_slug`, `tier` (small/mid/large), `status` (group_stage/knockout/final/ended/cancelled), `current_stage`, `stage_count`, `source_challenge_id` FK, `topic_title`, `curriculum_title`. Closes circular FK from `play_challenges.tournament_id`. |
+| `play_tournament_members.sql` | `play_tournament_members` table — composite PK `(tournament_id, device_id)`, `status` (active/eliminated/placed), `placement`, `reward_keys`, `claimed`. |
+| `play_challenge_rpcs.sql` | **14 SECURITY DEFINER RPC functions** for challenges: `play_create_challenge`, `play_my_challenge_stories`, `play_join_global_challenge`, `play_start_challenge`, `play_leave_challenge`, `play_mark_challenge_absent`, `play_submit_challenge_result`, `play_update_challenge_progress`, `play_mark_challenge_results_viewed`, `play_end_challenge`, `play_claim_challenge_reward`, `play_challenge_members_list`, `play_challenge_state`, `play_open_global_challenges`. |
+| `play_tournament_rpcs.sql` | **7 SECURITY DEFINER RPC functions** for tournaments: `play_create_tournament` (field size → tier/stage calc, creates stage-1 challenge), `play_find_tournament_by_challenge`, `play_join_tournament`, `play_tournament_state` (lazy bracket read), `play_tournament_stage_state`, `play_advance_tournament_stage` (eliminate bottom half, create next stage challenge or assign final placements), `play_claim_tournament_reward`. |
+
+All RPC functions use `SECURITY DEFINER` — the client (`anon` role) never touches the tables directly. Same pattern as every other `play_*` table.
 
 Other tables (`play_curricula`, `play_signs`, `play_progress`, `play_user_stats`, `play_question_attempts`, `play_devices`, `play_device_events`, `help_requests`) are used in app code; full column inventory is in `userdata.md`.
 
@@ -589,11 +665,15 @@ RootLayout
 └── Stack
     ├── index RootGate → SkillsFlow  OR  Redirect /(tabs)/home
     ├── (tabs) + FloatingTabBar
-    │   ├── home: AppHeader + SkillProgressCard*
+    │   ├── home: AppHeader + SkillProgressCard* + ChallengeCornerCard
     │   ├── skills: AppHeader + LandingScreen
     │   ├── keys: AppHeader + Premium card | KeysOptionsContent
     │   └── reports: AppHeader + StatCards + WeekCalendarRow + LeaguePanel + SkillReportCard*
     ├── play: SkillsFlow standalone
+    ├── challenge-corner → challenge-create | challenge-online | challenge-offline | challenge-tournament
+    │   ├── challenge-scout-room → challenge-start → challenge-run → challenge-results → challenge-reward
+    │   ├── challenge-tournament → challenge-tournament-room → challenge-start → ...
+    │   └── (all challenge screens share the same run→results→reward tail)
     ├── settings, manage-subscription, leaderboard, mistakes
     ├── help, feedback-form
     ├── keys-* / subscription-* / payment-complete / explainers
@@ -607,6 +687,29 @@ Standalone routes wrap with `ScreenTransition` on web.
 1. **Stage swap** in `SkillsFlow` — Reanimated enter/exit on `landing` / `learning-style` / `track-detail` / `downloading`
 2. **PlaySession** — `topicComplete` uses the same enter/exit; `outOfKeys` is an unanimated cut
 3. **CardDeck** — one horizontal strip, `withTiming` on Continue/Next (no drag)
+
+### Challenge Corner data flow
+
+```
+challenge-corner (menu)
+  ├── Add → challenge-create → createChallenge() RPC → challenge-online (waiting)
+  ├── Online → challenge-online → useChallengeSearch (poll + scout gap-filler)
+  │     → challenge-scout-room (scout join reveal) → challenge-start → challenge-run
+  │     → challenge-results → challenge-reward (claimChallengeReward)
+  ├── Offline → challenge-offline → generateCompanionChallenges()
+  │     → initCompanionSession → challenge-start → challenge-run
+  │     → challenge-results → challenge-reward
+  └── Tournaments → challenge-tournament
+        → searching (TournamentSearchPulse, 5-20s auto-found)
+        → ready (Join Tournament)
+        → challenge-tournament-room (TrophyPulse, scout/online join reveal)
+        → challenge-start → challenge-run → challenge-results
+        → back to challenge-tournament (promotion → Continue / elimination → Got It / final_win → Collect Reward)
+
+Offline tournaments use challengeScoutTournamentSession.ts (module-level singleton).
+Online tournaments use lib/tournaments.ts RPCs → play_tournaments / play_tournament_members.
+Both share the same challenge-run engine (challengeRuntime.ts bridge).
+```
 
 ### Known doc vs product caveats
 

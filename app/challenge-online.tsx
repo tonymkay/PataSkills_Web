@@ -171,18 +171,27 @@ export default function ChallengeOnlineScreen() {
     return () => { unsubscribe(); clearInterval(t); };
   }, [phase, activeChallengeId, attemptHandoff]);
 
+  // router.back() silently no-ops on web when this screen was loaded
+  // directly (typed URL / refresh) and expo-router has no prior route in
+  // its own nav state — canGoBack() guards that so the X button always
+  // does something.
+  const exitScreen = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/challenge-corner' as any);
+  }, [router]);
+
   const onLeaveWaiting = useCallback(async () => {
     if (activeChallengeId) {
       try { await leaveChallenge(activeChallengeId); } catch { /* best-effort */ }
     }
-    router.back();
-  }, [activeChallengeId, router]);
+    exitScreen();
+  }, [activeChallengeId, exitScreen]);
 
   const onExitBrowsing = useCallback(() => {
     collab.stopSearching();
-    router.back();
+    exitScreen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, [exitScreen]);
 
   const backButton = (
     <Pressable onPress={phase === 'waiting' ? () => void onLeaveWaiting() : onExitBrowsing} hitSlop={10}>

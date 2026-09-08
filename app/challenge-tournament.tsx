@@ -20,7 +20,8 @@ import {
   ActivityIndicator,
   Text,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { X, Trophy } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -282,7 +283,11 @@ export default function ChallengeTournamentScreen() {
   // ── Back / exit ──
   const handleBackExit = useCallback(() => {
     if (isOffline) stopLocalScoutTournament();
-    router.back();
+    // Guard: router.back() silently no-ops on web if this screen was
+    // loaded directly (typed URL / refresh) with no prior route in
+    // expo-router's own nav state.
+    if (router.canGoBack()) router.back();
+    else router.replace('/challenge-corner' as any);
   }, [isOffline, router]);
 
   useEffect(() => {

@@ -14,7 +14,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, View } from 'react-native';
-import { useIsFocused } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import Animated, {
   cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withTiming,
 } from 'react-native-reanimated';

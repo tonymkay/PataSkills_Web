@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider as NavigationThemeProvider, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
 import { fontAssets } from '@/constants/typography';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { initNotifications } from '@/lib/notifications';
 import { configureBilling } from '@/lib/billing';
@@ -65,17 +66,19 @@ function RootLayoutInner() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style="light" />
       <NavigationThemeProvider value={navigationTheme}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            // react-native-screens doesn't animate native-stack transitions
-            // on web (screens just swap instantly), so this Stack-level
-            // animation only ever does anything on iOS/Android. Web screens
-            // animate themselves instead — see components/nav/ScreenTransition.
-            animation: Platform.OS === 'web' ? 'none' : 'slide_from_right',
-            animationDuration: 280,
-          }}
-        />
+        <AppErrorBoundary>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              // react-native-screens doesn't animate native-stack transitions
+              // on web (screens just swap instantly), so this Stack-level
+              // animation only ever does anything on iOS/Android. Web screens
+              // animate themselves instead — see components/nav/ScreenTransition.
+              animation: Platform.OS === 'web' ? 'none' : 'slide_from_right',
+              animationDuration: 280,
+            }}
+          />
+        </AppErrorBoundary>
       </NavigationThemeProvider>
     </View>
   );

@@ -208,7 +208,11 @@ export default function ChallengeOfflineScreen() {
 
   const onBack = () => {
     setJoinedChallenge(null);
-    router.back();
+    // Guard: router.back() silently no-ops on web if this screen was
+    // loaded directly (typed URL / refresh) with no prior route in
+    // expo-router's own nav state.
+    if (router.canGoBack()) router.back();
+    else router.replace('/challenge-corner' as any);
   };
 
   const showingCarousel = !loading && !preparing && !joinedChallenge && challenges.length > 0;
