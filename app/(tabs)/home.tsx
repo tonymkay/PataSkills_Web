@@ -125,10 +125,10 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   heading: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.regular,
     fontSize: 28,
     lineHeight: 34,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing.xs,
   },
 });

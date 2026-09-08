@@ -5,36 +5,37 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowUpRight } from 'lucide-react-native';
-import { FontFamily, Radius, Spacing, Typography, useTheme } from '@/theme/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronRight } from 'lucide-react-native';
+import { FontFamily, Radius, Spacing } from '@/theme/tokens';
 
 const KEYS_ICON = require('@/assets/premium/key.webp');
 
 export function ChallengeCornerCard() {
-  const { colors } = useTheme();
   const router = useRouter();
 
   return (
     <Pressable
       onPress={() => router.push('/challenge-corner')}
-      style={({ pressed }) => [
-        styles.card,
-        { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant },
-        pressed && { opacity: 0.85 },
-      ]}
+      style={({ pressed }) => [pressed && { opacity: 0.85 }]}
     >
-      <View style={styles.topRow}>
+      <LinearGradient
+        colors={['#CDECB1', '#8AD68E']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.card}
+      >
         <Image source={KEYS_ICON} style={styles.key} contentFit="contain" />
-        <View style={styles.arrowBtn}>
-          <ArrowUpRight size={18} color="#1A1A1A" strokeWidth={2.4} />
+        <View style={styles.textBlock}>
+          <Text style={styles.title}>
+            Join Challenges
+          </Text>
+          <Text style={styles.title}>
+            for <Text style={styles.highlight}>Extra Keys</Text>
+          </Text>
         </View>
-      </View>
-      <Text style={[Typography.headlineMedium, styles.title, { color: colors.onSurface }]}>
-        Want extra keys?
-      </Text>
-      <Text style={[Typography.bodyMd, { color: colors.onSurfaceVariant, marginTop: Spacing.xs }]}>
-        Race in Challenge Corner and earn bonus keys.
-      </Text>
+        <ChevronRight size={26} color="#1A1A1A" strokeWidth={2.4} />
+      </LinearGradient>
     </Pressable>
   );
 }
@@ -42,28 +43,29 @@ export function ChallengeCornerCard() {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.xl,
-    borderWidth: 1,
-    padding: Spacing.gutter,
-  },
-  topRow: {
+    paddingVertical: Spacing.base,
+    paddingHorizontal: Spacing.gutter,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   key: {
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
   },
-  arrowBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+  textBlock: {
+    flex: 1,
+    marginLeft: Spacing.sm,
   },
   title: {
-    marginTop: Spacing.sm,
     fontFamily: FontFamily.bold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: '#1A1A1A',
+  },
+  highlight: {
+    fontFamily: FontFamily.bold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: '#B5651D',
   },
 });
