@@ -40,3 +40,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# local-only reference docs (not shared via git, same as PataSkillsV2)
+/docs

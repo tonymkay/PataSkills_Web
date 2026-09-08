@@ -3,6 +3,10 @@
     "name": "PataSkills Play",
     "slug": "play",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/9dabfd14-f5c7-4004-a38b-9d795c406e0f"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pataskillsplay",
@@ -17,7 +21,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tonymkay.play"
     },
     "web": {
       "favicon": "./assets/images/favicon.png",
@@ -25,6 +30,13 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9dabfd14-f5c7-4004-a38b-9d795c406e0f"
+      }
+    },
+    "owner": "tonymkay"
   }
 }
