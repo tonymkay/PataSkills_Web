@@ -9,6 +9,7 @@ import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTr
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { ModeCard } from './ModeCard';
+import { ModeCardSkeleton } from './ModeCardSkeleton';
 
 // Matches LandingScreen's bottom-sheet-style width cap so this screen
 // reads consistently when the flow moves from the grid into this list.
@@ -50,12 +51,18 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
   // (world-facts).
   const [prevSkillId, setPrevSkillId] = useState(skillId);
   const [availableTracks, setAvailableTracks] = useState<Track[]>(skill.tracks);
+  // True only until this skill's track data (totals/progress/available
+  // tracks/custom defs) has resolved at least once — gates the skeleton
+  // list below. Reset on skill change so switching skills re-shows it
+  // rather than flashing stale rows from the previous skill.
+  const [loading, setLoading] = useState(true);
 
   if (prevSkillId !== skillId) {
     setPrevSkillId(skillId);
     setAvailableTracks(skill.tracks);
     setTrackTotals(null);
     setTrackDefs(undefined);
+    setLoading(true);
   }
 
   const trackOptions = getTrackOptionsForSkill(skill, availableTracks, trackDefs);
@@ -64,7 +71,7 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
     getCompletedTracks(skillId).then(setCompletedTracks).catch(() => {});
     getTrackTotals(skillId).then(setTrackTotals).catch(() => {});
     getAvailableTracks(skillId).then(setAvailableTracks).catch(() => {});
-    getCurriculumTrackDefs(skillId).then(setTrackDefs).catch(() => {});
+    getCurriculumTrackDefs(skillId).then(setTrackDefs).catch(() => {}).finally(() => setLoading(false));
   }, [skillId]);
 
   const nextUpTrack = trackOptions.find((o) => !completedTracks.includes(o.track))?.track;
@@ -86,7 +93,19 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
         </View>
 
         <View style={styles.list}>
-          {groupTrackOptions(trackOptions).map((group, groupIdx) => (
+          {loading ? (
+            Array.from({ length: skill.tracks.length || 4 }).map((_, i) => (
+              <View key={i}>
+                {i > 0 && (
+                  <View style={styles.connector}>
+                    <View style={[styles.connectorLine, { backgroundColor: colors.outlineVariant }]} />
+                  </View>
+                )}
+                <ModeCardSkeleton />
+              </View>
+            ))
+          ) : (
+            groupTrackOptions(trackOptions).map((group, groupIdx) => (
             <View key={group.groupTitle ?? `g${groupIdx}`} style={groupIdx > 0 ? styles.groupSpacing : undefined}>
               {group.groupTitle ? (
                 <Text style={[styles.groupHeading, { color: colors.onSurfaceVariant }]}>{group.groupTitle}</Text>
@@ -94,7 +113,13 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
               {group.options.map((option, i) => {
                 const isDone = completedTracks.includes(option.track);
                 return (
-                  <View key={option.track} style={i > 0 ? styles.rowSpacing : undefined}>
+                  <View key={option.track}>
+                    {/* Connecting line between cards (Brilliant-style) */}
+                    {i > 0 && (
+                      <View style={styles.connector}>
+                        <View style={[styles.connectorLine, { backgroundColor: colors.outlineVariant }]} />
+                      </View>
+                    )}
                     <ModeCard
                       image={option.image}
                       title={option.label}
@@ -108,7 +133,8 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
                 );
               })}
             </View>
-          ))}
+            ))
+          )}
         </View>
       </ScrollView>
     </View>
@@ -151,8 +177,12 @@ const styles = StyleSheet.create({
   list: {
     width: '100%',
   },
-  rowSpacing: {
-    marginTop: Spacing.sm,
+  connector: {
+    alignItems: 'center',
+  },
+  connectorLine: {
+    width: 2,
+    height: Spacing.md,
   },
   groupSpacing: {
     marginTop: Spacing.lg,

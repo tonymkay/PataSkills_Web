@@ -614,7 +614,14 @@ function QuizCardDeck({
   }
 
   const segmentCount = Math.min(totalCount, 8);
-  const filledSegments = Math.round((correctCount / totalCount) * segmentCount);
+  // Segments track how far the learner has actually gotten through the
+  // deck (currentIndex), not how many were right on the first try
+  // (correctCount) — the latter under-counts a question that was missed
+  // then got right on retry (the card still advances, but correctCount
+  // doesn't), making the bar visibly lag behind the cards on screen and
+  // sometimes stay short of full even after the last card. Matches
+  // ReadingCardDeck's position-based fill above.
+  const filledSegments = Math.round((currentIndex / totalCount) * segmentCount);
   const activeSegmentIndex = filledSegments;
 
   return (

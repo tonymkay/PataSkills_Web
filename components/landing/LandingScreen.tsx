@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { SkillGridCard } from './SkillGridCard';
+import { SkillGridCardSkeleton } from './SkillGridCardSkeleton';
 import { LANDING_SKILLS, getLandingSkill } from '@/constants/skills';
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
@@ -54,11 +55,16 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
   // this resolves, using getLandingSkill()'s generic default for its
   // tracks/illustration behavior.
   const [catalogRows, setCatalogRows] = useState<{ slug: string; title: string }[]>([]);
+  // True only until the catalog's first resolution (success or failure) —
+  // gates the skeleton grid below. LANDING_SKILLS already renders instantly
+  // once this clears, so this never blocks longer than the network call.
+  const [catalogLoading, setCatalogLoading] = useState(true);
 
   useEffect(() => {
     getCurriculaCatalog()
       .then((rows) => setCatalogRows(rows.map((r) => ({ slug: r.slug, title: r.title }))))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setCatalogLoading(false));
   }, []);
 
   const refreshProgress = () => {
@@ -135,9 +141,9 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
         <Text style={[styles.heading, { color: colors.onSurface }]}>Choose a skill</Text>
 
         <View style={styles.grid}>
-          {gridSkills.map((skill) => (
-            <SkillGridCard key={skill.key} skill={skill} onPress={onStart} />
-          ))}
+          {catalogLoading
+            ? Array.from({ length: LANDING_SKILLS.length }).map((_, i) => <SkillGridCardSkeleton key={i} />)
+            : gridSkills.map((skill) => <SkillGridCard key={skill.key} skill={skill} onPress={onStart} />)}
         </View>
 
         {/* Existing user, login link — outside the grid. Hidden once tabs

@@ -33,17 +33,19 @@ export function GetStartedScreen({ onGetStarted }: GetStartedScreenProps) {
         },
       ]}
     >
-      <View style={styles.top}>
-        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-        <Text style={[styles.heading, { color: colors.onSurface }]}>
-          Learn with{'\n'}Questions
-        </Text>
+      <View style={styles.middle}>
+        <View style={styles.top}>
+          <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+          <Text style={[styles.heading, { color: colors.onSurface }]}>
+            Learn with{'\n'}Questions
+          </Text>
+        </View>
+
+        <FlashcardStack />
       </View>
 
-      <FlashcardStack />
-
       <View style={styles.bottom}>
-        <Button label="Get Started" onPress={onGetStarted} uppercase={false} />
+        <Button label="Get Started" onPress={onGetStarted} />
       </View>
     </View>
   );
@@ -54,6 +56,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.marginMobile,
     justifyContent: 'space-between',
+  },
+  middle: {
+    flex: 1,
+    justifyContent: 'center',
   },
   top: {
     alignItems: 'center',
