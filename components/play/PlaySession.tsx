@@ -54,9 +54,14 @@ interface PlaySessionProps {
    *  handler the initial LandingScreen mode picker uses. */
   onSwitchTrack: (track: Track) => void;
   onExit?: () => void;
+  /** Forwarded from SkillsFlow — true only for the pre-unlock, first-ever
+   *  onboarding run. Swaps the topicComplete screen's REDO SESSION button
+   *  for an underlined "Go to home page" link (onExit); every other
+   *  behavior — including still spending a key to continue — is unchanged. */
+  isOnboarding?: boolean;
 }
 
-export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked = false, onSwitchTrack, onExit }: PlaySessionProps) {
+export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked = false, onSwitchTrack, onExit, isOnboarding = false }: PlaySessionProps) {
   const { colors } = useTheme();
   const isFocused = useIsFocused();
   const {
@@ -343,7 +348,8 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
           progressText={`${sessionIndex + 1}/${sessions.length}`}
           scoreText={`${sessionIndex + 1}/${sessions.length}`}
           onPrimaryPress={handleNextPress}
-          onSecondaryPress={handleRedoSession}
+          onSecondaryPress={isOnboarding ? onExit : handleRedoSession}
+          isOnboarding={isOnboarding}
         />
         <ModeSwitcherSheet
           visible={switcherVisible}

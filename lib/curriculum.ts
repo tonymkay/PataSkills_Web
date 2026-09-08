@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, getPlayAssetPublicUrl } from './supabase';
 import { QuizQuestion, SignCatalogEntry, CurriculumTrackDefinition } from '@/types/quiz';
 import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, chunkByTopicBounded, PlaySession, QuizPlaySession } from '@/utils/groupSessions';
 import { deriveReadingEntriesFromQuestions } from '@/utils/hydrateQuestions';
@@ -364,6 +364,50 @@ export interface RemoteCurriculum {
 }
 
 /**
+ * Two-image ("which sign means X") questions carry a `pairId` (e.g. "A1")
+ * but the curriculum JSON often ships with `images: [null, null]` — the
+ * real linking lives in play_sign_pairs (pairId -> key_a/key_b) + play_signs
+ * (key -> image_path), maintained via the admin Signs screen, but nothing
+ * ever merges it back into the static JSON. Resolve it here at load time
+ * instead, so relinking a sign in admin takes effect immediately with no
+ * separate publish/export step, and it self-heals for every curriculum
+ * that uses this pairId pattern, not just today's.
+ */
+async function resolvePairedSignImages(questions: QuizQuestion[]): Promise<QuizQuestion[]> {
+  const needsResolve = questions.some(
+    (q) => q.pairId && Array.isArray(q.images) && q.images.some((img) => !img),
+  );
+  if (!needsResolve) return questions;
+
+  const [{ data: pairs }, { data: signs }] = await Promise.all([
+    supabase.from('play_sign_pairs').select('pair_id, key_a, key_b'),
+    supabase.from('play_signs').select('key, image_path'),
+  ]);
+  if (!pairs || !signs) return questions;
+
+  const imagePathByKey = new Map<string, string>(signs.map((s: any) => [s.key, s.image_path]));
+  const pairByPairId = new Map<string, { key_a: string; key_b: string }>(
+    pairs.map((p: any) => [p.pair_id, p]),
+  );
+
+  return questions.map((q) => {
+    if (!q.pairId || !Array.isArray(q.images)) return q;
+    const pair = pairByPairId.get(q.pairId);
+    if (!pair) return q;
+    const pathA = imagePathByKey.get(pair.key_a);
+    const pathB = imagePathByKey.get(pair.key_b);
+    if (!pathA && !pathB) return q;
+    return {
+      ...q,
+      images: [
+        q.images[0] ?? (pathA ? getPlayAssetPublicUrl(pathA) : q.images[0]),
+        q.images[1] ?? (pathB ? getPlayAssetPublicUrl(pathB) : q.images[1]),
+      ],
+    };
+  });
+}
+
+/**
  * Fetches the active curriculum row + its JSON file from Supabase Storage.
  * DB-only: no cache, no local fallback. Throws on any failure — the caller
  * is responsible for surfacing that as a failed download step.
@@ -404,5 +448,7 @@ export async function loadRemoteCurriculum(
     ? supabase.storage.from('play-assets').getPublicUrl(row.cover_image_path).data?.publicUrl ?? null
     : null;
 
-  return { title: row.title, coverImageUrl, tracks, questions, signs };
+  const resolvedQuestions = await resolvePairedSignImages(questions);
+
+  return { title: row.title, coverImageUrl, tracks, questions: resolvedQuestions, signs };
 }

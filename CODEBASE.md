@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated from source**: 2026-09-08 · Root: `desktop/platform/PataProducts/play/`  
+> **Generated from source**: 2026-09-08 · Updated: onboarding flow (splash + Get Started + FlashcardStack), StoryCarousel/challenge-tournament crash fix, ChallengeCornerCard redesign · Root: `desktop/platform/PataProducts/play/`  
 > Companion specs: `userdata.md` (storage keys + tables), `json-conversion.md` (content pipeline).
 
 ---
@@ -49,9 +49,12 @@ Live landing catalog in `constants/skills.ts` (`LANDING_SKILLS`):
 
 ```
 Pre-unlock (first launch until first topic complete):
-  app/index.tsx RootGate → SkillsFlow
-    LandingScreen → LearningStyleScreen → TrackDetailScreen → Downloading → PlaySession
-    markTopicCompleted() → unlockTabsIfNeeded() → @play/tabs_unlocked = "true"
+  app/index.tsx RootGate → logo splash (icon-dark.png + theme bg, every cold launch)
+    → GetStartedScreen ("Learn with Questions" + decorative FlashcardStack) → Get Started
+    → SkillsFlow isOnboarding
+        LandingScreen → LearningStyleScreen → TrackDetailScreen → Downloading → PlaySession
+        topicComplete: Continue kept, REDO SESSION replaced by underlined "Go to home page"
+        markTopicCompleted() → unlockTabsIfNeeded() → @play/tabs_unlocked = "true"
 
 Post-unlock (every later launch):
   app/index.tsx Redirect → /(tabs)/home
@@ -130,6 +133,7 @@ play/
 │   ├── home/                    # SkillProgressCard, ChallengeCornerCard
 │   ├── landing/                 # LandingScreen, LearningStyle, TrackDetail, ModeCard, …
 │   ├── nav/                     # AppHeader, FloatingTabBar, ScreenTransition
+│   ├── onboarding/               # GetStartedScreen, FlashcardStack (pre-onboarding, RootGate only)
 │   ├── play/                    # SkillsFlow, PlaySession
 │   ├── profile/                 # Avatar, LeagueCard, LeagueSheet, LeaderboardRow
 │   ├── reports/                 # StatCard, WeekCalendarRow, LeaguePanel, SkillReportCard, MistakeCard
@@ -241,10 +245,10 @@ On mount: hide splash when fonts load; `initNotifications()`; `configureBilling(
 
 ### `index.tsx` — RootGate
 
-- `areTabsUnlocked()` (`@play/tabs_unlocked`)
-- Locked: `<SkillsFlow />` (no tab bar)
+- While AsyncStorage is loading (`areTabsUnlocked()`, `@play/tabs_unlocked`): logo splash — `assets/images/icon-dark.png` + theme background, no copy, shown on every cold launch regardless of unlock state
 - Unlocked: `<Redirect href="/(tabs)/home" />`
-- While AsyncStorage is loading: blank themed `View` (no flash)
+- Locked, `Get Started` not yet tapped this mount: `<GetStartedScreen onGetStarted={...} />` (`components/onboarding/`) — logo, "Learn with Questions" heading, decorative `FlashcardStack`, `Get Started` CTA
+- Locked, tapped: `<SkillsFlow isOnboarding />` (no tab bar) — `isOnboarding` forwards through `PlaySession` to `SessionStateScreen`'s `topicComplete` screen, swapping `REDO SESSION` for an underlined "Go to home page" link (`onSecondaryPress` → `onExit`). Onboarding completion itself is unchanged — still `markTopicCompleted()` → `unlockTabsIfNeeded()` on first topic complete, not tied to Get Started or the splash
 
 ### `(tabs)/`
 
@@ -350,7 +354,7 @@ Used by `WatchingAdContent.tsx` (display-ad fallback). **Current out-of-keys pro
 
 - `KeysOfferScreen` — 20-key Paystack upsell; Maybe later / hardware back → `outOfKeys` (`BackHandler`). Key art: `assets/premium/key.webp`
 - `KeysOptionsContent` — Buy keys / Subscribe / Free trial (sessions left vs countdown + reminder toggle)
-- `SessionStateScreen` — topic/chapter complete, out of keys, rewards. Login link hidden after tabs unlock
+- `SessionStateScreen` — topic/chapter complete, out of keys, rewards. Login link hidden after tabs unlock. `isOnboarding` prop (topicComplete only): replaces `REDO SESSION` with an underlined "Go to home page" link — no redo/retake offered during the pre-unlock onboarding run
 - `WatchAdPromptSheet` — **Android**: `showRewardedForSession()` then reward step; grant on **Unlock** tap (`grantBonusKey`), not on ad complete. **Web**: skip ad → `DownloadAppModal` (`source="ads"`)
 - `KeyRewardSuccessModal` / `KeyRewardContent`
 - `WatchingAdContent` — in-page AdSense + timer; **not wired** from WatchAdPromptSheet today
@@ -358,7 +362,7 @@ Used by `WatchingAdContent.tsx` (display-ad fallback). **Current out-of-keys pro
 
 ### Challenge
 
-- `StoryCarousel.tsx` — Horizontal swipeable story cards for challenge browsing (offline/online). Handles pagination dots and auto-advance.
+- `StoryCarousel.tsx` — Horizontal swipeable story cards for challenge browsing (offline/online/tournament). `useIsFocused` from `@react-navigation/native` (not `expo-router`, which doesn't export it — that mismatch previously crashed with no error boundary; both are now in place, see `AppErrorBoundary.tsx`).
 - `AvatarStack.tsx` — Overlapping avatar row with `+N` overflow. Used in challenge/tournament waiting rooms.
 
 ### Landing / Home
@@ -371,7 +375,14 @@ Landing lives in `components/landing/` (not `home/`):
 
 `components/home/SkillProgressCard.tsx` — Home tab only. `% Complete` uses `FontFamily.regular`.
 
-`components/home/ChallengeCornerCard.tsx` — Home tab card linking to `/challenge-corner`. Reward-driven copy ("Want extra keys?").
+`components/home/ChallengeCornerCard.tsx` — Home tab card linking to `/challenge-corner`. Horizontal gradient pill (`#CDECB1 → #8AD68E`), key icon, "Join Challenges / for **Extra Keys**" (orange highlight), chevron.
+
+### Onboarding
+
+`components/onboarding/` — pre-unlock only, rendered from `app/index.tsx` RootGate before `SkillsFlow`:
+
+- `GetStartedScreen.tsx` — logo (`assets/images/icon-dark.png`) + "Learn with Questions" heading + `FlashcardStack` + `Get Started` button (`Button`, `uppercase={false}`). `onGetStarted` just advances RootGate's local stage into `SkillsFlow`; does not itself touch `@play/tabs_unlocked`.
+- `FlashcardStack.tsx` — 3 hardcoded decorative cards (teal/green/orange gradients), no images/sourced content. Center card static; side cards start stacked exactly behind it and animate outward on mount via Reanimated (`withDelay` 400ms + `withTiming` 1100ms, ease-out — deliberately slow, not snappy).
 
 ### Nav
 
@@ -381,8 +392,8 @@ Landing lives in `components/landing/` (not `home/`):
 
 ### Play
 
-- `SkillsFlow` — stages `landing | learning-style | track-detail | downloading | session`. `standalone` skips landing when `params.skill` is set. Exit → `/(tabs)/home` if tabs unlocked
-- `PlaySession` — spend keys, decks, mode switcher, `XP_PER_CORRECT = 5`, `recordXpEarned` + `recordActivityToday` on topic complete, `markTopicCompleted` / `markTrackCompleted`
+- `SkillsFlow` — stages `landing | learning-style | track-detail | downloading | session`. `standalone` skips landing when `params.skill` is set. `isOnboarding` prop (default `false`) forwards to `PlaySession`. Exit → `/(tabs)/home` if tabs unlocked
+- `PlaySession` — spend keys, decks, mode switcher, `XP_PER_CORRECT = 5`, `recordXpEarned` + `recordActivityToday` on topic complete, `markTopicCompleted` / `markTrackCompleted`. `isOnboarding` prop forwards to `SessionStateScreen` and, on `topicComplete`, swaps `onSecondaryPress` from `handleRedoSession` to `onExit`
 
 ### Profile / Reports / Settings / UI
 
@@ -663,7 +674,7 @@ premium expiresAt → setPremium(false), local + play_accounts
 ```
 RootLayout
 └── Stack
-    ├── index RootGate → SkillsFlow  OR  Redirect /(tabs)/home
+    ├── index RootGate → logo splash → GetStartedScreen → SkillsFlow isOnboarding  OR  Redirect /(tabs)/home
     ├── (tabs) + FloatingTabBar
     │   ├── home: AppHeader + SkillProgressCard* + ChallengeCornerCard
     │   ├── skills: AppHeader + LandingScreen

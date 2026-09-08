@@ -60,9 +60,14 @@ function parseSkill(value?: string): CurriculumSlug | null {
 interface SkillsFlowProps {
   embedded?: boolean;
   standalone?: boolean;
+  /** True only when rendered from the pre-unlock root gate's first-ever
+   *  run (app/index.tsx, after GetStartedScreen). Forwarded to PlaySession
+   *  so the topicComplete screen swaps its REDO SESSION button for an
+   *  underlined "Go to home page" link — see docs for the onboarding plan. */
+  isOnboarding?: boolean;
 }
 
-export function SkillsFlow({ embedded = false, standalone = false }: SkillsFlowProps = {}) {
+export function SkillsFlow({ embedded = false, standalone = false, isOnboarding = false }: SkillsFlowProps = {}) {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -280,6 +285,7 @@ export function SkillsFlow({ embedded = false, standalone = false }: SkillsFlowP
             deepLinked={trackIsDeepLinked}
             onSwitchTrack={handleSelectTrack}
             onExit={handleExit}
+            isOnboarding={isOnboarding}
           />
         </View>
       ) : (

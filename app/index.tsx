@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Redirect, useFocusEffect } from 'expo-router';
 import { areTabsUnlocked } from '@/lib/progress';
 import { SkillsFlow } from '@/components/play/SkillsFlow';
+import { GetStartedScreen } from '@/components/onboarding/GetStartedScreen';
 import { useTheme } from '@/theme/ThemeContext';
+
+const LOGO = require('@/assets/images/icon-dark.png');
 
 /**
  * Root gate. Pre-unlock, this renders the Skills Corner flow directly (no
@@ -16,6 +19,10 @@ import { useTheme } from '@/theme/ThemeContext';
 export default function RootGate() {
   const { colors } = useTheme();
   const [unlocked, setUnlocked] = useState<boolean | null>(null);
+  // Gates GetStartedScreen -> SkillsFlow, pre-unlock only. Local to this
+  // mount — SkillsFlow's own stage transitions never navigate away from
+  // '/', so this doesn't need to survive a remount.
+  const [getStartedTapped, setGetStartedTapped] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -29,15 +36,36 @@ export default function RootGate() {
     }, [])
   );
 
-  // Still checking AsyncStorage — render a plain themed background rather
-  // than either branch below, so there's no flash of the wrong one.
+  // Still checking AsyncStorage — logo + theme background only, same
+  // splash shown on every cold launch regardless of unlock state.
   if (unlocked === null) {
-    return <View style={{ flex: 1, backgroundColor: colors.background || '#0B0D12' }} />;
+    return (
+      <View style={[styles.splash, { backgroundColor: colors.background || '#0B0D12' }]}>
+        <Image source={LOGO} style={styles.splashLogo} resizeMode="contain" />
+      </View>
+    );
   }
 
   if (unlocked) {
     return <Redirect href="/(tabs)/home" />;
   }
 
-  return <SkillsFlow />;
+  if (!getStartedTapped) {
+    return <GetStartedScreen onGetStarted={() => setGetStartedTapped(true)} />;
+  }
+
+  return <SkillsFlow isOnboarding />;
 }
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashLogo: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+  },
+});

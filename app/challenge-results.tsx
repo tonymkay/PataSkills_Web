@@ -195,7 +195,7 @@ export default function ChallengeResultsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.xl, gap: Spacing.lg }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.xl, gap: Spacing.lg }}
       >
         <View style={{ alignItems: 'center', gap: Spacing.sm, paddingTop: Spacing.xxl }}>
           <Trophy size={64} color={AMBER} strokeWidth={2} />
@@ -283,7 +283,8 @@ export default function ChallengeResultsScreen() {
       </View>
 
       <Modal visible={reviewOpen} animationType="slide" onRequestClose={() => setReviewOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+        <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center' }}>
+        <View style={{ flex: 1, width: '100%', maxWidth: 480, backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.md, gap: Spacing.gutter }}>
             <Text style={[Typography.headlineSm, { color: colors.onSurface }]}>Review</Text>
             {run.questions.map((q, i) => {
@@ -326,6 +327,7 @@ export default function ChallengeResultsScreen() {
           <View style={{ paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.md }}>
             <Button label="Close" variant="outline" onPress={() => setReviewOpen(false)} textColor={colors.onSurface} />
           </View>
+        </View>
         </View>
       </Modal>
 

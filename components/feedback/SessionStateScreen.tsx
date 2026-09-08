@@ -57,6 +57,12 @@ interface SessionStateScreenProps {
    *  caller supplies its own onBuyKeysPress/onSubscribePress. */
   skillId?: CurriculumSlug;
   track?: Track;
+  /** topicComplete only, forwarded from PlaySession's isOnboarding prop —
+   *  true only for the pre-unlock, first-ever onboarding run. Replaces the
+   *  REDO SESSION secondary button with an underlined "Go to home page"
+   *  link (still calls onSecondaryPress) — no redo/retake offered during
+   *  onboarding, per the onboarding plan. */
+  isOnboarding?: boolean;
 }
 
 const stateCopy: Record<
@@ -153,6 +159,7 @@ export function SessionStateScreen({
   onSubscribePress,
   skillId,
   track,
+  isOnboarding = false,
 }: SessionStateScreenProps) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -616,8 +623,17 @@ export function SessionStateScreen({
           </Pressable>
         )}
 
-        {/* Secondary — Redo or Wait */}
-        {config.secondary ? (
+        {/* Secondary — Redo or Wait. During onboarding's topicComplete,
+            no redo/retake is offered — an underlined "Go to home page"
+            link takes its place instead (still wired to onSecondaryPress,
+            which PlaySession points at onExit in this case). */}
+        {kind === 'topicComplete' && isOnboarding ? (
+          <Pressable onPress={onSecondaryPress} hitSlop={10} style={styles.goHomeLinkWrap}>
+            <Text style={[styles.goHomeLinkText, { color: colors.onSurfaceVariant }]}>
+              Go to home page
+            </Text>
+          </Pressable>
+        ) : config.secondary ? (
           <Pressable
             onPress={onSecondaryPress}
             style={[styles.secondaryButton, { borderColor: colors.outlineVariant }]}
@@ -898,6 +914,15 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 14,
     letterSpacing: 0.5,
+  },
+  goHomeLinkWrap: {
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  goHomeLinkText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
   timerText: {
     fontFamily: FontFamily.bold,

@@ -27,11 +27,11 @@ export function ChallengeCornerCard() {
       >
         <Image source={KEYS_ICON} style={styles.key} contentFit="contain" />
         <View style={styles.textBlock}>
-          <Text style={styles.title}>
-            Join Challenges
+          <Text style={styles.title} numberOfLines={1}>
+            Get Extra Keys
           </Text>
-          <Text style={styles.title}>
-            for <Text style={styles.highlight}>Extra Keys</Text>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            Join Todays Challenges
           </Text>
         </View>
         <ChevronRight size={26} color="#1A1A1A" strokeWidth={2.4} />
@@ -44,7 +44,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.xl,
     paddingVertical: Spacing.base,
-    paddingHorizontal: Spacing.gutter,
+    paddingLeft: Spacing.lg,
+    paddingRight: Spacing.gutter,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -54,18 +55,19 @@ const styles = StyleSheet.create({
   },
   textBlock: {
     flex: 1,
-    marginLeft: Spacing.sm,
+    marginLeft: Spacing.md,
   },
   title: {
     fontFamily: FontFamily.bold,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 19,
+    lineHeight: 24,
     color: '#1A1A1A',
   },
-  highlight: {
-    fontFamily: FontFamily.bold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: '#B5651D',
+  subtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#1A1A1A',
+    marginTop: 2,
   },
 });
