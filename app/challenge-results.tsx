@@ -7,7 +7,7 @@
  * go to /challenge-reward.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { BackHandler, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -449,3 +449,46 @@ export default function ChallengeResultsScreen() {
     </View>
   );
 }
+
+const reviewStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetWrapper: {
+    width: '100%',
+  },
+  sheetContainer: {
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.marginMobile,
+    paddingTop: Spacing.sm,
+    maxHeight: '85%',
+  },
+  handleRow: {
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: Radius.full,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: Spacing.md,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollView: {
+    flexGrow: 0,
+  },
+});

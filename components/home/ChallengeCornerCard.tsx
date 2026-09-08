@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight } from 'lucide-react-native';
 import { FontFamily, Radius, Spacing } from '@/theme/tokens';
+import { navPush } from '@/lib/navDirection';
 
 const KEYS_ICON = require('@/assets/premium/key.webp');
 
@@ -16,7 +17,7 @@ export function ChallengeCornerCard() {
 
   return (
     <Pressable
-      onPress={() => router.push('/challenge-corner')}
+      onPress={() => navPush(router, '/challenge-corner')}
       style={({ pressed }) => [pressed && { opacity: 0.85 }]}
     >
       <LinearGradient

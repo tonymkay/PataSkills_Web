@@ -10,6 +10,8 @@ import { ChevronLeft, Plus, Globe, WifiOff, Trophy, ChevronRight } from 'lucide-
 import { LinearGradient } from 'expo-linear-gradient';
 import { HomeBottomGlow } from '@/constants/gradients';
 import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
+import { ScreenTransition } from '@/components/nav/ScreenTransition';
+import { navPush, navBack } from '@/lib/navDirection';
 
 type MenuRowSpec = {
   key: string;
@@ -82,7 +84,7 @@ export default function ChallengeCornerScreen() {
       iconColor: colors.white,
       title: 'Add',
       subtitle: 'Create a new challenge',
-      onPress: () => router.push('/challenge-create'),
+      onPress: () => navPush(router, '/challenge-create'),
     },
     {
       key: 'online',
@@ -91,7 +93,7 @@ export default function ChallengeCornerScreen() {
       iconColor: colors.white,
       title: 'Online Challenge',
       subtitle: <WinnerRewardSubtext rewardKeys={5} />,
-      onPress: () => router.push('/challenge-online'),
+      onPress: () => navPush(router, '/challenge-online'),
     },
     {
       key: 'offline',
@@ -100,7 +102,7 @@ export default function ChallengeCornerScreen() {
       iconColor: colors.white,
       title: 'Offline Challenge',
       subtitle: <WinnerRewardSubtext rewardKeys={3} />,
-      onPress: () => router.push('/challenge-offline'),
+      onPress: () => navPush(router, '/challenge-offline'),
     },
     {
       key: 'tournament',
@@ -109,11 +111,12 @@ export default function ChallengeCornerScreen() {
       iconColor: colors.white,
       title: 'Tournaments',
       subtitle: <WinnerRewardSubtext rewardKeys={5} />,
-      onPress: () => router.push('/challenge-tournament'),
+      onPress: () => navPush(router, '/challenge-tournament'),
     },
   ];
 
   return (
+    <ScreenTransition>
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '45%' }}>
         <LinearGradient
@@ -125,7 +128,7 @@ export default function ChallengeCornerScreen() {
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.marginMobile, paddingVertical: Spacing.sm }}>
-        <Pressable onPress={() => router.back()} hitSlop={10}>
+        <Pressable onPress={() => navBack(router)} hitSlop={10}>
           <ChevronLeft size={IconSize.header} color={colors.onSurface} strokeWidth={2.5} />
         </Pressable>
         <Text style={[Typography.headlineMd, { color: colors.onSurface, flex: 1 }]} numberOfLines={1}>
@@ -154,5 +157,6 @@ export default function ChallengeCornerScreen() {
         ))}
       </View>
     </View>
+    </ScreenTransition>
   );
 }
