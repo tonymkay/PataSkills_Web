@@ -7,14 +7,18 @@
  * go to /challenge-reward.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Modal, Platform, ScrollView, Text, View } from 'react-native';
+import { BackHandler, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { Trophy } from 'lucide-react-native';
 import { Avatar } from '@/components/profile/Avatar';
 import { Button } from '@/components/ui/Button';
 import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
-import { BrandGradients, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
+import { BrandGradients, getSheetGradient } from '@/constants/gradients';
+import { Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import {
   clearChallengeRun,
   getFinishedChallengeRun,
@@ -23,6 +27,8 @@ import {
 } from '@/lib/challengeRuntime';
 import { markCompanionResultsViewed, stopCompanionSession } from '@/lib/challengeCompanionSession';
 import { useChallengeCompanionSession } from '@/hooks/useChallengeCompanionSession';
+import { getChallengeState, markChallengeResultsViewed, claimChallengeReward, type ChallengeState } from '@/lib/challenges';
+import { getDeviceId } from '@/lib/deviceId';
 import { resolveCorrectAnswerText } from '@/lib/mistakes';
 
 const GREEN = StaticColors.selection.activeBorder;
@@ -70,17 +76,23 @@ function ProgressPill({
 
 export default function ChallengeResultsScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [run] = useState<FinishedChallengeRun | null>(() => getFinishedChallengeRun());
   const isCompanion = !!run?.isCompanion;
-  const isMultiplayer = isCompanion;
+  const isOnline = !!run?.challengeId && !isCompanion;
+  const isMultiplayer = isCompanion || isOnline;
   const activityLabel = 'Challenge';
 
   const companionSession = useChallengeCompanionSession();
+  const [onlineState, setOnlineState] = useState<ChallengeState | null>(null);
+  const [myDeviceId, setMyDeviceId] = useState<string | null>(null);
 
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewRendered, setReviewRendered] = useState(false);
+  const reviewTranslateY = useSharedValue(600);
+  const reviewBackdropOpacity = useSharedValue(0);
   const [quitWarnOpen, setQuitWarnOpen] = useState(false);
   const [anchorMs, setAnchorMs] = useState<number | null>(null);
   const [remainingMs, setRemainingMs] = useState(EXIT_UNLOCK_MS);
@@ -91,9 +103,25 @@ export default function ChallengeResultsScreen() {
     if (isCompanion) {
       const t = markCompanionResultsViewed();
       queueMicrotask(() => setAnchorMs(t));
+    } else if (isOnline && run.challengeId) {
+      markChallengeResultsViewed(run.challengeId).then((t) => setAnchorMs(t ? t.getTime() : Date.now()));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isOnline || !run?.challengeId) return undefined;
+    getDeviceId().then(setMyDeviceId);
+    let cancelled = false;
+    const poll = () => {
+      getChallengeState(run.challengeId!).then((state) => {
+        if (!cancelled) setOnlineState(state);
+      });
+    };
+    poll();
+    const t = setInterval(poll, 3000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [isOnline, run?.challengeId]);
 
   useEffect(() => {
     if (anchorMs === null) return undefined;
@@ -103,10 +131,39 @@ export default function ChallengeResultsScreen() {
     return () => clearInterval(t);
   }, [anchorMs]);
 
+  const closeReview = useCallback(() => setReviewOpen(false), []);
+
+  useEffect(() => {
+    if (reviewOpen) {
+      setReviewRendered(true);
+      reviewBackdropOpacity.value = withTiming(1, { duration: 220 });
+      reviewTranslateY.value = withTiming(0, { duration: 360, easing: Easing.out(Easing.cubic) });
+    } else {
+      reviewBackdropOpacity.value = withTiming(0, { duration: 160 });
+      reviewTranslateY.value = withTiming(600, { duration: 220, easing: Easing.in(Easing.cubic) }, (finished) => {
+        if (finished) runOnJS(setReviewRendered)(false);
+      });
+    }
+  }, [reviewOpen, reviewTranslateY, reviewBackdropOpacity]);
+
+  const reviewSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: reviewTranslateY.value }] }));
+  const reviewBackdropStyle = useAnimatedStyle(() => ({ opacity: reviewBackdropOpacity.value }));
+
   const rows: Row[] = isCompanion
     ? companionSession.players.map((p) => ({
         id: p.deviceId, name: p.displayName, score: p.score, total: p.total, timeMs: p.timeMs,
         finished: p.finished, currentQuestionIndex: p.currentQuestionIndex, isMe: p.deviceId === companionSession.deviceId,
+      }))
+    : isOnline && onlineState
+    ? onlineState.players.map((p) => ({
+        id: p.deviceId ?? p.displayName ?? Math.random().toString(36),
+        name: p.displayName ?? 'Player',
+        score: p.score ?? 0,
+        total: p.total ?? run?.total ?? 0,
+        timeMs: p.timeMs ?? 0,
+        finished: !!p.finishedAt,
+        currentQuestionIndex: p.currentQuestionIndex,
+        isMe: p.deviceId === myDeviceId,
       }))
     : [];
   const sortedRows = sortRows(rows);
@@ -124,14 +181,18 @@ export default function ChallengeResultsScreen() {
     if (isCompanion) stopCompanionSession();
   };
 
-  const onExit = () => {
+  const onExit = async () => {
     if (!unlocked || exitedRef.current) return;
     exitedRef.current = true;
     finalizeAndCleanup();
+    let keys = rewardKeys;
+    if (isOnline && run?.challengeId) {
+      try { keys = await claimChallengeReward(run.challengeId); } catch { /* best-effort */ }
+    }
     setChallengeRewardSummary({
       score: run?.score ?? 0,
       total: run?.total ?? 0,
-      rewardKeys,
+      rewardKeys: keys,
       activityLabel,
       origin: run?.origin,
     });
@@ -282,52 +343,97 @@ export default function ChallengeResultsScreen() {
         )}
       </View>
 
-      <Modal visible={reviewOpen} animationType="slide" onRequestClose={() => setReviewOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center' }}>
-        <View style={{ flex: 1, width: '100%', maxWidth: 480, backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.md, gap: Spacing.gutter }}>
-            <Text style={[Typography.headlineSm, { color: colors.onSurface }]}>Review</Text>
-            {run.questions.map((q, i) => {
-              const correct = run.correct[i];
-              return (
-                <View
-                  key={q.id}
-                  style={{
-                    borderRadius: Radius.xl, borderWidth: 1.5, borderColor: colors.outlineVariant,
-                    backgroundColor: colors.surfaceContainerLow, paddingHorizontal: Spacing.lg,
-                    paddingVertical: Spacing.lg, gap: Spacing.md, alignItems: 'center',
-                  }}
+      <Modal
+        visible={reviewRendered}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={closeReview}
+      >
+        <View style={reviewStyles.overlay} pointerEvents="box-none">
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: StaticColors.backdropColor },
+              reviewBackdropStyle,
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeReview} />
+          </Animated.View>
+
+          <Animated.View style={[reviewStyles.sheetWrapper, reviewSheetStyle]}>
+            <LinearGradient
+              colors={getSheetGradient(isDark).colors}
+              start={getSheetGradient(isDark).start}
+              end={getSheetGradient(isDark).end}
+              style={[
+                reviewStyles.sheetContainer,
+                {
+                  borderColor: isDark ? colors.outlineVariant : '#E2E8F0',
+                  paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.md),
+                },
+              ]}
+            >
+              <View style={reviewStyles.handleRow}>
+                <View style={[reviewStyles.handle, { backgroundColor: colors.outlineVariant }]} />
+              </View>
+
+              <View style={reviewStyles.headerRow}>
+                <Text style={[Typography.titleMedium, { color: colors.onSurface, fontWeight: '800' }]}>Review</Text>
+                <Pressable
+                  onPress={closeReview}
+                  hitSlop={12}
+                  style={[reviewStyles.closeButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
                 >
-                  <Text style={[Typography.bodySm, { color: correct ? GREEN : StaticColors.wrongChipBg }]}>
-                    {`Question ${i + 1}`}
-                  </Text>
-                  <Text style={[Typography.bodyMd, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
-                    {q.question}
-                  </Text>
-                  <View
-                    style={{
-                      alignSelf: 'center',
-                      backgroundColor: correct ? colors.correctBg : StaticColors.wrongChipBg,
-                      borderRadius: Radius.full,
-                      paddingHorizontal: Spacing.md,
-                      paddingVertical: 7,
-                    }}
-                  >
-                    <Text style={{ color: correct ? colors.correctDark : StaticColors.wrongChipLetterBg, fontSize: 11, lineHeight: 18, fontWeight: 'bold' }}>
-                      {correct ? 'CORRECT' : 'MISSED'}
-                    </Text>
-                  </View>
-                  <Text style={[Typography.bodyMd, { color: GREEN, textAlign: 'center' }]}>
-                    {resolveCorrectAnswerText(q)}
-                  </Text>
-                </View>
-              );
-            })}
-          </ScrollView>
-          <View style={{ paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.md }}>
-            <Button label="Close" variant="outline" onPress={() => setReviewOpen(false)} textColor={colors.onSurface} />
-          </View>
-        </View>
+                  <Ionicons name="close" size={18} color={colors.onSurfaceVariant} />
+                </Pressable>
+              </View>
+
+              <ScrollView
+                style={reviewStyles.scrollView}
+                contentContainerStyle={{ paddingBottom: Spacing.md, gap: Spacing.gutter }}
+                showsVerticalScrollIndicator={false}
+              >
+                {run.questions.map((q, i) => {
+                  const correct = run.correct[i];
+                  return (
+                    <View
+                      key={q.id}
+                      style={{
+                        borderRadius: Radius.xl, borderWidth: 1.5, borderColor: colors.outlineVariant,
+                        backgroundColor: colors.surfaceContainerLow, paddingHorizontal: Spacing.lg,
+                        paddingVertical: Spacing.lg, gap: Spacing.md, alignItems: 'center',
+                      }}
+                    >
+                      <Text style={[Typography.bodySm, { color: correct ? GREEN : StaticColors.wrongChipBg }]}>
+                        {`Question ${i + 1}`}
+                      </Text>
+                      <Text style={[Typography.bodyMd, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
+                        {q.question}
+                      </Text>
+                      <View
+                        style={{
+                          alignSelf: 'center',
+                          backgroundColor: correct ? colors.correctBg : StaticColors.wrongChipBg,
+                          borderRadius: Radius.full,
+                          paddingHorizontal: Spacing.md,
+                          paddingVertical: 7,
+                        }}
+                      >
+                        <Text style={{ color: correct ? colors.correctDark : StaticColors.wrongChipLetterBg, fontSize: 11, lineHeight: 18, fontWeight: 'bold' }}>
+                          {correct ? 'CORRECT' : 'MISSED'}
+                        </Text>
+                      </View>
+                      <Text style={[Typography.bodyMd, { color: GREEN, textAlign: 'center' }]}>
+                        {resolveCorrectAnswerText(q)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </LinearGradient>
+          </Animated.View>
         </View>
       </Modal>
 
