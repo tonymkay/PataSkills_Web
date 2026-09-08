@@ -10,7 +10,8 @@ type DeviceEventType =
   | 'landing_page_seen'
   | 'topic_loading_started'
   | 'session_started'
-  | 'topic_complete';
+  | 'topic_complete'
+  | 'paywall_seen';
 
 // topic_loading_started deliberately has no counter column on play_devices
 // -- it's a funnel/timeline signal for play_device_events, not a running
@@ -206,6 +207,26 @@ export async function trackTopicLoadingStarted(skillId: string, track: string): 
 
 export async function trackSessionStarted(skillId: string, track: string): Promise<void> {
   await recordCheckpoint('session_started', { skillId, track });
+}
+
+// Fires the moment a learner is blocked by the keys/premium paywall --
+// either the first-look pack_20 upsell (KeysOfferScreen) or the full
+// "Other ways to Proceed" screen it falls back to (SessionStateScreen
+// kind="outOfKeys"), whether the cause is an exhausted key balance or an
+// unreset free-trial timer. `topicIndex` doubles as the entry/advance
+// distinction: null means blocked before starting anything this session
+// (entry), a number means blocked mid-track moving into that topic index
+// (advance) -- avoids a schema change for a dedicated reason column.
+export async function trackPaywallSeen(
+  skillId: string,
+  track: string,
+  topicIndex: number | null,
+): Promise<void> {
+  await recordCheckpoint('paywall_seen', {
+    skillId,
+    track,
+    ...(topicIndex !== null ? { topicIndex } : {}),
+  });
 }
 
 export async function trackTopicComplete(

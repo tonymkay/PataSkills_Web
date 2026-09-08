@@ -12,7 +12,7 @@ import { useKeys } from '@/hooks/useKeys';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import { getLocalProgress, markTopicCompleted, markTrackCompleted } from '@/lib/progress';
-import { trackTopicComplete } from '@/lib/deviceAnalytics';
+import { trackTopicComplete, trackPaywallSeen } from '@/lib/deviceAnalytics';
 import { recordXpEarned } from '@/lib/xp';
 import { recordActivityToday } from '@/lib/streak';
 import { Track } from '@/lib/curriculum';
@@ -77,6 +77,23 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
 
   const [outOfKeysReason, setOutOfKeysReason] = useState<OutOfKeysReason>(null);
 
+  // Centralizes every path that surfaces the paywall (KeysOfferScreen or
+  // SessionStateScreen kind="outOfKeys" directly) so trackPaywallSeen()
+  // fires exactly once per encounter, from one place, instead of being
+  // duplicated at each call site below. `toState` defaults to 'keysOffer'
+  // (the normal first-look upsell) -- resumeSessionWithNewKeys passes
+  // 'outOfKeys' explicitly since a second failed attempt skips straight
+  // to the full "Other ways to Proceed" screen without repeating the
+  // upsell, but it's still a fresh paywall encounter worth logging.
+  const showPaywall = useCallback(
+    (reason: Exclude<OutOfKeysReason, null>, toState: 'keysOffer' | 'outOfKeys' = 'keysOffer') => {
+      setOutOfKeysReason(reason);
+      void trackPaywallSeen(skillId, track, reason === 'advance' ? sessionIndex + 1 : null);
+      setFlowState(toState);
+    },
+    [skillId, track, sessionIndex],
+  );
+
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [switcherHeading, setSwitcherHeading] = useState<ModeSwitcherHeading>('switch');
   // Direction for the questions <-> topic-complete entering slide — forward
@@ -110,23 +127,20 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
 
     (async () => {
       if (isOutOfKeys) {
-        setOutOfKeysReason('entry');
-        setFlowState('keysOffer');
+        showPaywall('entry');
         return;
       }
 
       try {
         const remaining = await spendKey();
         if (remaining === null) {
-          setOutOfKeysReason('entry');
-          setFlowState('keysOffer');
+          showPaywall('entry');
           return;
         }
         setSessionStarted(true);
       } catch (err) {
         console.warn('[PlaySession] entry spendKey failed:', err);
-        setOutOfKeysReason('entry');
-        setFlowState('keysOffer');
+        showPaywall('entry');
       }
     })();
   }, [ready]); // minimal deps — ref guards re-entry
@@ -157,15 +171,13 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
     }
 
     if (isOutOfKeys) {
-      setOutOfKeysReason('advance');
-      setFlowState('keysOffer');
+      showPaywall('advance');
       return;
     }
 
     const remaining = await spendKey();
     if (remaining === null) {
-      setOutOfKeysReason('advance');
-      setFlowState('keysOffer');
+      showPaywall('advance');
       return;
     }
 
@@ -181,13 +193,13 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
     setOutOfKeysReason(null);
     setSessionStarted(true);
     setFlowState('playing');
-  }, [hasMoreSessions, isOutOfKeys, spendKey]);
+  }, [hasMoreSessions, isOutOfKeys, spendKey, showPaywall]);
 
   // Resume directly into playing once new keys become available
   const resumeSessionWithNewKeys = useCallback(async () => {
     const remaining = await spendKey();
     if (remaining === null) {
-      setFlowState('outOfKeys');
+      showPaywall(outOfKeysReason ?? 'entry', 'outOfKeys');
       return;
     }
 
@@ -201,7 +213,7 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
     setOutOfKeysReason(null);
     setSessionStarted(true);
     setFlowState('playing');
-  }, [outOfKeysReason, spendKey]);
+  }, [outOfKeysReason, spendKey, showPaywall]);
 
   // Fires when the learner presses NEXT SESSION on the topicComplete screen.
   // Decides which continuation UI (if any) to show, per the spec:
