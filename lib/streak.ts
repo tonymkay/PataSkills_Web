@@ -118,12 +118,12 @@ export async function getStreakData(): Promise<StreakData> {
   };
 }
 
-async function syncStreakToCloud(dates: string[]): Promise<void> {
+async function syncStreakToCloud(dates: string[]): Promise<boolean> {
   try {
     const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
-    if (!email) return;
+    if (!email) return false;
 
-    await supabase.from('play_user_stats').upsert(
+    const { error } = await supabase.from('play_user_stats').upsert(
       {
         email,
         active_days_count: dates.length,
@@ -132,5 +132,20 @@ async function syncStreakToCloud(dates: string[]): Promise<void> {
       },
       { onConflict: 'email' }
     );
-  } catch {}
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Manual "Backup now" entry point (Settings). Re-pushes the current
+ * activity-dates summary regardless of whether the live sync at
+ * recordActivityToday time succeeded. Returns false if no email is linked
+ * or there's no activity recorded yet — play_user_stats is email-keyed.
+ */
+export async function pushStreakToCloud(): Promise<boolean> {
+  const dates = await readDates();
+  if (dates.length === 0) return false;
+  return syncStreakToCloud(dates);
 }

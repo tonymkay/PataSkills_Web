@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +15,7 @@ import {
   LogOut,
   Moon,
   Crown,
+  UploadCloud,
 } from 'lucide-react-native';
 import { useTheme, Spacing, Radius, Typography, IconSize, StaticColors } from '@/theme/tokens';
 import { FontFamily } from '@/constants/typography';
@@ -25,6 +26,7 @@ import { logoutAccount } from '@/lib/restore';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { getKeysState } from '@/lib/keys';
 import { useKeys } from '@/hooks/useKeys';
+import { runManualBackup } from '@/lib/backup';
 import type { CurrencyCode } from '@/lib/currency';
 
 const CURRENCY_STORAGE_KEY = '@play/currency';
@@ -48,6 +50,7 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [currency, setCurrency] = useState<CurrencyCode>('USD');
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
 
   useEffect(() => {
     getStoredEmail().then(setEmail).catch(() => {});
@@ -86,6 +89,28 @@ export default function SettingsScreen() {
     const next: CurrencyCode = currency === 'USD' ? 'KES' : 'USD';
     setCurrency(next);
     AsyncStorage.setItem(CURRENCY_STORAGE_KEY, next).catch(() => {});
+  };
+
+  const handleBackupNow = async () => {
+    if (backingUp) return;
+    setBackingUp(true);
+    try {
+      const result = await runManualBackup();
+      const lines = [
+        `Mistakes: ${result.mistakesPushed}/${result.mistakesTotal} pushed`,
+        result.hasEmail
+          ? `Progress: ${result.progressSkillsPushed}/${result.progressSkillsFound} skills pushed`
+          : 'Progress: skipped (no account linked)',
+        `XP: ${result.xpSynced ? 'synced' : result.hasEmail ? 'failed' : 'skipped (no account linked)'}`,
+        `Streak: ${result.streakSynced ? 'synced' : result.hasEmail ? 'failed or no activity yet' : 'skipped (no account linked)'}`,
+        `Keys: ${result.keysSynced ? 'synced' : 'skipped (no account linked)'}`,
+      ];
+      Alert.alert('Backup complete', lines.join('\n'));
+    } catch {
+      Alert.alert('Backup failed', 'Could not reach the server. Try again in a moment.');
+    } finally {
+      setBackingUp(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -154,6 +179,15 @@ export default function SettingsScreen() {
           label="Currency"
           value={currency}
           onPress={handleToggleCurrency}
+        />
+
+        {/* ── Data ── */}
+        <SectionHeader title="Data" />
+        <SettingsRow
+          icon={<UploadCloud size={IconSize.inline} color={iconColor} />}
+          label="Back up now"
+          value={backingUp ? 'Syncing…' : undefined}
+          onPress={handleBackupNow}
         />
 
         {/* ── Support ── */}

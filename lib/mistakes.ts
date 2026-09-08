@@ -161,13 +161,15 @@ export async function getSkillMistakesCount(skillId: string): Promise<number> {
  * upsert_question_attempt RPC (matches PataSkillsV2 sql/46_question_attempts.sql
  * — table is public.question_attempts, PK (device_id, question_id), no email
  * column, writes go through this SECURITY DEFINER RPC granted to anon/authenticated).
+ * Returns whether the write actually landed, so callers that need to know
+ * (bulk backup) can count real successes instead of just firing and forgetting.
  */
-async function syncAttemptToCloud(attempt: QuestionAttempt): Promise<void> {
+async function syncAttemptToCloud(attempt: QuestionAttempt): Promise<boolean> {
   try {
     const deviceId = await getDeviceId();
-    if (!deviceId) return;
+    if (!deviceId) return false;
 
-    await supabase.rpc('upsert_question_attempt', {
+    const { error } = await supabase.rpc('upsert_question_attempt', {
       p_device_id: deviceId,
       p_skill_id: attempt.skillId,
       p_topic_id: String(attempt.topicIndex),
@@ -176,5 +178,42 @@ async function syncAttemptToCloud(attempt: QuestionAttempt): Promise<void> {
       p_attempt_count: attempt.attemptCount,
       p_solved: attempt.solved,
     });
-  } catch {}
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Manual "Backup now" entry point (Settings). Re-pushes every locally
+ * recorded mistake across every skill, regardless of whether the earlier
+ * live sync at record-time succeeded — this is the recovery path for
+ * exactly the situation where record-time syncing was broken/undeployed
+ * and local data piled up with nothing in Supabase. Device-keyed, so it
+ * works with or without a linked email. Returns how many attempts were
+ * successfully pushed out of how many were found locally.
+ */
+export async function pushAllMistakesToCloud(): Promise<{ pushed: number; total: number }> {
+  let keys: readonly string[] = [];
+  try {
+    keys = await AsyncStorage.getAllKeys();
+  } catch {
+    return { pushed: 0, total: 0 };
+  }
+
+  const mistakeKeys = keys.filter((k) => k.startsWith('@play/mistakes:'));
+  let pushed = 0;
+  let total = 0;
+
+  for (const key of mistakeKeys) {
+    const skillId = key.slice('@play/mistakes:'.length);
+    const map = await readSkillMistakes(skillId);
+    for (const attempt of Object.values(map)) {
+      total += 1;
+      const ok = await syncAttemptToCloud(attempt);
+      if (ok) pushed += 1;
+    }
+  }
+
+  return { pushed, total };
 }

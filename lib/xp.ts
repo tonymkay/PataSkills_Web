@@ -55,12 +55,12 @@ export async function recordXpEarned(
   return { skillXp: nextSkill, totalXp: nextTotal };
 }
 
-async function syncXpToCloud(totalXp: number): Promise<void> {
+async function syncXpToCloud(totalXp: number): Promise<boolean> {
   try {
     const email = await AsyncStorage.getItem(EMAIL_STORAGE_KEY);
-    if (!email) return;
+    if (!email) return false;
 
-    await supabase.from('play_user_stats').upsert(
+    const { error } = await supabase.from('play_user_stats').upsert(
       {
         email,
         total_xp: totalXp,
@@ -68,5 +68,18 @@ async function syncXpToCloud(totalXp: number): Promise<void> {
       },
       { onConflict: 'email' }
     );
-  } catch {}
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Manual "Backup now" entry point (Settings). Re-pushes current lifetime XP
+ * regardless of whether the live sync at recordXpEarned time succeeded.
+ * Returns false (no-op) if no email is linked — play_user_stats is email-keyed.
+ */
+export async function pushXpToCloud(): Promise<boolean> {
+  const totalXp = await getTotalXp();
+  return syncXpToCloud(totalXp);
 }

@@ -219,6 +219,42 @@ export async function syncAllProgressWithCloud(
 }
 
 /**
+ * Manual "Backup now" entry point (Settings). Pushes every locally recorded
+ * skill's progress straight to play_progress, regardless of whether the
+ * live upsert at markTopicCompleted/markTrackCompleted time actually landed
+ * — recovery path for a device that's been playing while syncing was
+ * broken or the build was stale. Requires email (play_progress has no
+ * device_id column — see docs/progress-restore-fix-plan.md); returns 0 if
+ * none is linked. Local values win outright (no merge) since this is an
+ * explicit "push what's on this device" action, not a background restore.
+ */
+export async function pushAllProgressToCloud(
+  email: string,
+  skillIds: (CurriculumSlug | string)[]
+): Promise<number> {
+  let pushed = 0;
+  for (const skillId of skillIds) {
+    try {
+      const local = await getLocalProgress(skillId);
+      const tracks = await getCompletedTracks(skillId);
+      const { error } = await supabase.from('play_progress').upsert(
+        {
+          email,
+          skill_id: skillId,
+          completed_topics: local.completedTopics,
+          total_topics: local.totalTopics,
+          completed_tracks: tracks,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'email,skill_id' }
+      );
+      if (!error) pushed += 1;
+    } catch {}
+  }
+  return pushed;
+}
+
+/**
  * Which learning-mode tracks the learner has fully exhausted (hit
  * trackComplete on), scoped to one skill. Used by ModeSwitcherSheet to show
  * a real "N/6 tracks complete" count and per-row DONE state instead of

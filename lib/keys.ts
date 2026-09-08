@@ -71,6 +71,20 @@ async function write(state: KeysState): Promise<void> {
   } catch {}
 }
 
+/**
+ * Manual "Backup now" entry point (Settings). Re-pushes the current key
+ * balance/premium state regardless of whether the live sync in write()
+ * succeeded earlier. No-op (returns false) if no email is linked —
+ * play_accounts is email-keyed.
+ */
+export async function pushKeysToCloud(): Promise<boolean> {
+  const email = await AsyncStorage.getItem(EMAIL_KEY);
+  if (!email) return false;
+  const state = await read();
+  await write(state);
+  return true;
+}
+
 /** The timer is the source of truth: once `resetAt` has passed, the balance
  *  refills as soon as anything reads state — no separate "day changed"
  *  check, no UI action required. Also checks for subscription expiration. */
