@@ -27,6 +27,7 @@ import {
   startCompanionRace,
   stopCompanionSession,
 } from '@/lib/challengeCompanionSession';
+import { submitChallengeResult } from '@/lib/challenges';
 import { useChallengeCompanionSession } from '@/hooks/useChallengeCompanionSession';
 
 const GREEN = StaticColors.selection.activeBorder;
@@ -148,6 +149,9 @@ export default function ChallengeRunScreen() {
     const run: FinishedChallengeRun = { ...pending, timeMs, score, total, correct: finalResults };
     setFinishedChallengeRun(run);
     if (isCompanion) sendCompanionFinish(score, total, timeMs);
+    else if (pending.challengeId) {
+      submitChallengeResult(pending.challengeId, { timeMs, score, total }).catch(() => { /* best-effort */ });
+    }
     router.replace('/challenge-results');
   }, [pending, total, isCompanion, router]);
 

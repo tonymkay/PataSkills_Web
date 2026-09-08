@@ -7,7 +7,7 @@
  * go to /challenge-reward.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -343,14 +343,7 @@ export default function ChallengeResultsScreen() {
         )}
       </View>
 
-      <Modal
-        visible={reviewRendered}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        navigationBarTranslucent
-        onRequestClose={closeReview}
-      >
+      {reviewRendered && (
         <View style={reviewStyles.overlay} pointerEvents="box-none">
           <Animated.View
             style={[
@@ -435,7 +428,7 @@ export default function ChallengeResultsScreen() {
             </LinearGradient>
           </Animated.View>
         </View>
-      </Modal>
+      )}
 
       <QuitConfirmSheet
         visible={quitWarnOpen}
@@ -452,13 +445,19 @@ export default function ChallengeResultsScreen() {
 
 const reviewStyles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
+    alignItems: 'center',
+    zIndex: 30,
+    elevation: 30,
   },
   sheetWrapper: {
     width: '100%',
+    maxWidth: 480,
+    alignItems: 'center',
   },
   sheetContainer: {
+    width: '100%',
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
     borderWidth: 1,
