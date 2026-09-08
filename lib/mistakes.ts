@@ -48,7 +48,7 @@ async function writeSkillMistakes(skillId: string, data: MistakeMap): Promise<vo
   } catch {}
 }
 
-function resolveCorrectAnswerText(question: QuizQuestion): string {
+export function resolveCorrectAnswerText(question: QuizQuestion): string {
   if (Array.isArray(question.answers) && question.answers.length > question.correctAnswer) {
     const ans = question.answers[question.correctAnswer];
     if (ans) return ans;

@@ -20,6 +20,10 @@ interface QuitConfirmSheetProps {
   visible: boolean;
   onKeepPlaying: () => void;
   onQuit: () => void;
+  title?: string;
+  subtitle?: string;
+  keepLabel?: string;
+  quitLabel?: string;
 }
 
 /**
@@ -28,7 +32,15 @@ interface QuitConfirmSheetProps {
  * Same shell/gradient/safe-area treatment as FeedbackSheet & LearnMoreSheet
  * (getSheetGradient, grabber handle, insets.bottom-aware bottom padding).
  */
-export function QuitConfirmSheet({ visible, onKeepPlaying, onQuit }: QuitConfirmSheetProps) {
+export function QuitConfirmSheet({
+  visible,
+  onKeepPlaying,
+  onQuit,
+  title = 'Are you sure?',
+  subtitle = "If you quit, you'll lose your progress and XP.",
+  keepLabel = 'KEEP PLAYING',
+  quitLabel = 'QUIT',
+}: QuitConfirmSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(400);
@@ -86,18 +98,18 @@ export function QuitConfirmSheet({ visible, onKeepPlaying, onQuit }: QuitConfirm
             </View>
 
             <Text style={[Typography.headlineSm, styles.title, { color: colors.onSurface }]}>
-              Are you sure?
+              {title}
             </Text>
             <Text style={[Typography.bodyMd, styles.subtitle, { color: colors.onSurfaceVariant }]}>
-              If you quit, you&apos;ll lose your progress and XP.
+              {subtitle}
             </Text>
 
             <Pressable onPress={onKeepPlaying} style={styles.keepBtn}>
-              <Text style={styles.keepBtnText}>KEEP PLAYING</Text>
+              <Text style={styles.keepBtnText}>{keepLabel}</Text>
             </Pressable>
 
             <Pressable onPress={onQuit} hitSlop={8} style={styles.quitBtn}>
-              <Text style={[styles.quitBtnText, { color: colors.onSurfaceVariant }]}>QUIT</Text>
+              <Text style={[styles.quitBtnText, { color: colors.onSurfaceVariant }]}>{quitLabel}</Text>
             </Pressable>
           </LinearGradient>
         </Animated.View>

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Typography, FontFamily } from '@/theme/tokens';
 import { AppHeader } from '@/components/nav/AppHeader';
 import { SkillProgressCard, deriveSkillProgressState } from '@/components/home/SkillProgressCard';
+import { ChallengeCornerCard } from '@/components/home/ChallengeCornerCard';
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { getLocalProgress } from '@/lib/progress';
 import { LANDING_SKILLS } from '@/constants/skills';
@@ -89,6 +90,7 @@ export default function HomeTab() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <ChallengeCornerCard />
         <Text style={[styles.heading, { color: colors.onSurface }]}>
           My Skills
         </Text>
