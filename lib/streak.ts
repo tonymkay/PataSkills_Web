@@ -140,15 +140,23 @@ async function syncStreakToCloud(dates: string[]): Promise<boolean> {
   }
 }
 
+export type StreakPushStatus = 'synced' | 'no_activity' | 'error';
+
 /**
  * Manual "Backup now" entry point (Settings). Re-pushes the current
  * activity-dates summary regardless of whether the live sync at
  * recordActivityToday time succeeded. Device-keyed, so it works with or
- * without a linked email — see docs/sync-gaps-fix-plan.md Gap 1. Still
- * returns false if there's no activity recorded yet (nothing to push).
+ * without a linked email — see docs/sync-gaps-fix-plan.md Gap 1.
+ *
+ * Returns a distinct status rather than a bare boolean — 'no_activity' (no
+ * push attempted, nothing recorded yet) used to be indistinguishable from
+ * 'error' (an actual failed Supabase write), both collapsing to `false` and
+ * showing the same "failed or no activity yet" line in the backup summary
+ * no matter which one actually happened.
  */
-export async function pushStreakToCloud(): Promise<boolean> {
+export async function pushStreakToCloud(): Promise<StreakPushStatus> {
   const dates = await readDates();
-  if (dates.length === 0) return false;
-  return syncStreakToCloud(dates);
+  if (dates.length === 0) return 'no_activity';
+  const ok = await syncStreakToCloud(dates);
+  return ok ? 'synced' : 'error';
 }

@@ -4,7 +4,7 @@ import { getStoredEmail } from '@/lib/email';
 import { pushAllMistakesToCloud } from '@/lib/mistakes';
 import { pushAllProgressToCloud } from '@/lib/progress';
 import { pushXpToCloud } from '@/lib/xp';
-import { pushStreakToCloud } from '@/lib/streak';
+import { pushStreakToCloud, type StreakPushStatus } from '@/lib/streak';
 import { pushKeysToCloud } from '@/lib/keys';
 import { flushQueuedDeviceEvents } from '@/lib/deviceAnalytics';
 
@@ -15,7 +15,7 @@ export interface BackupResult {
   progressSkillsPushed: number;
   progressSkillsFound: number;
   xpSynced: boolean;
-  streakSynced: boolean;
+  streakStatus: StreakPushStatus;
   keysSynced: boolean;
 }
 
@@ -52,7 +52,7 @@ export async function runManualBackup(): Promise<BackupResult> {
   const email = await getStoredEmail();
   const skillIds = await discoverLocalSkillIds();
 
-  const [mistakesResult, progressPushed, xpSynced, streakSynced, keysSynced] = await Promise.all([
+  const [mistakesResult, progressPushed, xpSynced, streakStatus, keysSynced] = await Promise.all([
     pushAllMistakesToCloud(),
     pushAllProgressToCloud(email, skillIds),
     pushXpToCloud(),
@@ -67,7 +67,7 @@ export async function runManualBackup(): Promise<BackupResult> {
     progressSkillsPushed: progressPushed,
     progressSkillsFound: skillIds.length,
     xpSynced,
-    streakSynced,
+    streakStatus,
     keysSynced,
   };
 }

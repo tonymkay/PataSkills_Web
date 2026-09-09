@@ -126,6 +126,9 @@ export default function KeysConfirmScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="off"
+                importantForAutofill="no"
+                textContentType="none"
                 editable={!busy}
                 style={[
                   styles.input,

@@ -21,14 +21,19 @@ alter table play_user_stats enable row level security;
 
 -- Same anon-key access pattern as play_devices.sql / play_accounts.sql --
 -- no per-user auth is enforced elsewhere in this app.
+-- Policies are dropped-then-created (Postgres has no CREATE POLICY IF NOT
+-- EXISTS) so this migration can be safely re-run after a partial failure.
+drop policy if exists "public select play_user_stats" on play_user_stats;
 create policy "public select play_user_stats"
   on play_user_stats for select
   using (true);
 
+drop policy if exists "public insert play_user_stats" on play_user_stats;
 create policy "public insert play_user_stats"
   on play_user_stats for insert
   with check (true);
 
+drop policy if exists "public update play_user_stats" on play_user_stats;
 create policy "public update play_user_stats"
   on play_user_stats for update
   using (true)

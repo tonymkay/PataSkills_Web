@@ -152,6 +152,9 @@ export function KeysOfferScreen({ skillId, track, onMaybeLater }: KeysOfferScree
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="off"
+                importantForAutofill="no"
+                textContentType="none"
                 editable={!busy}
                 style={[
                   styles.input,
@@ -164,14 +167,16 @@ export function KeysOfferScreen({ skillId, track, onMaybeLater }: KeysOfferScree
           </View>
 
           <Text style={[styles.noteText, { color: colors.onSurfaceVariant }]}>
-            Paid securely via Paystack. Your keys link directly to this email.
+            {Platform.OS === 'android'
+              ? 'Paid securely via Google Play. Your keys link directly to this email.'
+              : 'Paid securely via Paystack. Your keys link directly to this email.'}
           </Text>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <Button
-          label="Pay with Paystack"
+          label={Platform.OS === 'android' ? 'Pay with Google Play' : 'Pay with Paystack'}
           onPress={onConfirm}
           disabled={busy}
           loading={busy}

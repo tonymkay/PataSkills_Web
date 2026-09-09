@@ -29,7 +29,7 @@ export function ChallengeCornerCard() {
         <Image source={KEYS_ICON} style={styles.key} contentFit="contain" />
         <View style={styles.textBlock}>
           <Text style={styles.title} numberOfLines={1}>
-            Get Extra Keys
+            Need Extra Keys?
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
             Join Todays Challenges
@@ -44,7 +44,7 @@ export function ChallengeCornerCard() {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
-    paddingVertical: Spacing.base,
+    paddingVertical: Spacing.gutter,
     paddingLeft: Spacing.lg,
     paddingRight: Spacing.gutter,
     flexDirection: 'row',
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   },
   textBlock: {
     flex: 1,
-    marginLeft: Spacing.md,
+    marginLeft: Spacing.sm,
   },
   title: {
     fontFamily: FontFamily.bold,

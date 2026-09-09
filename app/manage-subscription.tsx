@@ -85,7 +85,7 @@ export default function ManageSubscriptionScreen() {
   };
 
   const planCtaLabel = (premium ? 'Manage subscription' : 'Upgrade to Premium').toUpperCase();
-  const headerTitle = premium ? 'Premium' : 'Plan';
+  const headerTitle = 'Manage Subscription';
 
   const dateStr = subInfo?.expiresAt
     ? new Date(subInfo.expiresAt).toLocaleDateString(undefined, {
@@ -109,7 +109,6 @@ export default function ManageSubscriptionScreen() {
           <ArrowLeft size={IconSize.header} color={colors.onSurface} strokeWidth={2} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.onSurface }]}>{headerTitle}</Text>
-        <View style={styles.backBtn} />
       </View>
 
       <ScrollView
@@ -228,7 +227,7 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.gutter,
     paddingHorizontal: Spacing.marginMobile,
     paddingVertical: Spacing.sm,
   },
@@ -242,7 +241,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 20,
     lineHeight: 26,
-    textAlign: 'center',
   },
   content: {
     paddingHorizontal: Spacing.marginMobile,

@@ -15,6 +15,7 @@ import {
   LogOut,
   Moon,
   Crown,
+  Trash2,
   UploadCloud,
 } from 'lucide-react-native';
 import { useTheme, Spacing, Radius, Typography, IconSize, StaticColors } from '@/theme/tokens';
@@ -23,10 +24,12 @@ import { SectionHeader, SettingsRow, SettingsToggleRow } from '@/components/sett
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
 import { getStoredEmail, truncateEmailMiddle } from '@/lib/email';
 import { logoutAccount } from '@/lib/restore';
+import { deleteAccount } from '@/lib/account';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { getKeysState } from '@/lib/keys';
 import { useKeys } from '@/hooks/useKeys';
 import { runManualBackup } from '@/lib/backup';
+import { StatusModal, type StatusModalItem } from '@/components/ui/StatusModal';
 import type { CurrencyCode } from '@/lib/currency';
 
 const CURRENCY_STORAGE_KEY = '@play/currency';
@@ -51,6 +54,7 @@ export default function SettingsScreen() {
   const [currency, setCurrency] = useState<CurrencyCode>('USD');
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [statusModal, setStatusModal] = useState<{ title: string; items: StatusModalItem[] } | null>(null);
 
   useEffect(() => {
     getStoredEmail().then(setEmail).catch(() => {});
@@ -96,16 +100,48 @@ export default function SettingsScreen() {
     setBackingUp(true);
     try {
       const result = await runManualBackup();
-      const lines = [
-        `Mistakes: ${result.mistakesPushed}/${result.mistakesTotal} pushed`,
-        `Progress: ${result.progressSkillsPushed}/${result.progressSkillsFound} skills pushed`,
-        `XP: ${result.xpSynced ? 'synced' : 'failed'}`,
-        `Streak: ${result.streakSynced ? 'synced' : 'failed or no activity yet'}`,
-        `Keys: ${result.keysSynced ? 'synced' : 'skipped (no account linked)'}`,
+      const items: StatusModalItem[] = [
+        {
+          label: 'Mistakes',
+          value: `${result.mistakesPushed}/${result.mistakesTotal} pushed`,
+          tone: result.mistakesTotal === 0 || result.mistakesPushed === result.mistakesTotal ? 'success' : 'error',
+        },
+        {
+          label: 'Progress',
+          value: `${result.progressSkillsPushed}/${result.progressSkillsFound} skills`,
+          tone:
+            result.progressSkillsFound === 0 || result.progressSkillsPushed === result.progressSkillsFound
+              ? 'success'
+              : 'error',
+        },
+        {
+          label: 'XP',
+          value: result.xpSynced ? 'Synced' : 'Failed',
+          tone: result.xpSynced ? 'success' : 'error',
+        },
+        {
+          label: 'Streak',
+          value:
+            result.streakStatus === 'synced'
+              ? 'Synced'
+              : result.streakStatus === 'no_activity'
+                ? 'No activity yet'
+                : 'Failed',
+          tone:
+            result.streakStatus === 'synced' ? 'success' : result.streakStatus === 'no_activity' ? 'neutral' : 'error',
+        },
+        {
+          label: 'Keys',
+          value: result.keysSynced ? 'Synced' : result.hasEmail ? 'Failed' : 'Skipped (no account linked)',
+          tone: result.keysSynced ? 'success' : result.hasEmail ? 'error' : 'neutral',
+        },
       ];
-      Alert.alert('Backup complete', lines.join('\n'));
+      setStatusModal({ title: 'Backup complete', items });
     } catch {
-      Alert.alert('Backup failed', 'Could not reach the server. Try again in a moment.');
+      setStatusModal({
+        title: 'Backup failed',
+        items: [{ label: 'Server', value: 'Could not reach the server', tone: 'error' }],
+      });
     } finally {
       setBackingUp(false);
     }
@@ -116,6 +152,26 @@ export default function SettingsScreen() {
       await logoutAccount();
       setEmail(null);
     } catch {}
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account. Your data is removed from this device now and fully erased from our servers after 90 days. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteAccount();
+            setEmail(null);
+            if (router.canDismiss()) router.dismissAll();
+            router.replace('/');
+          },
+        },
+      ],
+    );
   };
 
   const iconColor = colors.onSurfaceVariant;
@@ -215,17 +271,21 @@ export default function SettingsScreen() {
         />
 
         {/* ── Account actions ── */}
+        <SectionHeader title="Account Actions" />
         {email && (
-          <>
-            <SectionHeader title="Account Actions" />
-            <SettingsRow
-              icon={<LogOut size={IconSize.inline} color="#F2274C" />}
-              label="Log out"
-              onPress={handleLogout}
-              danger
-            />
-          </>
+          <SettingsRow
+            icon={<LogOut size={IconSize.inline} color="#F2274C" />}
+            label="Log out"
+            onPress={handleLogout}
+            danger
+          />
         )}
+        <SettingsRow
+          icon={<Trash2 size={IconSize.inline} color="#F2274C" />}
+          label="Delete account"
+          onPress={handleDeleteAccount}
+          danger
+        />
       </ScrollView>
 
       {/* Restore/login modal — same one LandingScreen & SessionStateScreen use */}
@@ -243,6 +303,13 @@ export default function SettingsScreen() {
         }}
         currentEmail={email}
         onLoggedOut={() => setEmail(null)}
+      />
+
+      <StatusModal
+        visible={!!statusModal}
+        onClose={() => setStatusModal(null)}
+        title={statusModal?.title ?? ''}
+        items={statusModal?.items ?? []}
       />
     </View>
   );

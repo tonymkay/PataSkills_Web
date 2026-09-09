@@ -126,6 +126,9 @@ export default function SubscriptionConfirmScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="off"
+                importantForAutofill="no"
+                textContentType="none"
                 editable={!busy}
                 style={[
                   styles.input,
@@ -160,7 +163,7 @@ export default function SubscriptionConfirmScreen() {
       {/* Footer Confirm CTA */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.lg) }]}>
         <Button
-          label={Platform.OS === 'android' ? 'Subscribe with Google Play' : 'Subscribe with Paystack'}
+          label={Platform.OS === 'android' ? 'Pay with Google Play' : 'Pay with Paystack'}
           onPress={onConfirm}
           disabled={busy}
           loading={busy}
