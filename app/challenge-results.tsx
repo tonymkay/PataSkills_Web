@@ -1,6 +1,9 @@
 /**
- * Score + live leaderboard. Companion is fully wired; scout/online/tournament
- * branches land in later steps (same screen, extra imports).
+ * Score + live leaderboard. Companion, Scout, and Online are fully wired.
+ * Tournament stages (isScout + tournamentId) route back into
+ * challenge-tournament.tsx instead of /challenge-reward — that screen owns
+ * promotion/elimination/final_win and the actual reward grant. Real online
+ * tournament stages aren't wired end-to-end yet (see challenge-start.tsx).
  *
  * Exit is locked until everyone finishes or the 2-minute grace timer
  * (firstResultsAt) clears — same as the old app. Non-tournament runs then
@@ -27,6 +30,9 @@ import {
 } from '@/lib/challengeRuntime';
 import { markCompanionResultsViewed, stopCompanionSession } from '@/lib/challengeCompanionSession';
 import { useChallengeCompanionSession } from '@/hooks/useChallengeCompanionSession';
+import { markScoutResultsViewed, stopScoutSession } from '@/lib/challengeScoutSession';
+import { useChallengeScoutSession } from '@/hooks/useChallengeScoutSession';
+import { recordLocalStageResult, isLocalTournamentId } from '@/lib/challengeScoutTournamentSession';
 import { getChallengeState, markChallengeResultsViewed, claimChallengeReward, type ChallengeState } from '@/lib/challenges';
 import { getDeviceId } from '@/lib/deviceId';
 import { resolveCorrectAnswerText } from '@/lib/mistakes';
@@ -81,11 +87,15 @@ export default function ChallengeResultsScreen() {
 
   const [run] = useState<FinishedChallengeRun | null>(() => getFinishedChallengeRun());
   const isCompanion = !!run?.isCompanion;
-  const isOnline = !!run?.challengeId && !isCompanion;
-  const isMultiplayer = isCompanion || isOnline;
-  const activityLabel = 'Challenge';
+  const isScout = !!run?.isScout;
+  const isOnline = !!run?.challengeId && !isCompanion && !isScout;
+  const isMultiplayer = isCompanion || isOnline || isScout;
+  const isTournament = !!run?.tournamentId;
+  const isLocalTournament = isTournament && isLocalTournamentId(run?.tournamentId);
+  const activityLabel = isTournament ? 'Tournament' : 'Challenge';
 
   const companionSession = useChallengeCompanionSession();
+  const scoutSession = useChallengeScoutSession();
   const [onlineState, setOnlineState] = useState<ChallengeState | null>(null);
   const [myDeviceId, setMyDeviceId] = useState<string | null>(null);
 
@@ -102,6 +112,9 @@ export default function ChallengeResultsScreen() {
     if (!run) return;
     if (isCompanion) {
       const t = markCompanionResultsViewed();
+      queueMicrotask(() => setAnchorMs(t));
+    } else if (isScout) {
+      const t = markScoutResultsViewed();
       queueMicrotask(() => setAnchorMs(t));
     } else if (isOnline && run.challengeId) {
       markChallengeResultsViewed(run.challengeId).then((t) => setAnchorMs(t ? t.getTime() : Date.now()));
@@ -154,6 +167,11 @@ export default function ChallengeResultsScreen() {
         id: p.deviceId, name: p.displayName, score: p.score, total: p.total, timeMs: p.timeMs,
         finished: p.finished, currentQuestionIndex: p.currentQuestionIndex, isMe: p.deviceId === companionSession.deviceId,
       }))
+    : isScout
+    ? scoutSession.players.map((p) => ({
+        id: p.deviceId, name: p.displayName, score: p.score, total: p.total, timeMs: p.timeMs,
+        finished: p.finished, currentQuestionIndex: p.currentQuestionIndex, isMe: p.deviceId === scoutSession.deviceId,
+      }))
     : isOnline && onlineState
     ? onlineState.players.map((p) => ({
         id: p.deviceId ?? p.displayName ?? Math.random().toString(36),
@@ -175,15 +193,48 @@ export default function ChallengeResultsScreen() {
 
   const rewardKeys = isCompanion
     ? companionSession.players.find((p) => p.deviceId === companionSession.deviceId)?.rewardKeys ?? 0
+    : isScout
+    ? scoutSession.players.find((p) => p.deviceId === scoutSession.deviceId)?.rewardKeys ?? 0
     : 0;
 
   const finalizeAndCleanup = () => {
     if (isCompanion) stopCompanionSession();
+    else if (isScout) stopScoutSession();
   };
 
   const onExit = async () => {
     if (!unlocked || exitedRef.current) return;
     exitedRef.current = true;
+
+    // Tournament stage race: don't go through the normal reward path —
+    // challenge-tournament.tsx owns promotion/elimination/final_win and
+    // the actual reward grant. For a local (offline scout) bracket, we're
+    // the ones who have to advance it, since nothing server-side is
+    // ticking the stage forward; capture the finished pool before
+    // finalizeAndCleanup() tears the scout session down.
+    if (isTournament && run?.tournamentId) {
+      if (isLocalTournament) {
+        try {
+          await recordLocalStageResult(
+            scoutSession.players.map((p) => ({ deviceId: p.deviceId, score: p.score, timeMs: p.timeMs })),
+          );
+        } catch { /* best-effort */ }
+      }
+      finalizeAndCleanup();
+      clearChallengeRun();
+      router.replace({
+        pathname: '/challenge-tournament' as any,
+        params: {
+          tournamentId: run.tournamentId,
+          stage: String(run.tournamentStage ?? 1),
+          stageScore: String(run.score ?? 0),
+          stageTotal: String(run.total ?? 0),
+          ...(isLocalTournament ? { source: 'scout-local' } : {}),
+        },
+      });
+      return;
+    }
+
     finalizeAndCleanup();
     let keys = rewardKeys;
     if (isOnline && run?.challengeId) {
@@ -250,7 +301,7 @@ export default function ChallengeResultsScreen() {
   }
 
   const headline = isMultiplayer ? 'My Rank' : 'Complete!';
-  const exitLabel = rewardKeys > 0 ? 'See Reward' : 'Exit';
+  const exitLabel = isTournament ? 'Continue' : rewardKeys > 0 ? 'See Reward' : 'Exit';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>

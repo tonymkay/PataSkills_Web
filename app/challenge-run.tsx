@@ -27,7 +27,7 @@ import {
   startCompanionRace,
   stopCompanionSession,
 } from '@/lib/challengeCompanionSession';
-import { sendScoutFinish, sendScoutProgress, startScoutRace } from '@/lib/challengeScoutSession';
+import { sendScoutFinish, sendScoutProgress, startScoutRace, stopScoutSession } from '@/lib/challengeScoutSession';
 import { submitChallengeResult } from '@/lib/challenges';
 import { useChallengeCompanionSession } from '@/hooks/useChallengeCompanionSession';
 import { useChallengeScoutSession } from '@/hooks/useChallengeScoutSession';
@@ -121,6 +121,7 @@ export default function ChallengeRunScreen() {
       if (!alive) return;
       const deadlineMs = perQuestionSeconds * 1000 * total;
       if (isCompanion) startCompanionRace(deadlineMs);
+      else if (isScout) startScoutRace(deadlineMs);
     })();
     return () => {
       alive = false;
@@ -140,6 +141,17 @@ export default function ChallengeRunScreen() {
   }, [isCompanion, companionSession.deviceId, companionSession.players]);
 
   useEffect(() => {
+    if (!isScout) return;
+    scoutSession.players.forEach((p) => {
+      if (!p.deviceId || p.deviceId === scoutSession.deviceId || !p.finished || notifiedFinishRef.current.has(p.deviceId)) return;
+      notifiedFinishRef.current.add(p.deviceId);
+      const firstName = (p.displayName || 'Player').trim().split(' ')[0];
+      const seconds = Math.max(0, Math.round((p.timeMs ?? 0) / 1000));
+      setToast(`${firstName} finished in ${seconds}secs`);
+    });
+  }, [isScout, scoutSession.deviceId, scoutSession.players]);
+
+  useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(null), 2200);
     return () => clearTimeout(t);
@@ -153,11 +165,12 @@ export default function ChallengeRunScreen() {
     const run: FinishedChallengeRun = { ...pending, timeMs, score, total, correct: finalResults };
     setFinishedChallengeRun(run);
     if (isCompanion) sendCompanionFinish(score, total, timeMs);
+    else if (isScout) sendScoutFinish(score, total, timeMs);
     else if (pending.challengeId) {
       submitChallengeResult(pending.challengeId, { timeMs, score, total }).catch(() => { /* best-effort */ });
     }
     router.replace('/challenge-results');
-  }, [pending, total, isCompanion, router]);
+  }, [pending, total, isCompanion, isScout, router]);
 
   const advance = useCallback((correct: boolean) => {
     if (!current || advancingRef.current) return;
@@ -170,6 +183,7 @@ export default function ChallengeRunScreen() {
     const nextIndex = qIndex + 1;
     const liveScore = nextResults.filter(Boolean).length;
     if (isCompanion) sendCompanionProgress(nextIndex, liveScore);
+    else if (isScout) sendScoutProgress(nextIndex, liveScore);
 
     if (nextIndex >= total) {
       finishRun(nextResults);
@@ -178,7 +192,7 @@ export default function ChallengeRunScreen() {
       setSelected(null);
       advancingRef.current = false;
     }
-  }, [current, results, qIndex, total, isCompanion, finishRun]);
+  }, [current, results, qIndex, total, isCompanion, isScout, finishRun]);
 
   useEffect(() => {
     if (selected === null || !current) return undefined;
@@ -190,6 +204,7 @@ export default function ChallengeRunScreen() {
   const confirmLeave = () => {
     setQuitOpen(false);
     if (isCompanion) stopCompanionSession();
+    else if (isScout) stopScoutSession();
     router.back();
   };
 

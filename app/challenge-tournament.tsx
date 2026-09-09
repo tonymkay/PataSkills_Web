@@ -164,6 +164,7 @@ export default function ChallengeTournamentScreen() {
   );
   const [loading, setLoading] = useState(false);
   const [tState, setTState] = useState<TournamentState | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
 
   // ── Reanimated progress (internal timer for search timeout) ──
   const progress = useSharedValue(0);
@@ -245,12 +246,14 @@ export default function ChallengeTournamentScreen() {
       const scoutNameArr = params.scoutNames ? params.scoutNames.split(',') : [];
       let tid: string | null = null;
       try {
-        tid = await createTournament({
+        const created = await createTournament({
           curriculumSlug: activeSlug,
           sourceChallengeId: params.sourceChallengeId || null,
           scoutIds: scoutIdArr.length > 0 ? scoutIdArr : undefined,
           scoutNames: scoutNameArr.length > 0 ? scoutNameArr : undefined,
         });
+        tid = created?.tournamentId ?? null;
+        setInviteCode(created?.inviteCode ?? null);
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
         if (message.includes('already exists') && params.sourceChallengeId) {
@@ -455,6 +458,29 @@ export default function ChallengeTournamentScreen() {
               <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, textAlign: 'center', marginTop: Spacing.sm }]}>
                 {tierLabel} Tournament • {tState?.stageCount ?? '?'} stages
               </Text>
+            ) : null}
+
+            {!isOffline && (inviteCode ?? tState?.inviteCode) ? (
+              <View
+                style={{
+                  marginTop: Spacing.lg, alignItems: 'center', gap: Spacing.xs,
+                  backgroundColor: colors.surfaceContainerHigh, borderRadius: 16,
+                  paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+                }}
+              >
+                <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant }]}>
+                  Invite a friend with this code
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: 4,
+                    color: GREEN,
+                  }}
+                  selectable
+                >
+                  {inviteCode ?? tState?.inviteCode}
+                </Text>
+              </View>
             ) : null}
 
             {(fieldPhotos.length > 0 || fieldNames.length > 0) && (

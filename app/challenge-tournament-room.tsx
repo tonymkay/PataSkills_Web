@@ -16,13 +16,12 @@ import { ArrowLeft, Trophy } from 'lucide-react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { Avatar } from '@/components/profile/Avatar';
-import { buildChallengeQuestions } from '@/lib/challengeQuestions';
+import { buildChallengeQuestions, makeRaceSeed } from '@/lib/challengeQuestions';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
-import { getCachedTitle } from '@/lib/curriculaCatalog';
 import {
   isLocalTournamentId,
   getMyStagePool,
-  getLocalStagePool,
+  getLocalTournamentState,
 } from '@/lib/challengeScoutTournamentSession';
 import {
   initScoutSession,
@@ -110,16 +109,19 @@ export default function ChallengeTournamentRoom() {
     (async () => {
       setLoading(true);
       const pool = getMyStagePool();
-      if (!pool || !active) {
+      const tournamentState = getLocalTournamentState();
+      if (!pool || !tournamentState || !active) {
         if (active) { setLoading(false); router.back(); }
         return;
       }
-      const stagePoolInfo = getLocalStagePool();
-      setTopicTitle(stagePoolInfo?.topicTitle ?? null);
+      setTopicTitle(tournamentState.topicTitle || null);
       setTotalRoster(1 + pool.scouts.length); // human + scouts
 
-      const slug = pool.curriculumSlug as CurriculumSlug;
-      const questions = await buildChallengeQuestions(slug, pool.seed, pool.questionCount, pool.topicIndex);
+      const slug = tournamentState.curriculumSlug as CurriculumSlug;
+      // Each stage races fresh over the whole curriculum — the tournament's
+      // topicTitle (above) is fixed at creation purely for display; there's
+      // no per-stage topic index to scope to, so topicIndex stays null.
+      const questions = await buildChallengeQuestions(slug, makeRaceSeed(), 10, null);
       if (!active || questions.length === 0) {
         if (active) router.back();
         return;
@@ -146,12 +148,12 @@ export default function ChallengeTournamentRoom() {
       const handoffTimer = setTimeout(() => {
         if (!active || proceededRef.current) return;
         proceededRef.current = true;
-        const currTitle = getCachedTitle(slug) ?? slug;
         setPendingChallengeRun({
-          isTournament: true,
+          isScout: true,
           tournamentId,
+          tournamentStage: tournamentState.currentStage,
           curriculumSlug: slug,
-          curriculumTitle: currTitle,
+          curriculumTitle: tournamentState.curriculumTitle,
           questions,
           origin: 'challenge-corner',
           difficulty: 'medium',

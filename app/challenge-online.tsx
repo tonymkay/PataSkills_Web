@@ -27,6 +27,7 @@ import {
 } from '@/lib/challenges';
 import { buildChallengeQuestions } from '@/lib/challengeQuestions';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
+import { getCachedTitle } from '@/lib/curriculaCatalog';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 type Phase = 'browsing' | 'waiting';
@@ -152,11 +153,9 @@ export default function ChallengeOnlineScreen() {
     if (handedOffRef.current) return;
     handedOffRef.current = true;
     setPendingChallengeRun({
-      kind: 'challenge',
       challengeId: activeChallengeId,
       curriculumSlug: mine.curriculumSlug,
-      curriculumName: mine.curriculumSlug,
-      isCreator: false,
+      curriculumTitle: getCachedTitle(mine.curriculumSlug) ?? mine.curriculumSlug,
       startedAtMs: state.startedAt.getTime(),
       questions,
       origin: 'challenge-corner',

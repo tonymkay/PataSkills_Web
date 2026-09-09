@@ -21,11 +21,19 @@ export async function getCurriculaCatalog(): Promise<CurriculumCatalogRow[]> {
   if (cache) return cache;
   if (!inflight) {
     inflight = (async () => {
-      const { data, error } = await supabase
-        .from('play_curricula')
-        .select('slug, title, cover_image_path')
-        .eq('is_active', true);
-      cache = !error && data ? data : [];
+      try {
+        const { data, error } = await supabase
+          .from('play_curricula')
+          .select('slug, title, cover_image_path')
+          .eq('is_active', true);
+        cache = !error && data ? data : [];
+      } catch {
+        // Offline / network failure — resolve to empty rather than
+        // rejecting, so callers (generateCompanionChallenges,
+        // generateScoutChallenge) fail gracefully into their own empty
+        // states instead of leaving an awaiting caller hung forever.
+        cache = [];
+      }
       inflight = null;
       return cache;
     })();

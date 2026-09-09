@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Plus, Globe, WifiOff, Trophy, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, Plus, Globe, WifiOff, Trophy, ChevronRight, Ticket } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { HomeBottomGlow } from '@/constants/gradients';
 import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
@@ -103,6 +103,15 @@ export default function ChallengeCornerScreen() {
       title: 'Add',
       subtitle: 'Create a new challenge',
       onPress: () => navPush(router, '/challenge-create'),
+    },
+    {
+      key: 'join-tournament',
+      Icon: Ticket,
+      iconBg: colors.actionBlue,
+      iconColor: colors.white,
+      title: 'Join a Tournament',
+      subtitle: 'Enter a code you were invited with',
+      onPress: () => navPush(router, '/challenge-tournament-join'),
     },
     {
       key: 'online',

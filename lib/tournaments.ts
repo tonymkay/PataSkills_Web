@@ -35,6 +35,9 @@ export interface TournamentState {
   fieldPhotos: string[];
   topicTitle: string | null;
   curriculumTitle: string | null;
+  /** Only meaningful for the creator's own device — the code they can
+   *  share so someone else can join via play_join_tournament_by_code. */
+  inviteCode: string | null;
 }
 
 export interface TournamentStageState {
@@ -60,7 +63,9 @@ export async function createTournament(opts: {
   sourceChallengeId?: string | null;
   scoutIds?: string[];
   scoutNames?: string[];
-}): Promise<string | null> {
+  /** Optional — locks the invite code to one person's email. */
+  inviteEmail?: string | null;
+}): Promise<{ tournamentId: string; inviteCode: string | null } | null> {
   if (!isSupabaseConfigured) return null;
   const deviceId = await getDeviceId();
   const curriculumTitle = getCachedTitle(opts.curriculumSlug) ?? opts.curriculumSlug;
@@ -73,9 +78,12 @@ export async function createTournament(opts: {
     p_scout_names: opts.scoutNames ?? [],
     p_topic_title: topicTitle,
     p_curriculum_title: curriculumTitle,
+    p_invite_email: opts.inviteEmail ?? null,
   });
   if (error) throw new Error(error.message);
-  return (data as string | null) ?? null;
+  const row = ((data ?? []) as Record<string, unknown>[])[0];
+  if (!row?.tournament_id) return null;
+  return { tournamentId: String(row.tournament_id), inviteCode: (row.invite_code as string | null) ?? null };
 }
 
 /** Lookup fallback for createTournament()'s "already exists" race. */
@@ -104,6 +112,31 @@ export async function joinTournament(
   });
   if (error) throw new Error(error.message);
   return (data as 'joined' | 'already' | 'ineligible') ?? 'ineligible';
+}
+
+export type JoinByCodeResult = 'joined' | 'already' | 'not_found' | 'expired' | 'wrong_email' | 'ineligible';
+
+/** Redeems a tournament invite code — the "Join a Tournament" screen's only
+ *  action. On 'joined'/'already' the tournamentId is real and the caller
+ *  should route straight into challenge-tournament-room.tsx with it. */
+export async function joinTournamentByCode(
+  code: string,
+  email?: string | null,
+): Promise<{ result: JoinByCodeResult; tournamentId: string | null }> {
+  if (!isSupabaseConfigured) return { result: 'ineligible', tournamentId: null };
+  const deviceId = await getDeviceId();
+  const { data, error } = await supabase.rpc('play_join_tournament_by_code', {
+    p_device_id: deviceId,
+    p_code: code,
+    p_email: email ?? null,
+  });
+  if (error) throw new Error(error.message);
+  const row = ((data ?? []) as Record<string, unknown>[])[0];
+  if (!row) return { result: 'not_found', tournamentId: null };
+  return {
+    result: (row.result as JoinByCodeResult) ?? 'not_found',
+    tournamentId: row.tournament_id ? String(row.tournament_id) : null,
+  };
 }
 
 /** Story-shell poll — lazily advances the bracket server-side on every call. */
@@ -135,6 +168,7 @@ export async function getTournamentState(tournamentId: string): Promise<Tourname
       fieldPhotos: Array.isArray(row.field_photos) ? (row.field_photos as string[]) : [],
       topicTitle: (row.topic_title as string | null) ?? null,
       curriculumTitle: (row.curriculum_title as string | null) ?? null,
+      inviteCode: (row.invite_code as string | null) ?? null,
     };
   } catch {
     return null;
