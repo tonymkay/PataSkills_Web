@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated from source**: 2026-09-08 · Updated: onboarding flow (splash + Get Started + FlashcardStack), StoryCarousel/challenge-tournament crash fix, ChallengeCornerCard redesign · Root: `desktop/platform/PataProducts/play/`  
+> **Generated from source**: 2026-09-08 · Updated 2026-09-10: challenge/friend-invite codes (`play_challenge_invite_code.sql`), creator waiting-room (invite code + cancel-for-everyone) reusing `challenge-online.tsx`, `challenge-tournament-join.tsx` documented (was missing), pending-challenge guard on `challenge-create.tsx` · Root: `desktop/platform/PataProducts/play/`  
 > Companion specs: `userdata.md` (storage keys + tables), `json-conversion.md` (content pipeline).
 
 ---
@@ -66,9 +66,10 @@ Post-unlock (every later launch):
   app/play.tsx   Full-screen SkillsFlow (standalone) — no FloatingTabBar
 
 Challenge Corner (reward-driven side loop):
-  /challenge-corner → Add | Online | Offline | Tournaments
-    /challenge-create     → create challenge → /challenge-online (waiting)
-    /challenge-online     → search → scout-room → /challenge-start → run → results → reward
+  /challenge-corner → Add | Join with a Code | Online | Offline | Tournaments
+    /challenge-create        → create challenge (global or private+code) → /challenge-online (waiting room, as creator)
+    /challenge-tournament-join → code entry → tries challenge code, then tournament code → /challenge-online or /challenge-tournament-room
+    /challenge-online     → search → waiting (roster; creator sees invite code + cancel-for-everyone) → /challenge-start → run → results → reward
     /challenge-offline    → companion carousel → join → /challenge-start → run → results → reward
     /challenge-tournament → search → found → join → /challenge-tournament-room → start → run → results → promotion/elimination/win
 ```
@@ -102,10 +103,11 @@ play/
 │   ├── +html.tsx                # Web HTML shell (fonts, AdSense, phone frame CSS)
 │   ├── +not-found.tsx
 │   ├── (tabs)/                  # home, skills, keys, reports + FloatingTabBar
-│   ├── challenge-corner.tsx          # Challenge Corner menu (4 rows)
-│   ├── challenge-create.tsx          # Create a challenge form
+│   ├── challenge-corner.tsx          # Challenge Corner menu (5 rows)
+│   ├── challenge-create.tsx          # Create a challenge form (global or private+invite-code)
+│   ├── challenge-tournament-join.tsx # Code entry — tries a challenge code, then a tournament code
 │   ├── challenge-offline.tsx         # Offline companion challenge carousel
-│   ├── challenge-online.tsx          # Online global challenge search + waiting room
+│   ├── challenge-online.tsx          # Online challenge search + waiting room (also the creator's room for private/global challenges)
 │   ├── challenge-scout-room.tsx      # Scout waiting room (globe pulse + join reveal)
 │   ├── challenge-tournament.tsx      # Tournament story (search → found → promotion/elimination/win)
 │   ├── challenge-tournament-room.tsx # Tournament stage waiting room
@@ -315,10 +317,11 @@ Grid of `play_signs`; tap to swap `image_path`.
 
 | Route | File | Role |
 |-------|------|------|
-| `/challenge-corner` | `challenge-corner.tsx` | Static 4-row menu: Add, Online Challenge, Offline Challenge, Tournaments. No Live row. |
-| `/challenge-create` | `challenge-create.tsx` | Create Challenge form: curriculum picker, topic count, deadline, global toggle, invite by email/nickname. Calls `createChallenge()` from `lib/challenges.ts`. |
+| `/challenge-corner` | `challenge-corner.tsx` | Static 5-row menu: Add, Join with a Code, Online Challenge, Offline Challenge, Tournaments. No Live row. |
+| `/challenge-create` | `challenge-create.tsx` | Create Challenge form: curriculum picker, topic, deadline, Global toggle (on = anyone can browse/join in `challenge-online`'s search; off = private, joinable only via invite code). Calls `createChallenge()` from `lib/challenges.ts`, which now returns `{ challengeId, inviteCode }`. On success routes straight into `/challenge-online?challengeId=…` — the creator lands in the same waiting room a joiner would. If this device already has a `status='waiting'` challenge it created (`getMyChallengeStories()`), the Create button swaps to "Check your challenge" and routes there instead of allowing a second create. |
+| `/challenge-tournament-join` | `challenge-tournament-join.tsx` | Single code-entry screen for both invite types. Tries `joinChallengeByCode()` first (no email needed); on a genuine "no such code" miss, falls back to `joinTournamentByCode()` (may prompt for the invite email). Routes to `/challenge-online` or `/challenge-tournament-room` depending on which matched. Reached from the Challenge Corner "Join with a Code" row. |
 | `/challenge-offline` | `challenge-offline.tsx` | Companion-owned offline races. `StoryCarousel` of `CompanionChallenge` cards, join → FlagPulse waiting room → `initCompanionSession` → `challenge-start`. |
-| `/challenge-online` | `challenge-online.tsx` | Online global challenge. `useChallengeSearch` hook polls for open challenges + scout gap-filler injection. GlobePulse waiting room → AvatarStack roster → realtime handoff to `challenge-start`. Offline fallback to `/challenge-offline`. |
+| `/challenge-online` | `challenge-online.tsx` | Online challenge search **and** the shared waiting room for both browsed-into and directly-created challenges (a `challengeId` param skips straight to the waiting phase). `useChallengeSearch` hook polls for open global challenges + scout gap-filler injection while browsing. Waiting phase: AvatarStack roster + realtime handoff to `challenge-start`. If the current device is the challenge's creator (`getMyChallengeStories()`), also shows the invite code (`Share.share()` to send it) and a "Cancel for everyone" button (`cancelChallenge()`) — exiting the screen normally does *not* cancel a creator's own challenge, only that explicit button does. Offline fallback to `/challenge-offline`. |
 | `/challenge-scout-room` | `challenge-scout-room.tsx` | Scout waiting room. GlobePulse animation, trickle-reveal of scout joins via `initScoutSession` timeline, auto-handoff to `/challenge-start` after last join + buffer. |
 | `/challenge-tournament` | `challenge-tournament.tsx` | Tournament story screen. Searching (TournamentSearchPulse) → Found (avatars + reward preview) → Join → promotion/elimination/final_win bodies. Supports both online (`getTournamentState`) and offline (`getLocalTournamentState`). Auto-search timer with 5–20s random delay. |
 | `/challenge-tournament-room` | `challenge-tournament-room.tsx` | Tournament stage waiting room. TrophyPulse animation, scout join reveal (local) or poll stage state (online). Auto-proceeds to `/challenge-start`. |
@@ -453,8 +456,8 @@ UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install C
 | `deviceId.ts` | Anonymous per-device UUID, persisted in `AsyncStorage` -- not a hardware fingerprint/IDFA/GAID; see `userdata.md` §5 |
 | `deviceAnalytics.ts` | Anonymous pre-email checkpoints (`landing_page_seen` / `topic_loading_started` / `session_started` / `topic_complete` / `paywall_seen`) -> `play_devices` + `play_device_events`; offline queue (`AsyncStorage`) when writes fail, flushed on reconnect via `backup.ts`'s NetInfo listener; see `userdata.md` §5 and `docs/device-tracking-plan.md` |
 | `navDirection.ts` | `navPush` / `navBack` / `navReplace` |
-| **`challenges.ts`** | **Online challenges — device-id RPCs on `play_challenges` / `play_challenge_members`. Create, join, start, leave, submit results, claim rewards, subscribe to status changes, get open global challenges.** |
-| **`tournaments.ts`** | **Tournaments — device-id RPCs on `play_tournaments` / `play_tournament_members`. Create, join, poll state (lazy bracket advance), claim podium rewards. `play_`-prefixed RPCs mirror `challenges.ts` pattern.** |
+| **`challenges.ts`** | **Online + private challenges — device-id RPCs on `play_challenges` / `play_challenge_members`. Create (returns `{ challengeId, inviteCode }`), join by global browse or by `joinChallengeByCode()`, start, leave, `cancelChallenge()` (creator-only, cancels for everyone while still waiting), submit results, claim rewards, subscribe to status changes, get open global challenges.** |
+| **`tournaments.ts`** | **Tournaments — device-id RPCs on `play_tournaments` / `play_tournament_members`. Create (returns `{ tournamentId, inviteCode }`), join, `joinTournamentByCode()` (optional email lock), poll state (lazy bracket advance), claim podium rewards. `play_`-prefixed RPCs mirror `challenges.ts`'s invite-code pattern.** |
 | **`challengeCompanions.ts`** | **Offline companion challenge generation. Deterministic persona pool, topic-weighted matchmaking, 3-challenge batches per `StoryCarousel` page.** |
 | **`challengeCompanionSession.ts`** | **Module-level singleton for an active companion race session. Init/start/stop lifecycle, simulated opponent progress, join timeline for waiting-room reveals.** |
 | **`challengeScouts.ts`** | **Scout persona pool + generation. `generateScoutChallenge()` picks a curriculum topic, assigns scout opponents with randomized difficulty. `pickRandomScouts()` for field-fill.** |
@@ -572,12 +575,15 @@ One-off Node `.mjs` (run from `play/`). Highlights:
 
 | SQL file | Purpose |
 |----------|--------|
-| `play_challenges.sql` | `play_challenges` table — uuid PK, `curriculum_slug`, `seed`, `question_count`, `is_global`, `tournament_id` FK, `status` check, `deadline_at`. RLS enabled, deny-all direct access. |
+| `play_challenges.sql` | `play_challenges` table — uuid PK, `curriculum_slug`, `seed`, `question_count`, `is_global`, `tournament_id` FK, `status` check, `deadline_at`, `invite_code` (added by `play_challenge_invite_code.sql`). RLS enabled, deny-all direct access. |
 | `play_challenge_members.sql` | `play_challenge_members` table — composite PK `(challenge_id, device_id)`, `status`, `is_creator`, `display_name`, `score`/`time_ms`/`finished_at`, `reward_keys`, `claimed`. |
 | `play_tournaments.sql` | `play_tournaments` table — uuid PK, `curriculum_slug`, `tier` (small/mid/large), `status` (group_stage/knockout/final/ended/cancelled), `current_stage`, `stage_count`, `source_challenge_id` FK, `topic_title`, `curriculum_title`. Closes circular FK from `play_challenges.tournament_id`. |
 | `play_tournament_members.sql` | `play_tournament_members` table — composite PK `(tournament_id, device_id)`, `status` (active/eliminated/placed), `placement`, `reward_keys`, `claimed`. |
-| `play_challenge_rpcs.sql` | **14 SECURITY DEFINER RPC functions** for challenges: `play_create_challenge`, `play_my_challenge_stories`, `play_join_global_challenge`, `play_start_challenge`, `play_leave_challenge`, `play_mark_challenge_absent`, `play_submit_challenge_result`, `play_update_challenge_progress`, `play_mark_challenge_results_viewed`, `play_end_challenge`, `play_claim_challenge_reward`, `play_challenge_members_list`, `play_challenge_state`, `play_open_global_challenges`. |
-| `play_tournament_rpcs.sql` | **7 SECURITY DEFINER RPC functions** for tournaments: `play_create_tournament` (field size → tier/stage calc, creates stage-1 challenge), `play_find_tournament_by_challenge`, `play_join_tournament`, `play_tournament_state` (lazy bracket read), `play_tournament_stage_state`, `play_advance_tournament_stage` (eliminate bottom half, create next stage challenge or assign final placements), `play_claim_tournament_reward`. |
+| `play_tournament_invites.sql` | Adds `invite_code` / `invite_email` / `expires_at` to `play_tournaments` + `generate_play_invite_code()` (6-char, uppercase, no ambiguous chars, retries on collision against `play_tournaments`). |
+| `play_tournament_join_by_code.sql` | Redefines `play_create_tournament` to return `(tournament_id, invite_code)`; adds `play_join_tournament_by_code` (code + optional email-lock check → joins current stage's pool); redefines `play_tournament_state` to include `invite_code`. |
+| `play_challenge_invite_code.sql` | Friend-challenge counterpart to the two files above, scoped to `play_challenges` instead of `play_tournaments`. Adds `invite_code` column + `generate_play_challenge_invite_code()` (own collision check, independent of the tournament codes). Redefines `play_create_challenge` to return `(challenge_id, invite_code)`. Adds `play_join_challenge_by_code` (mirrors `play_join_tournament_by_code`'s result shape: `joined` / `started` / `already` / `not_found` / `ineligible`). Adds `play_cancel_challenge` (creator-only, only while `status='waiting'`, sets `status='cancelled'` — distinct from `play_leave_challenge`, which only cancels as a side-effect of the creator leaving). Redefines `play_my_challenge_stories` and `play_challenge_state` to surface `invite_code` (creator-only in both — null for other members). |
+| `play_challenge_rpcs.sql` | **14 SECURITY DEFINER RPC functions** for challenges: `play_create_challenge`, `play_my_challenge_stories`, `play_join_global_challenge`, `play_start_challenge`, `play_leave_challenge`, `play_mark_challenge_absent`, `play_submit_challenge_result`, `play_update_challenge_progress`, `play_mark_challenge_results_viewed`, `play_end_challenge`, `play_claim_challenge_reward`, `play_challenge_members_list`, `play_challenge_state`, `play_open_global_challenges`. (`play_create_challenge`, `play_my_challenge_stories`, `play_challenge_state` are since redefined by `play_challenge_invite_code.sql` — apply that file after this one.) |
+| `play_tournament_rpcs.sql` | **7 SECURITY DEFINER RPC functions** for tournaments: `play_create_tournament` (field size → tier/stage calc, creates stage-1 challenge), `play_find_tournament_by_challenge`, `play_join_tournament`, `play_tournament_state` (lazy bracket read), `play_tournament_stage_state`, `play_advance_tournament_stage` (eliminate bottom half, create next stage challenge or assign final placements), `play_claim_tournament_reward`. (`play_create_tournament` and `play_tournament_state` are since redefined by `play_tournament_join_by_code.sql`.) |
 
 All RPC functions use `SECURITY DEFINER` — the client (`anon` role) never touches the tables directly. Same pattern as every other `play_*` table.
 
@@ -703,9 +709,12 @@ Standalone routes wrap with `ScreenTransition` on web.
 
 ```
 challenge-corner (menu)
-  ├── Add → challenge-create → createChallenge() RPC → challenge-online (waiting)
+  ├── Add → challenge-create → createChallenge() RPC (global or private+code) → challenge-online (waiting room, as creator)
+  ├── Join with a Code → challenge-tournament-join → joinChallengeByCode() then joinTournamentByCode()
+  │     → challenge-online (challengeId) OR challenge-tournament-room (tournamentId)
   ├── Online → challenge-online → useChallengeSearch (poll + scout gap-filler)
-  │     → challenge-scout-room (scout join reveal) → challenge-start → challenge-run
+  │     → waiting room (roster; creator: invite code + cancel-for-everyone)
+  │     → challenge-scout-room (scout join reveal, when a scout gap-filler was injected) → challenge-start → challenge-run
   │     → challenge-results → challenge-reward (claimChallengeReward)
   ├── Offline → challenge-offline → generateCompanionChallenges()
   │     → initCompanionSession → challenge-start → challenge-run
@@ -720,6 +729,11 @@ challenge-corner (menu)
 Offline tournaments use challengeScoutTournamentSession.ts (module-level singleton).
 Online tournaments use lib/tournaments.ts RPCs → play_tournaments / play_tournament_members.
 Both share the same challenge-run engine (challengeRuntime.ts bridge).
+
+Invite codes are two independent namespaces (play_challenges.invite_code vs
+play_tournaments.invite_code) — challenge-tournament-join.tsx tries the
+challenge lookup first (no email prompt) and only falls back to the
+tournament lookup on a genuine "no such code" miss.
 ```
 
 ### Known doc vs product caveats
@@ -729,6 +743,7 @@ Both share the same challenge-run engine (challengeRuntime.ts bridge).
 - `webRewardedAd` / `WatchingAdContent` / AdSense unit are **not** on the live Watch Ad path
 - Football conversion is **not** a shipped landing skill
 - League names in UI must match `lib/leagues.ts` (gemstone ladder), not a Bronze/Silver/Gold set
+- `play_challenge_invite_code.sql` is written to the repo but **not yet applied** to the live Supabase project as of 2026-09-10 — `createChallenge()`, `joinChallengeByCode()`, `cancelChallenge()`, and the invite-code UI in `challenge-online.tsx` / `challenge-create.tsx` will not work until it's run
 
 ---
 

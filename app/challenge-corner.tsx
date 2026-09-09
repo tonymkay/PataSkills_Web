@@ -109,8 +109,8 @@ export default function ChallengeCornerScreen() {
       Icon: Ticket,
       iconBg: colors.actionBlue,
       iconColor: colors.white,
-      title: 'Join a Tournament',
-      subtitle: 'Enter a code you were invited with',
+      title: 'Join with a Code',
+      subtitle: 'For a private challenge or tournament invite',
       onPress: () => navPush(router, '/challenge-tournament-join'),
     },
     {

@@ -7,10 +7,10 @@
  * A challengeId param (e.g. deep link) skips straight to the waiting room.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Globe2, Search, WifiOff } from 'lucide-react-native';
+import { X, Globe2, Search, WifiOff, Copy } from 'lucide-react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, interpolate,
 } from 'react-native-reanimated';
@@ -21,7 +21,7 @@ import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { useChallengeSearch } from '@/hooks/useChallengeSearch';
 import { useOnline } from '@/hooks/useOnline';
 import {
-  getChallengeMembers, getChallengeState, getMyChallengeStories,
+  cancelChallenge, getChallengeMembers, getChallengeState, getMyChallengeStories,
   leaveChallenge, subscribeToChallengeStatus,
   type ChallengeMember, type OpenGlobalChallenge,
 } from '@/lib/challenges';
@@ -136,6 +136,54 @@ export default function ChallengeOnlineScreen() {
     return () => { alive = false; clearInterval(t); };
   }, [phase, activeChallengeId]);
 
+  // ── Creator-only: invite code + cancel-for-everyone ──────────────────────
+  const [isCreator, setIsCreator] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    if (phase !== 'waiting' || !activeChallengeId) return;
+    let alive = true;
+    getMyChallengeStories().then((stories) => {
+      if (!alive) return;
+      const mine = stories.find((s) => s.challengeId === activeChallengeId);
+      setIsCreator(!!mine?.isCreator);
+      setInviteCode(mine?.inviteCode ?? null);
+    });
+    return () => { alive = false; };
+  }, [phase, activeChallengeId]);
+
+  const onShareCode = useCallback(() => {
+    if (!inviteCode) return;
+    void Share.share({
+      message: `Join my challenge on PataSkills! Use code ${inviteCode} under "Join a Challenge".`,
+    });
+  }, [inviteCode]);
+
+  const onCancelChallenge = useCallback(() => {
+    if (!activeChallengeId) return;
+    Alert.alert(
+      'Cancel this challenge?',
+      'This ends it for everyone who joined.',
+      [
+        { text: 'Keep waiting', style: 'cancel' },
+        {
+          text: 'Cancel for everyone',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              await cancelChallenge(activeChallengeId);
+            } catch { /* best-effort — leaving still exits the room below */ }
+            setCancelling(false);
+            if (router.canGoBack()) router.back();
+            else router.replace('/challenge-corner' as any);
+          },
+        },
+      ],
+    );
+  }, [activeChallengeId, router]);
+
   const attemptHandoff = useCallback(async () => {
     if (!activeChallengeId || handedOffRef.current) return;
     const state = await getChallengeState(activeChallengeId);
@@ -180,11 +228,15 @@ export default function ChallengeOnlineScreen() {
   }, [router]);
 
   const onLeaveWaiting = useCallback(async () => {
-    if (activeChallengeId) {
+    // Creators just step away — the challenge keeps waiting in the
+    // background and challenge-create.tsx will offer to bring them back to
+    // it. Only the explicit "Cancel for everyone" button ends it for real.
+    // Non-creators leaving does still release their spot.
+    if (activeChallengeId && !isCreator) {
       try { await leaveChallenge(activeChallengeId); } catch { /* best-effort */ }
     }
     exitScreen();
-  }, [activeChallengeId, exitScreen]);
+  }, [activeChallengeId, isCreator, exitScreen]);
 
   const onExitBrowsing = useCallback(() => {
     collab.stopSearching();
@@ -278,6 +330,32 @@ export default function ChallengeOnlineScreen() {
               size={40}
             />
           </View>
+
+          {isCreator && inviteCode && (
+            <View style={{ alignItems: 'center', gap: Spacing.sm, width: '100%' }}>
+              <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: 'bold', letterSpacing: 0.5, textTransform: 'uppercase' }]}>
+                Invite code
+              </Text>
+              <Pressable
+                onPress={onShareCode}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+                  paddingVertical: Spacing.sm, paddingHorizontal: Spacing.lg,
+                  borderRadius: Radius.lg, borderWidth: 1.5, borderColor: colors.outlineVariant,
+                }}
+              >
+                <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', letterSpacing: 4 }]}>
+                  {inviteCode}
+                </Text>
+                <Copy size={18} color={colors.onSurfaceVariant} strokeWidth={2} />
+              </Pressable>
+              <Pressable onPress={onCancelChallenge} disabled={cancelling} hitSlop={8}>
+                <Text style={[Typography.bodySm, { color: '#ef4444', fontWeight: '600' }]}>
+                  {cancelling ? 'Cancelling\u2026' : 'Cancel for everyone'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       ) : searchShowingCarousel ? (
         // ── Search found results: StoryCarousel ──

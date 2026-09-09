@@ -16,6 +16,7 @@ import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navBack } from '@/lib/navDirection';
 import { FontFamily, Radius, Spacing, StaticColors, useTheme } from '@/theme/tokens';
 import { joinTournamentByCode, type JoinByCodeResult } from '@/lib/tournaments';
+import { joinChallengeByCode } from '@/lib/challenges';
 import { sanitizeAndValidateEmail } from '@/lib/email';
 
 const GREEN = StaticColors.selection.activeBorder;
@@ -23,13 +24,13 @@ const GREEN = StaticColors.selection.activeBorder;
 function messageFor(result: JoinByCodeResult): string {
   switch (result) {
     case 'not_found':
-      return "That code doesn't match any tournament. Double-check it and try again.";
+      return "That code doesn't match anything. Double-check it and try again.";
     case 'expired':
       return 'This invite has expired.';
     case 'wrong_email':
       return "This invite is for a different email — enter the email you were invited with.";
     case 'ineligible':
-      return 'This tournament has already ended.';
+      return 'This has already ended.';
     default:
       return 'Something went wrong. Please try again.';
   }
@@ -65,6 +66,28 @@ export default function ChallengeTournamentJoinScreen() {
     setBusy(true);
     setError(null);
     try {
+      // Codes are two separate namespaces (challenges vs tournaments) —
+      // try the friend-challenge lookup first since it doesn't need an
+      // email, and only fall back to the tournament lookup on a genuine
+      // "no such code" miss.
+      const challengeAttempt = await joinChallengeByCode(trimmedCode);
+      if (challengeAttempt.result !== 'not_found') {
+        if (challengeAttempt.result === 'joined' || challengeAttempt.result === 'started' || challengeAttempt.result === 'already') {
+          if (!challengeAttempt.challengeId) {
+            setError('Something went wrong. Please try again.');
+            return;
+          }
+          router.replace({
+            pathname: '/challenge-online' as any,
+            params: { challengeId: challengeAttempt.challengeId },
+          });
+          return;
+        }
+        // 'ineligible' — a real challenge code that's no longer joinable.
+        setError('This challenge has already ended or was cancelled.');
+        return;
+      }
+
       const { result, tournamentId } = await joinTournamentByCode(trimmedCode, emailToSend);
       if (result === 'joined' || result === 'already') {
         if (!tournamentId) {
@@ -95,7 +118,7 @@ export default function ChallengeTournamentJoinScreen() {
           <Pressable onPress={() => navBack(router)} hitSlop={Spacing.sm} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Join a Tournament</Text>
+          <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Join with a Code</Text>
         </View>
 
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} bounces={false}>
@@ -105,7 +128,7 @@ export default function ChallengeTournamentJoinScreen() {
 
           <Text style={[styles.title, { color: colors.onSurface }]}>Enter your invite code</Text>
           <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-            Ask the person who created the tournament for the code they were given.
+            Works for both private challenges and tournaments — ask whoever created it for the code they were given.
           </Text>
 
           <View style={styles.inputSection}>

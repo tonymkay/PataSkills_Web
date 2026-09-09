@@ -11,7 +11,7 @@ import { ChevronLeft, ChevronRight, Globe, Check } from 'lucide-react-native';
 import { IconSize, Radius, Spacing, Typography, useTheme } from '@/theme/tokens';
 import { getCurriculaCatalog, type CurriculumCatalogRow } from '@/lib/curriculaCatalog';
 import { getChallengeTopics } from '@/lib/challengeQuestions';
-import { createChallenge } from '@/lib/challenges';
+import { createChallenge, getMyChallengeStories, type ChallengeStory } from '@/lib/challenges';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 
@@ -39,6 +39,16 @@ export default function ChallengeCreateScreen() {
   const [deadlineHours, setDeadlineHours] = useState<number | null>(24);
   const [isGlobal, setIsGlobal] = useState(true); // default ON — reward-driven UX
   const [creating, setCreating] = useState(false);
+
+  // ── existing not-yet-started challenge this device already created ──
+  // Prevents creating a second one before the first is aborted/started.
+  const [pending, setPending] = useState<ChallengeStory | null | undefined>(undefined); // undefined = still checking
+  const checkPending = useCallback(() => {
+    getMyChallengeStories().then((stories) => {
+      setPending(stories.find((s) => s.isCreator && s.status === 'waiting' && !s.isTournament) ?? null);
+    });
+  }, []);
+  useEffect(() => { checkPending(); }, [checkPending]);
 
   // ── bottom-sheet shim (simple modal) ──
   const [sheetOpen, setSheetOpen] = useState<'curriculum' | 'topic' | 'deadline' | null>(null);
@@ -69,19 +79,25 @@ export default function ChallengeCreateScreen() {
     return () => { alive = false; };
   }, [curriculum]);
 
-  const canCreate = !!curriculum && !!topic && !creating && isGlobal;
+  const canCreate = !!curriculum && !!topic && !creating && !pending;
 
   const onCreate = useCallback(async () => {
     if (!curriculum || !topic || !canCreate) return;
     setCreating(true);
     try {
-      await createChallenge({
+      const created = await createChallenge({
         curriculumSlug: curriculum.slug,
         targetTopicCount: topic.index >= 0 ? topic.index : null,
         isGlobal,
         deadlineAt: deadlineHours ? new Date(Date.now() + deadlineHours * 3_600_000) : null,
       });
-      router.replace('/challenge-corner' as any);
+      if (!created) throw new Error('Check your connection and try again.');
+      // Straight into the waiting room — same screen/flow a joiner lands in,
+      // just as the creator this time.
+      router.replace({
+        pathname: '/challenge-online' as any,
+        params: { challengeId: created.challengeId, origin: 'create' },
+      });
     } catch (e) {
       Alert.alert(
         'Could not create the challenge',
@@ -91,6 +107,16 @@ export default function ChallengeCreateScreen() {
       setCreating(false);
     }
   }, [curriculum, topic, canCreate, isGlobal, deadlineHours, router]);
+
+  // Already have a waiting challenge — go check on it instead of creating
+  // a second one.
+  const onCheckPending = useCallback(() => {
+    if (!pending) return;
+    router.replace({
+      pathname: '/challenge-online' as any,
+      params: { challengeId: pending.challengeId, origin: 'create' },
+    });
+  }, [pending, router]);
 
   // ── helpers ──
   const pickerRowStyle = {
@@ -174,31 +200,49 @@ export default function ChallengeCreateScreen() {
             <Switch
               value={isGlobal}
               onValueChange={setIsGlobal}
+              disabled={creating || !!pending}
               trackColor={{ false: colors.outlineVariant, true: colors.tealAccent }}
               thumbColor={colors.white}
             />
           </View>
           <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant }]}>
-            Anyone online doing this skill can join. Global challenges expire after 5 minutes and auto-start when 20 people join.
+            {isGlobal
+              ? 'Anyone online doing this skill can join. Global challenges expire after 5 minutes and auto-start when 20 people join.'
+              : "Private — only people you share the invite code with can join. They'll enter it under \u201cJoin a Challenge\u201d."}
           </Text>
         </View>
 
-        {/* Create button */}
+        {/* Already have a waiting challenge — nudge to go check on it */}
+        {pending && (
+          <View style={{
+            padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: colors.surfaceContainerHigh,
+            borderWidth: 1, borderColor: colors.outlineVariant, gap: Spacing.xs,
+          }}>
+            <Text style={[Typography.bodyMd, { color: colors.onSurface, fontWeight: '600' }]}>
+              You already have a challenge waiting for players
+            </Text>
+            <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant }]}>
+              Abort it from the waiting room before starting a new one.
+            </Text>
+          </View>
+        )}
+
+        {/* Create / check-pending button */}
         <Pressable
-          onPress={onCreate}
-          disabled={!canCreate}
+          onPress={pending ? onCheckPending : onCreate}
+          disabled={pending ? false : !canCreate}
           style={{
             height: 56,
             borderRadius: Radius.lg,
-            backgroundColor: canCreate ? colors.tealAccent : colors.surfaceContainerHigh,
+            backgroundColor: (pending || canCreate) ? colors.tealAccent : colors.surfaceContainerHigh,
             alignItems: 'center',
             justifyContent: 'center',
             marginTop: Spacing.md,
             opacity: creating ? 0.7 : 1,
           }}
         >
-          <Text style={[Typography.bodyLg, { color: canCreate ? colors.white : colors.onSurfaceVariant, fontWeight: '600' }]}>
-            {creating ? 'Creating\u2026' : 'Create Challenge'}
+          <Text style={[Typography.bodyLg, { color: (pending || canCreate) ? colors.white : colors.onSurfaceVariant, fontWeight: '600' }]}>
+            {pending ? 'Check your challenge' : creating ? 'Creating\u2026' : 'Create Challenge'}
           </Text>
         </Pressable>
       </ScrollView>

@@ -29,6 +29,10 @@ export interface ChallengeStory {
   myFinished: boolean;
   myRewardKeys: number;
   myClaimed: boolean;
+  /** Only populated for the creator's own device — the code they can share
+   *  so friends can join via joinChallengeByCode(). Null for everyone else
+   *  and for challenges that predate the invite-code migration. */
+  inviteCode: string | null;
 }
 
 export interface ChallengeMember {
@@ -75,7 +79,7 @@ export async function createChallenge(opts: {
   isGlobal?: boolean;
   deadlineAt?: Date | null;
   displayName?: string;
-}): Promise<string | null> {
+}): Promise<{ challengeId: string; inviteCode: string | null } | null> {
   if (!isSupabaseConfigured) return null;
   const deviceId = await getDeviceId();
   const { data, error } = await supabase.rpc('play_create_challenge', {
@@ -87,7 +91,50 @@ export async function createChallenge(opts: {
     p_display_name: opts.displayName ?? 'You',
   });
   if (error) throw new Error(error.message);
-  return (data as string | null) ?? null;
+  const row = ((data ?? []) as Record<string, unknown>[])[0];
+  if (!row?.challenge_id) return null;
+  return {
+    challengeId: String(row.challenge_id),
+    inviteCode: (row.invite_code as string | null) ?? null,
+  };
+}
+
+export type JoinChallengeByCodeResult = 'joined' | 'started' | 'already' | 'not_found' | 'ineligible';
+
+/** Redeems a private-challenge invite code — the friend-invite counterpart
+ *  to joinTournamentByCode(). On 'joined'/'started'/'already' the
+ *  challengeId is real and the caller should route into the waiting room
+ *  (challenge-online.tsx with a challengeId param) with it. */
+export async function joinChallengeByCode(
+  code: string,
+  displayName = 'You',
+): Promise<{ result: JoinChallengeByCodeResult; challengeId: string | null }> {
+  if (!isSupabaseConfigured) return { result: 'not_found', challengeId: null };
+  const deviceId = await getDeviceId();
+  const { data, error } = await supabase.rpc('play_join_challenge_by_code', {
+    p_device_id: deviceId,
+    p_code: code,
+    p_display_name: displayName,
+  });
+  if (error) throw new Error(error.message);
+  const row = ((data ?? []) as Record<string, unknown>[])[0];
+  if (!row) return { result: 'not_found', challengeId: null };
+  return {
+    result: (row.result as JoinChallengeByCodeResult) ?? 'not_found',
+    challengeId: row.challenge_id ? String(row.challenge_id) : null,
+  };
+}
+
+/** Creator-only — cancels a still-waiting challenge for every member. */
+export async function cancelChallenge(challengeId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const deviceId = await getDeviceId();
+  const { data, error } = await supabase.rpc('play_cancel_challenge', {
+    p_device_id: deviceId,
+    p_id: challengeId,
+  });
+  if (error) throw new Error(error.message);
+  return Boolean(data);
 }
 
 export async function getMyChallengeStories(): Promise<ChallengeStory[]> {
@@ -116,6 +163,7 @@ export async function getMyChallengeStories(): Promise<ChallengeStory[]> {
       myFinished: Boolean(r.my_finished),
       myRewardKeys: (r.my_reward_keys as number | null) ?? 0,
       myClaimed: Boolean(r.my_claimed),
+      inviteCode: (r.invite_code as string | null) ?? null,
     }));
   } catch {
     return [];
