@@ -3,7 +3,7 @@
     "name": "PataSkills",
     "slug": "play",
     "version": "1.0.0",
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.0.1",
     "updates": {
       "url": "https://u.expo.dev/9dabfd14-f5c7-4004-a38b-9d795c406e0f"
     },
