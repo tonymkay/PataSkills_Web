@@ -81,7 +81,7 @@ export function ReadingCard({ sign, allSigns, onSelectRelated }: ReadingCardProp
         {sign.meaning ? (
           <>
             <Text style={[Typography.labelSmall, styles.sectionHeading, { color: colors.onSurfaceVariant }]}>
-              WHAT IT MEANS
+              ANSWER
             </Text>
             <Text style={[Typography.bodyMedium, styles.bodyText, { color: colors.onSurface }]}>
               {sign.meaning}

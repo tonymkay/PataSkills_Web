@@ -186,13 +186,11 @@ function ReadingCardDeck({
     activeFillAnim.value = withTiming(
       100,
       { duration: DURATION, easing: Easing.out(Easing.cubic) },
-      isLastCard
-        ? (finished) => {
-            if (finished) {
-              runOnJS(handleTransitionEnd)(nextIndex);
-            }
-          }
-        : undefined
+      (finished) => {
+        if (finished && isLastCard) {
+          runOnJS(handleTransitionEnd)(nextIndex);
+        }
+      }
     );
 
     if (isLastCard) {
@@ -469,13 +467,11 @@ function QuizCardDeck({
     activeFillAnim.value = withTiming(
       100,
       { duration: DURATION, easing: Easing.out(Easing.cubic) },
-      isLastCard
-        ? (finished) => {
-            if (finished) {
-              runOnJS(handleTransitionEnd)(isCorrect, nextIndex);
-            }
-          }
-        : undefined
+      (finished) => {
+        if (finished && isLastCard) {
+          runOnJS(handleTransitionEnd)(isCorrect, nextIndex);
+        }
+      }
     );
 
     try {

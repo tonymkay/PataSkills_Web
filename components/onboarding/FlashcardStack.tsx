@@ -32,7 +32,7 @@ interface CardDef {
 
 const CARDS: CardDef[] = [
   {
-    colors: ['#0ABFBF', '#0A8A9E'],
+    colors: ['#3AB9AA', '#93DCC9'],
     badge: 'QUESTION 3',
     tag: 'TRUE / FALSE',
     question: 'The Equator passes through Kenya.',
@@ -42,7 +42,7 @@ const CARDS: CardDef[] = [
     ],
   },
   {
-    colors: ['#3DCC6E', '#1E9E4E'],
+    colors: ['#CDECB1', '#8AD68E'],
     badge: 'QUESTION 1',
     tag: 'MULTIPLE CHOICE',
     question: 'Which of the following is the largest county in Kenya by area?',
@@ -54,7 +54,7 @@ const CARDS: CardDef[] = [
     ],
   },
   {
-    colors: ['#F5A623', '#E07B00'],
+    colors: ['#FDD708', '#E89C01'],
     badge: 'QUESTION 2',
     tag: 'MULTIPLE CHOICE',
     question: 'Which of the following is a renewable source of energy?',
