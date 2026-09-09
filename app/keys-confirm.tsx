@@ -138,7 +138,9 @@ export default function KeysConfirmScreen() {
           </View>
 
           <Text style={[styles.noteText, { color: colors.onSurfaceVariant }]}>
-            Paid securely via Paystack. Your keys link directly to this email.
+            {Platform.OS === 'android'
+              ? 'Paid securely via Google Play. Your keys link directly to this email.'
+              : 'Paid securely via Paystack. Your keys link directly to this email.'}
           </Text>
         </View>
       </ScrollView>
@@ -146,7 +148,7 @@ export default function KeysConfirmScreen() {
       {/* Footer Confirm CTA */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.lg) }]}>
         <Button
-          label="Pay with Paystack"
+          label={Platform.OS === 'android' ? 'Pay with Google Play' : 'Pay with Paystack'}
           onPress={onConfirm}
           disabled={busy}
           loading={busy}

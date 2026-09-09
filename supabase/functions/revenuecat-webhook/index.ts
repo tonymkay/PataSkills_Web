@@ -21,6 +21,24 @@ const admin = createClient(
 const ACTIVE_EVENTS = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION', 'NON_RENEWING_PURCHASE']);
 const INACTIVE_EVENTS = new Set(['EXPIRATION', 'BILLING_ISSUE', 'CANCELLATION', 'SUBSCRIPTION_PAUSED']);
 
+// Keys catalog, kept in sync with paystack-webhook's KEY_PACKS (numbers,
+// not USD price, since RC/Play Billing already handled payment -- this
+// webhook only needs to know how many keys each product_id is worth).
+const KEY_PACKS: Record<string, { keys: number }> = {
+  pataskills_keys_20: { keys: 20 },
+  pataskills_keys_40: { keys: 40 },
+  pataskills_keys_60: { keys: 60 },
+  pataskills_keys_80: { keys: 80 },
+  pataskills_keys_100: { keys: 100 },
+  pataskills_keys_120: { keys: 120 },
+  pataskills_keys_140: { keys: 140 },
+  pataskills_keys_160: { keys: 160 },
+};
+// RC resends webhooks on non-2xx / timeout, so an event.id de-dupe table is
+// the correct long-term fix for double-crediting. Out of scope for this
+// pass (matches paystack-webhook, which also has no dedupe) -- flagging in
+// case of a support ticket about a double-grant later.
+
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   if (!RESEND_API_KEY || !to) return;
   await fetch('https://api.resend.com/emails', {
@@ -109,6 +127,27 @@ Deno.serve(async (req) => {
         balance: isActive ? 999999 : 3,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'email' });
+    }
+  } else if (isKeyProduct && (type === 'INITIAL_PURCHASE' || type === 'NON_RENEWING_PURCHASE') && userId.includes('@')) {
+    // One-time key-pack purchase via Play Billing. This is an increment,
+    // not a set, so it needs a read-then-write -- upsert() would clobber
+    // the existing balance instead of adding to it.
+    const pack = productId ? KEY_PACKS[productId] : undefined;
+    if (pack) {
+      const { data: existing } = await admin
+        .from('play_accounts')
+        .select('balance')
+        .eq('email', userId)
+        .maybeSingle();
+      const currentBalance = existing?.balance ?? 3;
+      await admin.from('play_accounts').upsert(
+        {
+          email: userId,
+          balance: currentBalance + pack.keys,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'email' },
+      );
     }
   }
 

@@ -149,7 +149,9 @@ export default function SubscriptionConfirmScreen() {
             </View>
             <View style={styles.benefitRow}>
               <Check size={18} color={StaticColors.successLime} strokeWidth={2.5} />
-              <Text style={[styles.benefitText, { color: colors.onSurface }]}>Paid securely via Paystack Web</Text>
+              <Text style={[styles.benefitText, { color: colors.onSurface }]}>
+                {Platform.OS === 'android' ? 'Paid securely via Google Play' : 'Paid securely via Paystack Web'}
+              </Text>
             </View>
           </View>
         </View>
@@ -158,7 +160,7 @@ export default function SubscriptionConfirmScreen() {
       {/* Footer Confirm CTA */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.lg) }]}>
         <Button
-          label="Subscribe with Paystack"
+          label={Platform.OS === 'android' ? 'Subscribe with Google Play' : 'Subscribe with Paystack'}
           onPress={onConfirm}
           disabled={busy}
           loading={busy}

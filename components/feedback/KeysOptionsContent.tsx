@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, Image } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Image } from 'react-native';
 import { ChevronRight, Clock, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,7 +8,6 @@ import { FontFamily } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
 import { Toggle } from '@/components/ui/Toggle';
-import { DownloadAppModal } from '@/components/ui/DownloadAppModal';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { navPush } from '@/lib/navDirection';
 import { getKeysState, type KeysState } from '@/lib/keys';
@@ -55,8 +54,6 @@ export function KeysOptionsContent({
   const [resetAt, setResetAt] = useState<number | null>(resetAtProp ?? null);
   const [balance, setBalance] = useState<number | null>(balanceProp ?? null);
   const [isPremium, setIsPremium] = useState<boolean>(isPremiumProp ?? false);
-  // Web users see a "download the app" modal for subscriptions.
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   // Read timer state + keys state + reminder pref on mount when no prop override
   useEffect(() => {
@@ -123,12 +120,9 @@ export function KeysOptionsContent({
       onSubscribePress();
       return;
     }
-    // On web, subscriptions are only available on the mobile app via
-    // Google Play / RevenueCat. Show the "download the app" modal.
-    if (Platform.OS === 'web') {
-      setShowDownloadModal(true);
-      return;
-    }
+    // Web subscriptions go through Paystack exactly like keys do -- no
+    // platform gate needed here (previously blocked with a "download the
+    // app" modal, back when web had no subscribe path of its own).
     navPush(router, { pathname: '/subscription-plans', params: { skill: skillId, track } });
   };
 
@@ -146,7 +140,6 @@ export function KeysOptionsContent({
   };
 
   return (
-    <>
     <View style={styles.options}>
       {/* Option 1: Buy one time keys */}
       <Pressable
@@ -281,14 +274,6 @@ export function KeysOptionsContent({
         )}
       </Pressable>
     </View>
-
-    {/* Web-only: "Download the app" redirect for subscriptions */}
-    <DownloadAppModal
-      visible={showDownloadModal}
-      onClose={() => setShowDownloadModal(false)}
-      source="subscribe"
-    />
-    </>
   );
 }
 

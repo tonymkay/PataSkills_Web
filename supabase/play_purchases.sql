@@ -12,9 +12,14 @@ create table if not exists play_purchases (
 -- Index for fast lookup by email
 create index if not exists idx_play_purchases_email on play_purchases(email);
 
--- Enable RLS and allow public upsert and lookup
+-- RLS: reads stay open (client polls payment-complete.tsx by paystack_ref/
+-- email to detect the webhook-written row). Writes are now service-role
+-- only — paystack-webhook and revenuecat-webhook insert/update this table
+-- after verifying the payment; no anon insert/update/delete.
 alter table play_purchases enable row level security;
 drop policy if exists "allow all on play_purchases" on play_purchases;
-create policy "allow all on play_purchases"
-  on play_purchases for all to anon, authenticated
-  using (true) with check (true);
+drop policy if exists "public select play_purchases" on play_purchases;
+create policy "public select play_purchases"
+  on play_purchases for select
+  to anon, authenticated
+  using (true);

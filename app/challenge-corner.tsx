@@ -3,7 +3,8 @@
  * No Live row. Online/Create/Tournament routes land in later steps; Offline
  * is fully wired now.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, Plus, Globe, WifiOff, Trophy, ChevronRight } from 'lucide-react-native';
@@ -11,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { HomeBottomGlow } from '@/constants/gradients';
 import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
-import { navPush, navBack } from '@/lib/navDirection';
+import { navPush, navReplace } from '@/lib/navDirection';
 
 type MenuRowSpec = {
   key: string;
@@ -76,6 +77,23 @@ export default function ChallengeCornerScreen() {
   const insets = useSafeAreaInsets();
   const accent = colors.tealAccent;
 
+  // Challenge Corner can be reached through several nested sub-flows
+  // (create/online/offline/tournament, each with their own pushes), so a
+  // plain router.back() pop follows whatever that stack happened to build
+  // up to and can loop through intermediate screens instead of landing
+  // anywhere predictable. Both the header arrow and the OS-level back
+  // (hardware button / gesture) always jump straight to Home instead of
+  // popping the stack.
+  const goHome = () => navReplace(router, '/(tabs)/home', 'backward');
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      goHome();
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
+
   const rows: MenuRowSpec[] = [
     {
       key: 'add',
@@ -128,7 +146,7 @@ export default function ChallengeCornerScreen() {
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.marginMobile, paddingVertical: Spacing.sm }}>
-        <Pressable onPress={() => navBack(router)} hitSlop={10}>
+        <Pressable onPress={goHome} hitSlop={10}>
           <ChevronLeft size={IconSize.header} color={colors.onSurface} strokeWidth={2.5} />
         </Pressable>
         <Text style={[Typography.headlineMd, { color: colors.onSurface, flex: 1 }]} numberOfLines={1}>

@@ -1,0 +1,263 @@
+import { supabase } from '@/lib/supabase';
+import { PLANS, keyPackById } from '@/lib/premium';
+import { usdToKES } from '@/lib/currency';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDeviceId } from '@/lib/deviceId';
+import { linkDeviceToEmail, trackPurchaseInterested, trackPurchaseSuccess } from '@/lib/deviceAnalytics';
+
+const PAYSTACK_PUBLIC_KEY = process.env.EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder';
+
+export function billingAvailable(): boolean {
+  return true;
+}
+
+let scriptPromise: Promise<void> | null = null;
+function loadPaystackScript(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if ((window as any).PaystackPop) return Promise.resolve();
+  if (scriptPromise) return scriptPromise;
+  scriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Could not load Paystack'));
+    document.head.appendChild(script);
+  });
+  return scriptPromise;
+}
+
+async function openCheckout(
+  amountKES: number,
+  email: string,
+  label: string,
+  kind: 'subscription' | 'keys',
+  productId: string,
+  keysCount?: number,
+  expiresAt?: string,
+): Promise<string | null> {
+  await loadPaystackScript();
+
+  const reference = `pataplay_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+  // Fallback if PaystackPop is not available on non-web or script error
+  if (typeof window === 'undefined' || !(window as any).PaystackPop) {
+    return reference;
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const handler = (window as any).PaystackPop.setup({
+        key: process.env.EXPO_PUBLIC_PATASKILLS_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder',
+        email,
+        amount: Math.round(amountKES * 100),
+        currency: 'KES',
+        ref: reference,
+        label,
+        metadata: {
+          email,
+          kind,
+          product_id: productId,
+          keys: keysCount ?? null,
+          expires_at: expiresAt ?? null,
+        },
+        callback: () => resolve(reference),
+        onClose: () => resolve(null),
+      });
+      handler.openIframe();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+export type PurchaseResult = 'purchased' | 'cancelled' | 'unavailable' | 'error';
+
+export async function purchasePlan(packageId: string, email: string, skill?: string, track?: string): Promise<PurchaseResult> {
+  const plan = PLANS.find((p) => p.packageId === packageId) || PLANS[1];
+  const amountKES = usdToKES(plan.annualUSD ?? plan.weeklyUSD ?? plan.monthlyUSD);
+  const periodDays = plan.weeklyUSD ? 7 : plan.annualUSD ? 365 : 30;
+  const expiresAt = new Date(Date.now() + periodDays * 86_400_000).toISOString();
+  try {
+    // Save email locally before payment
+    await AsyncStorage.setItem('@play/user_email', email);
+    // Interested the moment they've entered an email and tapped Pay --
+    // fires whether or not they go on to complete checkout.
+    void trackPurchaseInterested(plan.packageId, skill, track);
+    const reference = await openCheckout(amountKES, email, `PataSkills ${plan.name}`, 'subscription', plan.packageId, undefined, expiresAt);
+    if (!reference) return 'cancelled';
+
+    // Join the device to this email right away, rather than waiting for
+    // the next tracking checkpoint to carry it (see docs/device-tracking-plan.md).
+    await getDeviceId();
+    await linkDeviceToEmail(email);
+    void trackPurchaseSuccess(plan.packageId, skill, track);
+
+    // Purchase & account state are now granted server-side by
+    // paystack-webhook after it verifies the payment with Paystack --
+    // payment-complete.tsx polls play_purchases/play_accounts for that
+    // webhook-written row instead of us self-granting here.
+
+    await AsyncStorage.setItem('@play/premium_expires_at', expiresAt);
+
+    const { router } = await import('expo-router');
+    // skill/track carried through so "Continue Playing" on payment-complete
+    // resumes the same skill/track instead of falling back to
+    // driving-theory (Bug B fix, §B.2/§C.1 of the multi-skill architecture
+    // doc). Both are optional -- this purchase flow can be entered without
+    // an active session context.
+    router.replace({
+      pathname: '/payment-complete',
+      params: {
+        reference,
+        type: 'subscription',
+        email,
+        expiresAt,
+        ...(skill ? { skill } : {}),
+        ...(track ? { track } : {}),
+      },
+    });
+    return 'purchased';
+  } catch {
+    return 'error';
+  }
+}
+
+export async function purchaseKeyPack(packId: string, email: string, skill?: string, track?: string): Promise<PurchaseResult> {
+  const pack = keyPackById(packId);
+  if (!pack) return 'error';
+  const amountKES = usdToKES(pack.priceUSD);
+  try {
+    // Save email locally before payment
+    await AsyncStorage.setItem('@play/user_email', email);
+    // Interested the moment they've entered an email and tapped Pay --
+    // fires whether or not they go on to complete checkout.
+    void trackPurchaseInterested(pack.id, skill, track);
+    const reference = await openCheckout(amountKES, email, `PataSkills ${pack.keys} keys`, 'keys', pack.productId, pack.keys);
+    if (!reference) return 'cancelled';
+
+    // Join the device to this email right away -- same as purchasePlan().
+    await getDeviceId();
+    await linkDeviceToEmail(email);
+    void trackPurchaseSuccess(pack.id, skill, track);
+
+    // Purchase is now granted server-side by paystack-webhook after it
+    // verifies the payment -- payment-complete.tsx polls play_purchases
+    // for that webhook-written row instead of us self-granting here.
+    const { router } = await import('expo-router');
+    // See purchasePlan()'s identical comment above -- same skill/track handoff.
+    router.replace({ pathname: '/payment-complete', params: { reference, type: 'keys', count: String(pack.keys), email, ...(skill ? { skill } : {}), ...(track ? { track } : {}) } });
+    return 'purchased';
+  } catch {
+    return 'error';
+  }
+}
+
+export interface SubscriptionInfo {
+  active: boolean;
+  expiresAt: string | null;
+  startedAt: string | null;
+  willRenew: boolean | null;
+  managementURL: string | null;
+  billingIssueDetectedAt: string | null;
+}
+
+export interface PremiumOverrideInfo {
+  awardedAt: string;
+  expiresAt: string | null;
+  claimed: boolean;
+  permanent: boolean;
+}
+
+export async function getSubscriptionInfo(): Promise<SubscriptionInfo | null> {
+  try {
+    const { getKeysState } = await import('@/lib/keys');
+    const state = await getKeysState();
+    if (!state.isPremium) return null;
+
+    let expiresAt: string | null = state.expiresAt ?? null;
+    if (!expiresAt) {
+      expiresAt = await AsyncStorage.getItem('@play/premium_expires_at');
+    }
+
+    const email = await AsyncStorage.getItem('@play/user_email');
+    if (email) {
+      const { data } = await supabase
+        .from('play_accounts')
+        .select('is_premium')
+        .eq('email', email)
+        .maybeSingle();
+      if (data && data.is_premium === false) {
+        return null;
+      }
+    }
+
+    return {
+      active: true,
+      expiresAt: expiresAt ?? null,
+      startedAt: null,
+      willRenew: null,
+      managementURL: 'https://play.google.com/store/account/subscriptions',
+      billingIssueDetectedAt: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getPremiumOverrideInfo(): Promise<PremiumOverrideInfo | null> {
+  try {
+    const { getKeysState } = await import('@/lib/keys');
+    const state = await getKeysState();
+    if (!state.isPremium) return null;
+    const expiresAt = state.expiresAt ?? (await AsyncStorage.getItem('@play/premium_expires_at'));
+    return {
+      awardedAt: new Date().toISOString(),
+      expiresAt: expiresAt ?? null,
+      claimed: true,
+      permanent: !expiresAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function claimPremiumOverride(): Promise<void> {
+  /* no-op */
+}
+
+export async function enforceLocalExpiry(): Promise<void> {
+  try {
+    const localExpires = await AsyncStorage.getItem('@play/premium_expires_at');
+    if (localExpires) {
+      const expTime = new Date(localExpires).getTime();
+      if (!isNaN(expTime) && Date.now() >= expTime) {
+        const { setPremium } = await import('@/lib/keys');
+        await setPremium(false);
+        await AsyncStorage.removeItem('@play/premium_expires_at');
+        const email = await AsyncStorage.getItem('@play/user_email');
+        if (email) {
+          await supabase.from('play_accounts').update({ is_premium: false, balance: 3, updated_at: new Date().toISOString() }).eq('email', email);
+        }
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+export async function syncPremiumOverride(): Promise<void> {
+  await enforceLocalExpiry();
+}
+
+export async function configureBilling(): Promise<void> {
+  await enforceLocalExpiry();
+}
+
+export async function restorePurchases(): Promise<boolean> {
+  return false;
+}
+
+export async function syncEntitlement(): Promise<boolean> {
+  return false;
+}

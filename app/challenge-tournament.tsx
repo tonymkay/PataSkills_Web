@@ -268,8 +268,18 @@ export default function ChallengeTournamentScreen() {
   }, [params.slug, params.sourceChallengeId, params.scoutIds, params.scoutNames, refreshState, isOffline]);
 
   // ── Fetch state when we already have a tournamentId ──
+  // Scoped to `body === 'loading'` — that's ONLY true when the screen was
+  // entered with an existing params.tournamentId (a genuine re-entry into
+  // an in-progress tournament, e.g. resuming after a stage's promotion).
+  // Without this guard, the effect also fired the instant a *fresh* join
+  // set tournamentId (via doCreate() inside handleJoinNow), racing against
+  // handleJoinNow's own setBody('ready') and usually winning a beat later —
+  // bodyForState() falls through to 'promotion' for any status that isn't
+  // literally 'eliminated'/'placed', including a brand-new 'active' member,
+  // so a fresh join would flash "Tournament Found" then immediately
+  // "You are promoted" without the player ever reaching the actual stage.
   useEffect(() => {
-    if (tournamentId && !tState) {
+    if (tournamentId && !tState && body === 'loading') {
       const timer = setTimeout(() => {
         void refreshState(tournamentId).then((s) => {
           if (!s) return;
@@ -278,7 +288,7 @@ export default function ChallengeTournamentScreen() {
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [tournamentId, tState, refreshState]);
+  }, [tournamentId, tState, body, refreshState]);
 
   // ── Back / exit ──
   const handleBackExit = useCallback(() => {

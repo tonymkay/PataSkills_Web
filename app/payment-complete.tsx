@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   Image,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2, ShieldCheck } from 'lucide-react-native';
@@ -11,9 +13,41 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, FontFamily, StaticColors } from '@/theme/tokens';
 import { grantBonusKey, setPremium } from '@/lib/keys';
+import { supabase } from '@/lib/supabase';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navReplace } from '@/lib/navDirection';
 import { Button } from '@/components/ui/Button';
+
+// Local guard so revisiting this screen (back button, hot reload, a second
+// poll tick racing the first) never grants the same purchase twice. This is
+// NOT a security boundary -- play_purchases writes are already service-role
+// only (see supabase/play_purchases.sql) -- it just keeps the client from
+// calling grantBonusKey/setPremium more than once for the same reference.
+const CLAIMED_REFS_KEY = '@play/claimed_purchase_refs';
+
+async function isClaimed(ref: string): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(CLAIMED_REFS_KEY);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    return list.includes(ref);
+  } catch {
+    return false;
+  }
+}
+
+async function markClaimed(ref: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(CLAIMED_REFS_KEY);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.includes(ref)) {
+      await AsyncStorage.setItem(CLAIMED_REFS_KEY, JSON.stringify([...list, ref].slice(-50)));
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+type PurchaseRow = { keys: number | null; is_premium: boolean | null };
 
 export default function PaymentCompleteScreen() {
   const router = useRouter();
@@ -26,19 +60,94 @@ export default function PaymentCompleteScreen() {
   const paystackRef = params.reference || `ref_${Date.now()}`;
   const [userEmail, setUserEmail] = useState<string | null>(params.email || null);
 
-  useEffect(() => {
-    if (isKeys) {
-      void grantBonusKey(keysCount, 'key_pack_purchase', paystackRef);
-    } else {
-      void setPremium(true, params.expiresAt);
-    }
+  // Native (Play Billing) purchases are confirmed by the OS before we ever
+  // route to this screen, so we grant immediately, as before. Web
+  // (Paystack) purchases are NOT confirmed at this point -- the popup
+  // closing only means the user finished the checkout form, not that the
+  // charge cleared -- so on web we poll play_purchases for the row that
+  // only paystack-webhook (server-side, signature-verified) can write,
+  // instead of trusting these route params directly.
+  const isWeb = Platform.OS === 'web';
+  const [status, setStatus] = useState<'checking' | 'success' | 'pending'>(isWeb ? 'checking' : 'success');
+  const [isRetrying, setIsRetrying] = useState(false);
+  const grantedRef = useRef(false);
 
+  useEffect(() => {
     if (!userEmail) {
       AsyncStorage.getItem('@play/user_email').then((stored) => {
         if (stored) setUserEmail(stored);
       }).catch(() => {});
     }
-  }, [isKeys, keysCount, paystackRef, userEmail]);
+  }, [userEmail]);
+
+  const grantFromRow = useCallback(async (row: PurchaseRow) => {
+    if (grantedRef.current || (await isClaimed(paystackRef))) {
+      setStatus('success');
+      return;
+    }
+    grantedRef.current = true;
+    if (row.keys && row.keys > 0) {
+      await grantBonusKey(row.keys, 'key_pack_purchase', paystackRef);
+    }
+    if (row.is_premium) {
+      await setPremium(true, params.expiresAt);
+    }
+    await markClaimed(paystackRef);
+    setStatus('success');
+  }, [paystackRef, params.expiresAt]);
+
+  const checkOnce = useCallback(async (): Promise<boolean> => {
+    const { data } = await supabase
+      .from('play_purchases')
+      .select('keys, is_premium')
+      .eq('paystack_ref', paystackRef)
+      .maybeSingle();
+    if (data) {
+      await grantFromRow(data as PurchaseRow);
+      return true;
+    }
+    return false;
+  }, [paystackRef, grantFromRow]);
+
+  useEffect(() => {
+    if (!isWeb) {
+      // Native: grant locally, same behavior as before this change.
+      if (isKeys) {
+        void grantBonusKey(keysCount, 'key_pack_purchase', paystackRef);
+      } else {
+        void setPremium(true, params.expiresAt);
+      }
+      return;
+    }
+
+    let alive = true;
+    let attempts = 0;
+    const poll = async () => {
+      const found = await checkOnce();
+      if (!alive || found) return;
+      attempts += 1;
+      if (attempts >= 10) {
+        setStatus('pending');
+        return;
+      }
+      setTimeout(poll, 2000);
+    };
+    void poll();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional run-once poll loop
+  }, [isWeb]);
+
+  const handleCheckAgain = async () => {
+    setIsRetrying(true);
+    try {
+      const found = await checkOnce();
+      if (!found) setStatus('pending');
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   const handleContinuePlaying = () => {
     // Forward skill/track (when the purchase flow carried them — Bug B
@@ -54,6 +163,34 @@ export default function PaymentCompleteScreen() {
       },
     });
   };
+
+  if (status === 'checking' || status === 'pending') {
+    return (
+      <ScreenTransition>
+        <View style={[styles.container, styles.centered, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.xl) }]}>
+          <ActivityIndicator size="large" color={colors.onSurface} />
+          <Text style={[styles.title, { color: colors.onSurface, marginTop: Spacing.lg }]}>
+            {status === 'checking' ? 'Confirming your payment…' : 'Still processing…'}
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
+            {status === 'checking'
+              ? 'Just a moment while Paystack confirms your payment.'
+              : 'This can take a moment. You can check again, or leave this page — it unlocks automatically.'}
+          </Text>
+          {status === 'pending' && (
+            <View style={{ marginTop: Spacing.xl, width: '100%', gap: Spacing.sm }}>
+              <Button
+                label={isRetrying ? 'Checking…' : 'Check Again'}
+                onPress={handleCheckAgain}
+                backgroundColor={StaticColors.successLime}
+                textColor="#000"
+              />
+            </View>
+          )}
+        </View>
+      </ScreenTransition>
+    );
+  }
 
   return (
     <ScreenTransition>
@@ -121,6 +258,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'space-between',
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.marginMobile,
   },
   body: {
     flex: 1,
