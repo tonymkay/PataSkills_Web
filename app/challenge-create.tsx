@@ -4,7 +4,7 @@
  * picker → Global toggle → Create.
  */
 import { useEffect, useState, useCallback } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, Globe, Check } from 'lucide-react-native';
@@ -16,6 +16,7 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Toggle } from '@/components/ui/Toggle';
+import { navReplace } from '@/lib/navDirection';
 
 interface TopicRow { title: string; index: number }
 
@@ -54,6 +55,22 @@ export default function ChallengeCreateScreen() {
 
   // ── bottom-sheet shim (simple modal) ──
   const [sheetOpen, setSheetOpen] = useState<'curriculum' | 'topic' | 'deadline' | null>(null);
+
+  // Challenge Corner is always the return destination from this screen —
+  // both the in-app back arrow and OS/hardware back. Using replace (not
+  // back/pop) so repeated back-and-forth navigation can't re-stack prior
+  // challenge screens.
+  const goToChallengeCorner = useCallback(() => {
+    navReplace(router, '/challenge-corner', 'backward');
+  }, [router]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      goToChallengeCorner();
+      return true;
+    });
+    return () => sub.remove();
+  }, [goToChallengeCorner]);
 
   // ── load curricula ──
   useEffect(() => {
@@ -94,6 +111,7 @@ export default function ChallengeCreateScreen() {
         deadlineAt: deadlineHours ? new Date(Date.now() + deadlineHours * 3_600_000) : null,
       });
       if (!created) throw new Error('Check your connection and try again.');
+      if (!created.inviteCode) throw new Error('Could not generate a challenge code. Please try again.');
       // Straight into the waiting room — same screen/flow a joiner lands in,
       // just as the creator this time.
       router.replace({
@@ -138,7 +156,7 @@ export default function ChallengeCreateScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.marginMobile, paddingVertical: Spacing.sm }}>
-        <Pressable onPress={() => router.back()} hitSlop={10}>
+        <Pressable onPress={goToChallengeCorner} hitSlop={10}>
           <ChevronLeft size={IconSize.header} color={colors.onSurface} strokeWidth={2.5} />
         </Pressable>
         <Text style={[Typography.headlineMd, { color: colors.onSurface, flex: 1 }]} numberOfLines={1}>

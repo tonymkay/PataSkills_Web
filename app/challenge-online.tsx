@@ -7,10 +7,10 @@
  * A challengeId param (e.g. deep link) skips straight to the waiting room.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Share, Text, View } from 'react-native';
+import { BackHandler, Pressable, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Globe2, Search, WifiOff, Copy } from 'lucide-react-native';
+import { X, Globe2, Search, WifiOff, Share2 } from 'lucide-react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, interpolate,
 } from 'react-native-reanimated';
@@ -18,6 +18,7 @@ import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@
 import { StoryCarousel } from '@/components/challenge/StoryCarousel';
 import { AvatarStack } from '@/components/challenge/AvatarStack';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
+import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
 import { useChallengeSearch } from '@/hooks/useChallengeSearch';
 import { useOnline } from '@/hooks/useOnline';
 import {
@@ -28,6 +29,7 @@ import {
 import { buildChallengeQuestions } from '@/lib/challengeQuestions';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
 import { getCachedTitle } from '@/lib/curriculaCatalog';
+import { navReplace } from '@/lib/navDirection';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 type Phase = 'browsing' | 'waiting';
@@ -140,6 +142,7 @@ export default function ChallengeOnlineScreen() {
   const [isCreator, setIsCreator] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [showAbortSheet, setShowAbortSheet] = useState(false);
 
   useEffect(() => {
     if (phase !== 'waiting' || !activeChallengeId) return;
@@ -161,27 +164,25 @@ export default function ChallengeOnlineScreen() {
   }, [inviteCode]);
 
   const onCancelChallenge = useCallback(() => {
-    if (!activeChallengeId) return;
-    Alert.alert(
-      'Cancel this challenge?',
-      'This ends it for everyone who joined.',
-      [
-        { text: 'Keep waiting', style: 'cancel' },
-        {
-          text: 'Cancel for everyone',
-          style: 'destructive',
-          onPress: async () => {
-            setCancelling(true);
-            try {
-              await cancelChallenge(activeChallengeId);
-            } catch { /* best-effort — leaving still exits the room below */ }
-            setCancelling(false);
-            if (router.canGoBack()) router.back();
-            else router.replace('/challenge-corner' as any);
-          },
-        },
-      ],
-    );
+    setShowAbortSheet(true);
+  }, []);
+
+  const onKeepWaiting = useCallback(() => {
+    setShowAbortSheet(false);
+  }, []);
+
+  const onConfirmAbort = useCallback(async () => {
+    setShowAbortSheet(false);
+    if (!activeChallengeId) {
+      router.replace('/challenge-corner' as any);
+      return;
+    }
+    setCancelling(true);
+    try {
+      await cancelChallenge(activeChallengeId);
+    } catch { /* best-effort — still route back to Challenge Corner below */ }
+    setCancelling(false);
+    router.replace('/challenge-corner' as any);
   }, [activeChallengeId, router]);
 
   const attemptHandoff = useCallback(async () => {
@@ -218,13 +219,13 @@ export default function ChallengeOnlineScreen() {
     return () => { unsubscribe(); clearInterval(t); };
   }, [phase, activeChallengeId, attemptHandoff]);
 
-  // router.back() silently no-ops on web when this screen was loaded
-  // directly (typed URL / refresh) and expo-router has no prior route in
-  // its own nav state — canGoBack() guards that so the X button always
-  // does something.
+  // Challenge Corner is always the return destination from this screen's
+  // browsing/searching flow — always replace rather than a plain back()
+  // pop, so repeated back-and-forth can't re-stack prior challenge screens
+  // (and this also sidesteps back() silently no-op'ing on web when the
+  // screen was loaded directly with no prior route in nav state).
   const exitScreen = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/challenge-corner' as any);
+    navReplace(router, '/challenge-corner', 'backward');
   }, [router]);
 
   const onLeaveWaiting = useCallback(async () => {
@@ -244,8 +245,27 @@ export default function ChallengeOnlineScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exitScreen]);
 
+  // OS/hardware back must land on Challenge Corner too, same as the in-app
+  // X, while this screen is on the searching/found (browsing) leg — the
+  // waiting-room leg already routes its back press through the abort/leave
+  // confirmation flow above.
+  useEffect(() => {
+    if (phase !== 'browsing') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onExitBrowsing();
+      return true;
+    });
+    return () => sub.remove();
+  }, [phase, onExitBrowsing]);
+
+  const onPressBack = useCallback(() => {
+    if (phase !== 'waiting') { onExitBrowsing(); return; }
+    if (isCreator) { setShowAbortSheet(true); return; }
+    void onLeaveWaiting();
+  }, [phase, isCreator, onExitBrowsing, onLeaveWaiting]);
+
   const backButton = (
-    <Pressable onPress={phase === 'waiting' ? () => void onLeaveWaiting() : onExitBrowsing} hitSlop={10}>
+    <Pressable onPress={onPressBack} hitSlop={10}>
       <X size={IconSize.header} color={colors.onSurface} strokeWidth={2.5} />
     </Pressable>
   );
@@ -347,7 +367,12 @@ export default function ChallengeOnlineScreen() {
                 <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', letterSpacing: 4 }]}>
                   {inviteCode}
                 </Text>
-                <Copy size={18} color={colors.onSurfaceVariant} strokeWidth={2} />
+                <Share2 size={18} color={colors.onSurfaceVariant} strokeWidth={2} />
+              </Pressable>
+              <Pressable onPress={onShareCode} hitSlop={8}>
+                <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: '600' }]}>
+                  Share via WhatsApp, email & more
+                </Text>
               </Pressable>
               <Pressable onPress={onCancelChallenge} disabled={cancelling} hitSlop={8}>
                 <Text style={[Typography.bodySm, { color: '#ef4444', fontWeight: '600' }]}>
@@ -406,6 +431,16 @@ export default function ChallengeOnlineScreen() {
       <View style={{ alignItems: 'center', paddingBottom: Spacing.md }}>
         <BottomBannerAd />
       </View>
+
+      <QuitConfirmSheet
+        visible={showAbortSheet}
+        onKeepPlaying={onKeepWaiting}
+        onQuit={() => void onConfirmAbort()}
+        title="Abort this challenge?"
+        subtitle="Players waiting will no longer be able to join."
+        keepLabel="KEEP WAITING"
+        quitLabel={cancelling ? 'ABORTING\u2026' : 'ABORT'}
+      />
     </View>
   );
 }

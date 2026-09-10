@@ -3,16 +3,17 @@
  * No Live row. Online/Create/Tournament routes land in later steps; Offline
  * is fully wired now.
  */
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronLeft, Plus, Globe, WifiOff, Trophy, ChevronRight, Ticket } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { HomeBottomGlow } from '@/constants/gradients';
 import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navPush, navReplace } from '@/lib/navDirection';
+import { getMyChallengeStories, type ChallengeStory } from '@/lib/challenges';
 
 type MenuRowSpec = {
   key: string;
@@ -94,15 +95,33 @@ export default function ChallengeCornerScreen() {
     return () => sub.remove();
   }, []);
 
+  // Own waiting challenge, if any — swaps the Add row into "Join Your
+  // Challenge" and routes straight to its waiting room. Re-checked every
+  // time this screen regains focus so it clears once the challenge is
+  // aborted, expires, or completes.
+  const [pendingChallenge, setPendingChallenge] = useState<ChallengeStory | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      getMyChallengeStories().then((stories) => {
+        if (!alive) return;
+        setPendingChallenge(stories.find((s) => s.isCreator && s.status === 'waiting' && !s.isTournament) ?? null);
+      });
+      return () => { alive = false; };
+    }, []),
+  );
+
   const rows: MenuRowSpec[] = [
     {
       key: 'add',
       Icon: Plus,
       iconBg: accent,
       iconColor: colors.white,
-      title: 'Add',
-      subtitle: 'Create a new challenge',
-      onPress: () => navPush(router, '/challenge-create'),
+      title: pendingChallenge ? 'Join Your Challenge' : 'Add',
+      subtitle: pendingChallenge ? 'Your challenge is waiting for players' : 'Create a new challenge',
+      onPress: () => (pendingChallenge
+        ? navPush(router, { pathname: '/challenge-online' as any, params: { challengeId: pendingChallenge.challengeId, origin: 'create' } })
+        : navPush(router, '/challenge-create')),
     },
     {
       key: 'join-tournament',
@@ -174,7 +193,7 @@ export default function ChallengeCornerScreen() {
             subtitle={row.subtitle}
             onPress={row.onPress}
             trailing={
-              row.key === 'add' ? (
+              row.key === 'add' && !pendingChallenge ? (
                 <Plus size={22} color={accent} strokeWidth={2.5} />
               ) : (
                 <ChevronRight size={22} color={colors.onSurfaceVariant} strokeWidth={2} />

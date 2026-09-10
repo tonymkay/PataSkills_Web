@@ -6,13 +6,21 @@
  * Scout / online branches land in a later step; companion is fully wired.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
+import { BackHandler, LayoutChangeEvent, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { TwoImageCard } from '@/components/cards/TwoImageCard';
+import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
 import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
+import { useKeys } from '@/hooks/useKeys';
 import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import {
   getPendingChallengeRun,
@@ -34,6 +42,8 @@ import { useChallengeScoutSession } from '@/hooks/useChallengeScoutSession';
 
 const GREEN = StaticColors.selection.activeBorder;
 const AUTO_ADVANCE_DELAY_MS = 260;
+const CARD_GAP = 16;
+const SLIDE_DURATION = 320;
 const FILL_EMPTY = 0;
 const FILL_ARRIVED = 0.05;
 const FILL_ANSWERED = 0.8;
@@ -81,6 +91,7 @@ export default function ChallengeRunScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { isPremium } = useKeys();
 
   const [pending] = useState<PendingChallengeRun | null>(() => getPendingChallengeRun());
   const questions = useMemo(() => pending?.questions ?? [], [pending]);
@@ -91,10 +102,24 @@ export default function ChallengeRunScreen() {
   const [results, setResults] = useState<boolean[]>(() => questions.map(() => false));
   const [quitOpen, setQuitOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [learnMoreOpen, setLearnMoreOpen] = useState(false);
 
   const startedAtRef = useRef<number>(0);
   const advancingRef = useRef(false);
   const finishedRef = useRef(false);
+
+  // Continuous horizontal-strip slide — same mechanics as the normal/
+  // onboarding question carousel in CardDeck.tsx (measured viewport width,
+  // a stripX shared value that never resets, pre-rendered adjacent slots)
+  // so challenge transitions feel identical to every other question flow.
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const handleViewportLayout = useCallback((e: LayoutChangeEvent) => {
+    setViewportWidth(e.nativeEvent.layout.width);
+  }, []);
+  const cardWidth = viewportWidth;
+  const stride = cardWidth + CARD_GAP;
+  const stripX = useSharedValue(0);
+  const stripStyle = useAnimatedStyle(() => ({ transform: [{ translateX: stripX.value }] }));
 
   const current = questions[qIndex];
   const isCompanion = !!pending?.isCompanion;
@@ -186,13 +211,30 @@ export default function ChallengeRunScreen() {
     else if (isScout) sendScoutProgress(nextIndex, liveScore);
 
     if (nextIndex >= total) {
+      // No next slot to slide toward — same rule CardDeck follows on its
+      // last card: skip the strip slide, hand off straight to finishRun.
       finishRun(nextResults);
-    } else {
+      return;
+    }
+
+    const settleNext = () => {
       setQIndex(nextIndex);
       setSelected(null);
       advancingRef.current = false;
+    };
+
+    if (stride > 0) {
+      stripX.value = withTiming(
+        -(nextIndex * stride),
+        { duration: SLIDE_DURATION, easing: Easing.out(Easing.cubic) },
+        (finished) => {
+          if (finished) runOnJS(settleNext)();
+        },
+      );
+    } else {
+      settleNext();
     }
-  }, [current, results, qIndex, total, isCompanion, isScout, finishRun]);
+  }, [current, results, qIndex, total, isCompanion, isScout, finishRun, stride, stripX]);
 
   useEffect(() => {
     if (selected === null || !current) return undefined;
@@ -231,28 +273,78 @@ export default function ChallengeRunScreen() {
       </View>
 
       {toast && (
-        <View style={{ alignItems: 'center', paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.xs }}>
-          <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant }]}>{toast}</Text>
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: insets.top + Spacing.xxl,
+            left: 0,
+            right: 0,
+            alignItems: 'center',
+            zIndex: 10,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.inverseSurface ?? StaticColors.neutral?.charcoal ?? '#1F1F1F',
+              paddingHorizontal: Spacing.base,
+              paddingVertical: Spacing.sm,
+              borderRadius: Radius.full,
+            }}
+          >
+            <Text style={[Typography.bodySm, { color: colors.inverseOnSurface ?? '#FFFFFF' }]}>{toast}</Text>
+          </View>
         </View>
       )}
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: Spacing.marginMobile, paddingTop: Spacing.gutter, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
+      <View
+        style={{ flex: 1, overflow: 'hidden' }}
+        onLayout={handleViewportLayout}
       >
-        <TwoImageCard
-          question={current}
-          selectedOption={selected}
-          onSelectOption={(i) => { if (selected === null) setSelected(i); }}
-          onOpenLearnMore={() => {}}
-          onToggleFlag={() => {}}
-          isFlagged={false}
-          evaluatedResult={
-            selected === null ? null : selected === current.correctAnswer ? 'right' : 'wrong'
-          }
-        />
-      </ScrollView>
+        {cardWidth > 0 && (
+          <Animated.View style={[{ flexDirection: 'row', alignItems: 'stretch', height: '100%' }, stripStyle]}>
+            {questions.map((question, idx) => {
+              const isCurrent = idx === qIndex;
+              const shouldRender = idx >= qIndex - 1 && idx <= qIndex + 2;
+              return (
+                <View
+                  key={`${question.id}-${idx}`}
+                  style={{ width: cardWidth, marginRight: CARD_GAP, flexShrink: 0, height: '100%' }}
+                >
+                  {shouldRender ? (
+                    <ScrollView
+                      style={{ flex: 1 }}
+                      contentContainerStyle={{ paddingHorizontal: Spacing.marginMobile, paddingTop: Spacing.gutter, paddingBottom: 40 }}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      <TwoImageCard
+                        question={question}
+                        selectedOption={isCurrent ? selected : null}
+                        onSelectOption={(i) => { if (isCurrent && selected === null) setSelected(i); }}
+                        onOpenLearnMore={isCurrent ? () => setLearnMoreOpen(true) : () => {}}
+                        onToggleFlag={() => {}}
+                        isFlagged={false}
+                        evaluatedResult={
+                          isCurrent
+                            ? (selected === null ? null : selected === question.correctAnswer ? 'right' : 'wrong')
+                            : null
+                        }
+                      />
+                    </ScrollView>
+                  ) : null}
+                </View>
+              );
+            })}
+          </Animated.View>
+        )}
+      </View>
+
+      <LearnMoreSheet
+        visible={learnMoreOpen}
+        question={current}
+        locked={!isPremium}
+        onClose={() => setLearnMoreOpen(false)}
+      />
 
       <QuitConfirmSheet
         visible={quitOpen}

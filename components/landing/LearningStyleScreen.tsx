@@ -191,7 +191,12 @@ const styles = StyleSheet.create({
   },
   connectorLine: {
     width: 2,
-    height: Spacing.md,
+    // Extended by 4px (2px each end) and pulled back with a negative
+    // margin so the line tucks under the adjacent ModeCard's 2px border
+    // instead of stopping at the card's rounded corner, which left a
+    // visible gap where the straight line met the curved edge.
+    height: Spacing.md + 4,
+    marginVertical: -2,
   },
   groupSpacing: {
     marginTop: Spacing.lg,

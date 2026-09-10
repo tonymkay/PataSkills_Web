@@ -44,7 +44,7 @@ const CARDS: CardDef[] = [
   {
     colors: ['#CDECB1', '#8AD68E'],
     badge: 'QUESTION 1',
-    tag: 'MULTIPLE CHOICE',
+    tag: 'SINGLE CHOICE',
     question: 'Which of the following is the largest county in Kenya by area?',
     options: [
       { letter: 'A', label: 'Turkana' },

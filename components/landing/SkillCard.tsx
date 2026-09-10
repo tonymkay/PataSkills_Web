@@ -38,6 +38,10 @@ export function SkillCard({ skill, completedTopics, totalTopics, onPress }: Skil
         {skill.title}
       </Text>
 
+      <View style={styles.illustrationWrap}>
+        <LandingIllustration />
+      </View>
+
       {completedTopics > 0 ? (
         <View style={styles.progressTrack}>
           <View style={[styles.progressSegment, { backgroundColor: '#2B303C' }]}>
@@ -72,10 +76,6 @@ export function SkillCard({ skill, completedTopics, totalTopics, onPress }: Skil
       >
         {completedTopics > 0 ? `${completedTopics}/${totalTopics} topics done` : skill.subtitle}
       </Text>
-
-      <View style={styles.illustrationWrap}>
-        <LandingIllustration />
-      </View>
 
       <Pressable
         onPress={onPress}

@@ -6,14 +6,14 @@
  * challenge-tournament-room.tsx — same room screen every other tournament
  * entry point uses.
  */
-import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Ticket } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
-import { navBack } from '@/lib/navDirection';
+import { navReplace } from '@/lib/navDirection';
 import { FontFamily, Radius, Spacing, StaticColors, useTheme } from '@/theme/tokens';
 import { joinTournamentByCode, type JoinByCodeResult } from '@/lib/tournaments';
 import { joinChallengeByCode } from '@/lib/challenges';
@@ -46,6 +46,21 @@ export default function ChallengeTournamentJoinScreen() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Challenge Corner is always the return destination from this screen —
+  // both the in-app back arrow and OS/hardware back. Replace (not back/pop)
+  // so repeated back-and-forth can't re-stack prior challenge screens.
+  const goToChallengeCorner = useCallback(() => {
+    navReplace(router, '/challenge-corner', 'backward');
+  }, [router]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      goToChallengeCorner();
+      return true;
+    });
+    return () => sub.remove();
+  }, [goToChallengeCorner]);
 
   const onJoin = async () => {
     const trimmedCode = code.trim();
@@ -115,7 +130,7 @@ export default function ChallengeTournamentJoinScreen() {
     <ScreenTransition>
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Spacing.gutter) }]}>
         <View style={styles.header}>
-          <Pressable onPress={() => navBack(router)} hitSlop={Spacing.sm} style={styles.backButton}>
+          <Pressable onPress={goToChallengeCorner} hitSlop={Spacing.sm} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.onSurface} strokeWidth={2.2} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Join with a Code</Text>
