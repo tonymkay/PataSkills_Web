@@ -26,16 +26,20 @@ export async function getCurriculaCatalog(): Promise<CurriculumCatalogRow[]> {
           .from('play_curricula')
           .select('slug, title, cover_image_path')
           .eq('is_active', true);
-        cache = !error && data ? data : [];
+        // Only cache a real result. Caching [] on failure used to make an
+        // offline/transient error permanent for the rest of the app
+        // session — reconnecting later never retried, since `cache` was
+        // already set (truthy) to an empty array. Leaving cache null on
+        // failure means the next caller (e.g. a Refresh tap) tries again.
+        if (!error && data && data.length > 0) {
+          cache = data;
+        }
+        inflight = null;
+        return cache ?? [];
       } catch {
-        // Offline / network failure — resolve to empty rather than
-        // rejecting, so callers (generateCompanionChallenges,
-        // generateScoutChallenge) fail gracefully into their own empty
-        // states instead of leaving an awaiting caller hung forever.
-        cache = [];
+        inflight = null;
+        return cache ?? [];
       }
-      inflight = null;
-      return cache;
     })();
   }
   return inflight;

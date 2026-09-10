@@ -12,6 +12,7 @@ import { sanitizeAndValidateEmail } from '@/lib/email';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
 import { navBack } from '@/lib/navDirection';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/StatusModal';
 
 export default function KeysConfirmScreen() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function KeysConfirmScreen() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [checkoutErrorVisible, setCheckoutErrorVisible] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('@play/user_email').then((stored) => {
@@ -55,7 +57,7 @@ export default function KeysConfirmScreen() {
     const result = await purchaseKeyPack(pack.id, sanitized, params.skill, params.track);
     setBusy(false);
     if (result === 'error') {
-      alert('Could not initiate checkout. Please try again.');
+      setCheckoutErrorVisible(true);
     }
   };
 
@@ -130,9 +132,11 @@ export default function KeysConfirmScreen() {
                 importantForAutofill="no"
                 textContentType="none"
                 editable={!busy}
+                multiline={false}
+                numberOfLines={1}
                 style={[
                   styles.input,
-                  { color: colors.onSurface },
+                  { color: colors.onSurface, textAlignVertical: 'center' },
                   Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
                 ]}
               />
@@ -160,6 +164,14 @@ export default function KeysConfirmScreen() {
         />
       </View>
     </View>
+    <ConfirmModal
+      visible={checkoutErrorVisible}
+      onClose={() => setCheckoutErrorVisible(false)}
+      title="Could not start checkout"
+      message="Please try again."
+      primaryLabel="OK"
+      onPrimary={() => setCheckoutErrorVisible(false)}
+    />
     </ScreenTransition>
   );
 }

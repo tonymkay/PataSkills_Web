@@ -90,6 +90,89 @@ export function StatusModal({ visible, onClose, title, items }: StatusModalProps
   );
 }
 
+export interface ConfirmModalProps {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  message: string;
+  primaryLabel: string;
+  onPrimary: () => void;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  destructive?: boolean;
+}
+
+/**
+ * Themed replacement for Alert.alert() when confirming a single action
+ * (delete account, logout, checkout error, etc). Companion to StatusModal
+ * above — that one reports a multi-item result, this one asks a question.
+ */
+export function ConfirmModal({
+  visible,
+  onClose,
+  title,
+  message,
+  primaryLabel,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+  destructive,
+}: ConfirmModalProps) {
+  const { colors } = useTheme();
+  const primaryColor = destructive ? '#F2274C' : StaticColors.successLime;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <View style={styles.sheetWrapper}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surfaceContainer,
+                borderColor: colors.surfaceContainerHigh,
+              },
+            ]}
+          >
+            <Text style={[styles.title, { color: colors.onSurface }]}>{title}</Text>
+            <Text style={[styles.message, { color: colors.onSurfaceVariant ?? colors.onSurface }]}>
+              {message}
+            </Text>
+
+            <Pressable
+              onPress={onPrimary}
+              style={({ pressed }) => [
+                styles.okBtn,
+                { backgroundColor: primaryColor },
+                pressed && { opacity: 0.88 },
+              ]}
+            >
+              <Text style={[styles.okBtnText, destructive && { color: '#FFFFFF' }]}>
+                {primaryLabel}
+              </Text>
+            </Pressable>
+
+            {secondaryLabel ? (
+              <Pressable
+                onPress={onSecondary ?? onClose}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  { borderColor: colors.surfaceContainerHigh },
+                  pressed && { opacity: 0.88 },
+                ]}
+              >
+                <Text style={[styles.secondaryBtnText, { color: colors.onSurface }]}>
+                  {secondaryLabel}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -114,6 +197,24 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 20,
     lineHeight: 26,
+  },
+  message: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  secondaryBtn: {
+    height: 48,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   itemsList: {
     gap: Spacing.sm,

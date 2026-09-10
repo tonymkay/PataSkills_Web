@@ -157,7 +157,7 @@ export default function ChallengeScoutRoom() {
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.xxl, paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.xxl }}>
           <View style={{ alignItems: 'center', gap: Spacing.sm }}>
             <GlobePulse />
-            <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', marginTop: Spacing.md }]}>
+            <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', marginTop: Spacing.md, textAlign: 'center' }]}>
               {challenge.topicTitle}
             </Text>
             <Text style={[Typography.bodyMd, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>

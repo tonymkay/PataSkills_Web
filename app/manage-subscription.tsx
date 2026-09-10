@@ -181,7 +181,6 @@ export default function ManageSubscriptionScreen() {
 
         {/* ── Help section ── */}
         <View style={{ gap: Spacing.md }}>
-          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Help</Text>
           <View
             style={[
               styles.helpCard,

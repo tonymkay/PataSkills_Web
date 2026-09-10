@@ -221,7 +221,7 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
                   pressed && { opacity: 0.85 },
                 ]}
               >
-                <Text style={styles.primaryBtnText}>CONTINUE AS THIS ACCOUNT</Text>
+                <Text style={styles.primaryBtnText}>CONTINUE</Text>
               </Pressable>
             </View>
           ) : (
@@ -492,7 +492,8 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    height: 52,
+    minHeight: 52,
+    paddingHorizontal: Spacing.md,
     borderRadius: Radius.full,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
@@ -503,5 +504,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.extraBold,
     fontSize: 15,
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });

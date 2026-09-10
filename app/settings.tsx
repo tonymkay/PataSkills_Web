@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,7 +29,7 @@ import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminde
 import { getKeysState } from '@/lib/keys';
 import { useKeys } from '@/hooks/useKeys';
 import { runManualBackup } from '@/lib/backup';
-import { StatusModal, type StatusModalItem } from '@/components/ui/StatusModal';
+import { StatusModal, ConfirmModal, type StatusModalItem } from '@/components/ui/StatusModal';
 import type { CurrencyCode } from '@/lib/currency';
 
 const CURRENCY_STORAGE_KEY = '@play/currency';
@@ -55,6 +55,8 @@ export default function SettingsScreen() {
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [statusModal, setStatusModal] = useState<{ title: string; items: StatusModalItem[] } | null>(null);
+  const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   useEffect(() => {
     getStoredEmail().then(setEmail).catch(() => {});
@@ -147,7 +149,12 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    setLogoutConfirmVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutConfirmVisible(false);
     try {
       await logoutAccount();
       setEmail(null);
@@ -155,23 +162,15 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete account?',
-      'This permanently deletes your account. Your data is removed from this device now and fully erased from our servers after 90 days. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteAccount();
-            setEmail(null);
-            if (router.canDismiss()) router.dismissAll();
-            router.replace('/');
-          },
-        },
-      ],
-    );
+    setDeleteConfirmVisible(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    setDeleteConfirmVisible(false);
+    await deleteAccount();
+    setEmail(null);
+    if (router.canDismiss()) router.dismissAll();
+    router.replace('/');
   };
 
   const iconColor = colors.onSurfaceVariant;
@@ -310,6 +309,30 @@ export default function SettingsScreen() {
         onClose={() => setStatusModal(null)}
         title={statusModal?.title ?? ''}
         items={statusModal?.items ?? []}
+      />
+
+      <ConfirmModal
+        visible={logoutConfirmVisible}
+        onClose={() => setLogoutConfirmVisible(false)}
+        title="Log out?"
+        message="You can log back in any time with the same email — your progress stays saved to your account."
+        primaryLabel="Log out"
+        onPrimary={confirmLogout}
+        secondaryLabel="Cancel"
+        onSecondary={() => setLogoutConfirmVisible(false)}
+        destructive
+      />
+
+      <ConfirmModal
+        visible={deleteConfirmVisible}
+        onClose={() => setDeleteConfirmVisible(false)}
+        title="Delete account?"
+        message="This permanently deletes your account. Your data is removed from this device now and fully erased from our servers after 90 days. This cannot be undone."
+        primaryLabel="Delete"
+        onPrimary={confirmDeleteAccount}
+        secondaryLabel="Cancel"
+        onSecondary={() => setDeleteConfirmVisible(false)}
+        destructive
       />
     </View>
   );

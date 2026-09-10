@@ -47,7 +47,7 @@ export function useChallengeSearch(
     tick();
     pollRef.current = setInterval(tick, 4000);
     clearScoutTimer();
-    const injectionDelayMs = 5000 + Math.random() * 15000;
+    const injectionDelayMs = 2000 + Math.random() * 8000;
     scoutTimerRef.current = setTimeout(() => {
       if (!online) return;
       setOpenChallenges((current) => {

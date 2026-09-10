@@ -59,6 +59,12 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
   // gates the skeleton grid below. LANDING_SKILLS already renders instantly
   // once this clears, so this never blocks longer than the network call.
   const [catalogLoading, setCatalogLoading] = useState(true);
+  // Per-skill { completedTopics, totalTopics }, keyed by skillId — same
+  // shape getLocalProgress() returns, same source the Home tab's
+  // SkillProgressCard reads. Populated below so this screen's grid cards
+  // show the exact same progress as Home for the same skill (previously
+  // this screen never read progress at all).
+  const [progressMap, setProgressMap] = useState<Record<string, { completedTopics: number; totalTopics: number }>>({});
 
   useEffect(() => {
     getCurriculaCatalog()
@@ -68,12 +74,28 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
   }, []);
 
   const refreshProgress = () => {
-    getLocalProgress().then(() => {
-      // Progress isn't surfaced on the grid cards in this design — kept
-      // as a no-op hook point so resume-detection logic has somewhere to
-      // live once the grid needs to show it again.
-    }).catch(() => {});
+    // Union of the static fallback list and whatever the catalog has
+    // resolved so far — covers both the instant-render skills and any
+    // DB-only skill, same id set LandingScreen's grid itself builds below.
+    const ids = Array.from(new Set([...LANDING_SKILLS.map((s) => s.id), ...catalogRows.map((r) => r.slug)]));
+    Promise.all(ids.map((id) => getLocalProgress(id).then((p) => [id, p] as const)))
+      .then((entries) => {
+        setProgressMap(
+          Object.fromEntries(
+            entries.map(([id, p]) => [id, { completedTopics: p.completedTopics, totalTopics: p.totalTopics }])
+          )
+        );
+      })
+      .catch(() => {});
   };
+
+  // Re-run once the catalog resolves (DB-only skills aren't in
+  // LANDING_SKILLS, so their progress can't be read until their id is
+  // known) — mirrors the mount-time refreshProgress() call below for the
+  // static list.
+  useEffect(() => {
+    if (catalogRows.length > 0) refreshProgress();
+  }, [catalogRows]);
 
   useEffect(() => {
     refreshProgress();
@@ -143,7 +165,14 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
         <View style={styles.grid}>
           {catalogLoading
             ? Array.from({ length: LANDING_SKILLS.length }).map((_, i) => <SkillGridCardSkeleton key={i} />)
-            : gridSkills.map((skill) => <SkillGridCard key={skill.key} skill={skill} onPress={onStart} />)}
+            : gridSkills.map((skill) => (
+                <SkillGridCard
+                  key={skill.key}
+                  skill={skill}
+                  progress={progressMap[skill.key]}
+                  onPress={onStart}
+                />
+              ))}
         </View>
 
         {/* Existing user, login link — outside the grid. Hidden once tabs

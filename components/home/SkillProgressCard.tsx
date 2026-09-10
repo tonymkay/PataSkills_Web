@@ -113,12 +113,15 @@ const styles = StyleSheet.create({
   },
   segmentRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    gap: 2,
     marginTop: Spacing.md,
+    overflow: 'hidden',
   },
   segment: {
-    width: 12,
+    flex: 1,
+    minWidth: 0,
     height: 4,
     borderRadius: Radius.sm,
   },

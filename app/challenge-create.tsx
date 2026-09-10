@@ -4,7 +4,7 @@
  * picker → Global toggle → Create.
  */
 import { useEffect, useState, useCallback } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, Globe, Check } from 'lucide-react-native';
@@ -14,6 +14,8 @@ import { getChallengeTopics } from '@/lib/challengeQuestions';
 import { createChallenge, getMyChallengeStories, type ChallengeStory } from '@/lib/challenges';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
+import { BottomSheet } from '@/components/ui/BottomSheet';
+import { Toggle } from '@/components/ui/Toggle';
 
 interface TopicRow { title: string; index: number }
 
@@ -197,12 +199,9 @@ export default function ChallengeCreateScreen() {
               <Globe size={IconSize.header} color={colors.onSurface} strokeWidth={2} />
               <Text style={[Typography.bodyLg, { color: colors.onSurface }]}>Global Challenge</Text>
             </View>
-            <Switch
+            <Toggle
               value={isGlobal}
               onValueChange={setIsGlobal}
-              disabled={creating || !!pending}
-              trackColor={{ false: colors.outlineVariant, true: colors.tealAccent }}
-              thumbColor={colors.white}
             />
           </View>
           <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant }]}>
@@ -255,7 +254,6 @@ export default function ChallengeCreateScreen() {
         title="Select a skill"
         onClose={() => setSheetOpen(null)}
         colors={colors}
-        insets={insets}
       >
         {curricula.map((c) => (
           <PickerRow
@@ -274,7 +272,6 @@ export default function ChallengeCreateScreen() {
         title="Select a topic"
         onClose={() => setSheetOpen(null)}
         colors={colors}
-        insets={insets}
       >
         {topics.length === 0 && !topicsLoading && (
           <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant }]}>No topics found for this skill yet.</Text>
@@ -296,7 +293,6 @@ export default function ChallengeCreateScreen() {
         title="Deadline"
         onClose={() => setSheetOpen(null)}
         colors={colors}
-        insets={insets}
       >
         {DEADLINES.map((d) => (
           <PickerRow
@@ -312,42 +308,27 @@ export default function ChallengeCreateScreen() {
   );
 }
 
-// ── reusable inline bottom-sheet (Modal) ──
+// ── reusable inline bottom-sheet ──
 function PickerSheet({
   visible,
   title,
   onClose,
   colors,
-  insets,
   children,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
-  insets: { bottom: number };
   children: React.ReactNode;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1 }} onPress={onClose} />
-      <View
-        style={{
-          backgroundColor: colors.surfaceContainerLow,
-          borderTopLeftRadius: Radius.xl,
-          borderTopRightRadius: Radius.xl,
-          paddingHorizontal: Spacing.marginMobile,
-          paddingTop: Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.lg,
-          maxHeight: '60%',
-        }}
-      >
-        <Text style={[Typography.headlineSm, { color: colors.onSurface, marginBottom: Spacing.md }]}>{title}</Text>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
-          <View style={{ gap: Spacing.sm }}>{children}</View>
-        </ScrollView>
-      </View>
-    </Modal>
+    <BottomSheet visible={visible} onClose={onClose} maxHeightPercent={0.6}>
+      <Text style={[Typography.headlineSm, { color: colors.onSurface, marginBottom: Spacing.md }]}>{title}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+        <View style={{ gap: Spacing.sm }}>{children}</View>
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
@@ -370,9 +351,11 @@ function PickerRow({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.sm,
-        borderRadius: Radius.md,
-        backgroundColor: selected ? colors.surfaceContainerHigh : 'transparent',
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radius.lg,
+        borderWidth: 1.5,
+        borderColor: selected ? colors.tealAccent : colors.outlineVariant,
+        backgroundColor: selected ? colors.surfaceContainerHigh : colors.surfaceContainerLow,
       }}
     >
       <Text style={[Typography.bodyLg, { color: colors.onSurface, flex: 1 }]} numberOfLines={2}>{label}</Text>

@@ -287,7 +287,7 @@ export default function ChallengeOnlineScreen() {
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <Text style={[Typography.bodyLg, { color: colors.white, fontWeight: '600' }]}>Search offline challenges</Text>
+              <Text style={[Typography.bodyLg, { color: colors.white, fontWeight: '600' }]}>SEARCH OFFLINE CHALLENGES</Text>
             </Pressable>
           </View>
         </View>

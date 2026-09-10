@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
@@ -20,25 +20,33 @@ export function BouncingDots({ color }: { color: string }) {
   const anim2 = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
-    const createBounce = (anim: Animated.Value, delay: number) => {
-      return Animated.loop(
+    // Every dot loops the SAME fixed-duration cycle (no delay inside the
+    // repeated sequence) so they stay locked together indefinitely — only
+    // the initial .start() is staggered, below. The old version put the
+    // stagger delay inside the looped sequence itself, giving each dot a
+    // different total cycle length (600/740/880ms) that drifted further
+    // out of sync on every repeat, reading as jittery/desynced instead of
+    // one coordinated wave.
+    const easing = Easing.inOut(Easing.ease);
+    const createBounce = (anim: Animated.Value) =>
+      Animated.loop(
         Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(anim, { toValue: -8, duration: 300, useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: -8, duration: 300, easing, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0, duration: 300, easing, useNativeDriver: true }),
         ])
       );
-    };
 
-    const b0 = createBounce(anim0, 0);
-    const b1 = createBounce(anim1, 140);
-    const b2 = createBounce(anim2, 280);
+    const b0 = createBounce(anim0);
+    const b1 = createBounce(anim1);
+    const b2 = createBounce(anim2);
 
+    const t1 = setTimeout(() => b1.start(), 140);
+    const t2 = setTimeout(() => b2.start(), 280);
     b0.start();
-    b1.start();
-    b2.start();
 
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       b0.stop();
       b1.stop();
       b2.stop();

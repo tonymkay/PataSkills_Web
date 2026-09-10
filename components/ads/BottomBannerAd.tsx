@@ -52,7 +52,7 @@ export function BottomBannerAd({ size = 'BANNER' }: { size?: 'BANNER' | 'LARGE_B
   const { width, height } = size === 'LARGE_BANNER' ? { width: 320, height: 100 } : { width: 320, height: 50 };
 
   return (
-    <View style={{ width, height: loaded ? height : 0, alignItems: 'center', overflow: 'hidden', paddingBottom: loaded ? Spacing.md : 0 }}>
+    <View style={{ width, height: loaded ? height : 0, alignSelf: 'center', alignItems: 'center', overflow: 'hidden', paddingBottom: loaded ? Spacing.md : 0 }}>
       <BannerAd
         unitId={BANNER_UNIT_ID}
         size={nativeSize}

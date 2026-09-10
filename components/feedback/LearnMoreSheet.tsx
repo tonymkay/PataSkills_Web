@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   Dimensions,
+  Image,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -18,11 +19,13 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeContext';
 import { Typography, FontFamily } from '@/constants/typography';
 import { Spacing, Radius } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
 import { BrandGradients, getSheetGradient } from '@/constants/gradients';
+import { Button } from '@/components/ui/Button';
 import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -32,6 +35,8 @@ interface LearnMoreSheetProps {
   visible: boolean;
   question: QuizQuestion | null;
   signCatalog?: SignCatalogEntry[];
+  /** True when the learner isn't premium — swaps the explanation for a paywall. */
+  locked?: boolean;
   onClose: () => void;
 }
 
@@ -57,9 +62,10 @@ function resolveSignEntry(
   return candidates.find((s) => s.signRef === inferredRef) ?? candidates[0];
 }
 
-export function LearnMoreSheet({ visible, question, signCatalog, onClose }: LearnMoreSheetProps) {
+export function LearnMoreSheet({ visible, question, signCatalog, locked = false, onClose }: LearnMoreSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [modalRendered, setModalRendered] = useState(visible);
   const translateY = useSharedValue(SCREEN_H);
@@ -207,63 +213,99 @@ export function LearnMoreSheet({ visible, question, signCatalog, onClose }: Lear
               bounces={true}
               nestedScrollEnabled={true}
             >
-              {/* Question summary text */}
-              <Text style={[Typography.titleSmall, styles.questionPreview, { color: colors.onSurface }]}>
-                {question.question}
-              </Text>
-
-              {/* Correct Answer Card */}
-              <View
-                style={[
-                  styles.answerCard,
-                  {
-                    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.12)' : '#F0FDF4',
-                    borderColor: '#22C55E',
-                  },
-                ]}
-              >
-                <View style={styles.answerHeader}>
-                  <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
-                  <Text style={[Typography.labelMedium, { color: '#16A34A', fontWeight: '800', marginLeft: 6 }]}>
-                    Correct Answer
+              {locked ? (
+                <View style={styles.paywallWrap}>
+                  <Image
+                    source={require('@/assets/premium/crown.webp')}
+                    style={styles.paywallCrown}
+                    resizeMode="contain"
+                  />
+                  <Text style={[Typography.titleMedium, styles.paywallTitle, { color: colors.onSurface }]}>
+                    Learn More is a premium feature
                   </Text>
+                  <Text style={[Typography.bodyMedium, styles.paywallBody, { color: colors.onSurfaceVariant }]}>
+                    Unlock full explanations for every question with Premium.
+                  </Text>
+                  <Button
+                    label="Subscribe today"
+                    variant="solid"
+                    backgroundColor="#FFFFFF"
+                    textColor="#000000"
+                    onPress={() => {
+                      onClose();
+                      router.push('/subscription-plans' as any);
+                    }}
+                  />
+                  <Button
+                    label="Maybe later"
+                    variant="outline"
+                    textColor={colors.onSurface}
+                    borderColor={colors.outlineVariant}
+                    onPress={onClose}
+                    style={styles.paywallSecondaryBtn}
+                  />
                 </View>
-                <Text style={[Typography.bodyLarge, styles.answerValueText, { color: colors.onSurface }]}>
-                  {correctAnswerDisplay}
-                </Text>
-              </View>
-
-              {/* Explanation Card */}
-              <View
-                style={[
-                  styles.explanationCard,
-                  {
-                    backgroundColor: isDark ? (colors.surfaceContainerLow || '#1E232D') : '#F8FAFC',
-                    borderColor: isDark ? colors.outlineVariant : '#E2E8F0',
-                  },
-                ]}
-              >
-                <Text style={[Typography.labelSmall, styles.explanationHeading, { color: colors.onSurfaceVariant }]}>
-                  WHY IS THIS CORRECT?
-                </Text>
-                <Text style={[Typography.bodyMedium, styles.explanationBody, { color: colors.onSurface }]}>
-                  {explanationText}
-                </Text>
-              </View>
-
-              {/* Got It Action Button */}
-              <Pressable onPress={onClose} style={styles.gotItButtonWrapper}>
-                <LinearGradient
-                  colors={BrandGradients.discovery.colors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.gotItGradient}
-                >
-                  <Text style={[Typography.labelLarge, styles.gotItButtonText]}>
-                    GOT IT
+              ) : (
+                <>
+                  {/* Question summary text */}
+                  <Text style={[Typography.titleSmall, styles.questionPreview, { color: colors.onSurface }]}>
+                    {question.question}
                   </Text>
-                </LinearGradient>
-              </Pressable>
+
+                  {/* Correct Answer Card */}
+                  <View
+                    style={[
+                      styles.answerCard,
+                      {
+                        backgroundColor: isDark ? 'rgba(34, 197, 94, 0.12)' : '#F0FDF4',
+                        borderColor: '#22C55E',
+                      },
+                    ]}
+                  >
+                    <View style={styles.answerHeader}>
+                      <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
+                      <Text style={[Typography.labelMedium, { color: '#16A34A', fontWeight: '800', marginLeft: 6 }]}>
+                        Correct Answer
+                      </Text>
+                    </View>
+                    <Text style={[Typography.bodyLarge, styles.answerValueText, { color: colors.onSurface }]}>
+                      {correctAnswerDisplay}
+                    </Text>
+                  </View>
+
+                  {/* Explanation Card */}
+                  <View
+                    style={[
+                      styles.explanationCard,
+                      {
+                        backgroundColor: isDark ? (colors.surfaceContainerLow || '#1E232D') : '#F8FAFC',
+                        borderColor: isDark ? colors.outlineVariant : '#E2E8F0',
+                      },
+                    ]}
+                  >
+                    <Text style={[Typography.labelSmall, styles.explanationHeading, { color: colors.onSurfaceVariant }]}>
+                      WHY IS THIS CORRECT?
+                    </Text>
+                    <Text style={[Typography.bodyMedium, styles.explanationBody, { color: colors.onSurface }]}>
+                      {explanationText}
+                    </Text>
+                  </View>
+
+                  {/* Got It Action Button */}
+                  <Pressable onPress={onClose} style={styles.gotItButtonWrapper}>
+                    <LinearGradient
+                      colors={BrandGradients.discovery.colors}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.gotItGradient}
+                    >
+                      <Text style={[Typography.labelLarge, styles.gotItButtonText]}>
+                        GOT IT
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                </>
+              )}
             </ScrollView>
           </LinearGradient>
         </Animated.View>
@@ -388,5 +430,29 @@ const styles = StyleSheet.create({
     color: '#0B3B31',
     fontFamily: FontFamily.extraBold,
     fontSize: 16,
+  },
+  paywallWrap: {
+    alignItems: 'center',
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  paywallCrown: {
+    width: 72,
+    height: 72,
+    marginBottom: Spacing.xs,
+  },
+  paywallTitle: {
+    fontFamily: FontFamily.extraBold,
+    textAlign: 'center',
+  },
+  paywallBody: {
+    fontFamily: FontFamily.regular,
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+    lineHeight: 20,
+  },
+  paywallSecondaryBtn: {
+    marginTop: Spacing.sm,
   },
 });

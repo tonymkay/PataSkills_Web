@@ -245,7 +245,7 @@ export default function ChallengeTournamentRoom() {
           <View style={{ alignItems: 'center', gap: Spacing.sm }}>
             <TrophyPulse />
             {topicTitle ? (
-              <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', marginTop: Spacing.md }]}>
+              <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', marginTop: Spacing.md, textAlign: 'center' }]}>
                 {topicTitle}
               </Text>
             ) : null}

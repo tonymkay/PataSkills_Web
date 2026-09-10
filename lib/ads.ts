@@ -15,7 +15,11 @@ export const BANNER_UNIT_ID =
     : ENV_BANNER_ANDROID || TEST_BANNER_ANDROID;
 
 const LOAD_TIMEOUT_MS = 5_000;
-const OVERALL_TIMEOUT_MS = 20_000;
+// Measured from AdEventType.OPENED, not ad.load() — see the OPENED
+// listener in showRewardedForSessionOnce. Needs to comfortably clear a
+// full rewarded-video playthrough (commonly 15-30s) plus the 1.5s/750ms
+// EARNED_REWARD settle delays below.
+const OVERALL_TIMEOUT_MS = 60_000;
 
 export type RewardOutcome = 'earned' | 'skipped' | 'unavailable';
 
@@ -144,6 +148,18 @@ async function showRewardedForSessionOnce(m: AdsModule, token: CancelToken): Pro
       subs.push(
         ad.addAdEventListener(AdEventType.OPENED, () => {
           opened = true;
+          // Start the safety net only once the ad is actually on screen.
+          // Starting it at ad.load() (the old behavior) meant a normal
+          // 15-30s rewarded-video playthrough could still be running when
+          // the 20s timer fired, resolving 'skipped' before EARNED_REWARD/
+          // CLOSED ever arrived — silently discarding a real reward and
+          // sending the learner to the dismiss-to-home path instead.
+          timers.push(
+            setTimeout(
+              () => done(earned ? 'earned' : 'skipped'),
+              OVERALL_TIMEOUT_MS,
+            ),
+          );
         }),
       );
 
@@ -178,19 +194,15 @@ async function showRewardedForSessionOnce(m: AdsModule, token: CancelToken): Pro
         }),
       );
 
-      // Load-phase timeout: if not loaded within 5s, fail fast
+      // Load-phase timeout: if not loaded within 5s, fail fast. The
+      // opened-triggered overall safety net (above, in the OPENED
+      // listener) covers the post-open case — it used to also be started
+      // here unconditionally at LOAD_TIMEOUT_MS's sibling OVERALL_TIMEOUT_MS,
+      // which is what caused Step 32's bug (see OPENED listener comment).
       timers.push(
         setTimeout(() => {
           if (!opened) done('unavailable');
         }, LOAD_TIMEOUT_MS),
-      );
-
-      // Overall safety net once opened
-      timers.push(
-        setTimeout(
-          () => done(opened ? (earned ? 'earned' : 'skipped') : 'unavailable'),
-          OVERALL_TIMEOUT_MS,
-        ),
       );
 
       try {

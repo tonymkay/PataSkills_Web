@@ -26,6 +26,7 @@ import { LearnMoreSheet } from '@/components/feedback/LearnMoreSheet';
 import { FeedbackSheet, FeedbackSheetState } from '@/components/feedback/FeedbackSheet';
 import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
 import { recordQuestionFailure, recordQuestionSuccess } from '@/lib/mistakes';
+import { useKeys } from '@/hooks/useKeys';
 
 const XP_PER_CORRECT = 5;
 
@@ -395,6 +396,7 @@ function QuizCardDeck({
   const [evaluatedResult, setEvaluatedResult] = useState<'right' | 'wrong' | null>(null);
   const [feedbackSheetState, setFeedbackSheetState] = useState<FeedbackSheetState>(null);
   const [isLearnMoreOpen, setIsLearnMoreOpen] = useState(false);
+  const { isPremium } = useKeys();
   const [quitOpen, setQuitOpen] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [totalCount] = useState(initialQuestions.length);
@@ -763,6 +765,7 @@ function QuizCardDeck({
         visible={isLearnMoreOpen}
         question={currentCard}
         signCatalog={signCatalog}
+        locked={!isPremium}
         onClose={() => setIsLearnMoreOpen(false)}
       />
 

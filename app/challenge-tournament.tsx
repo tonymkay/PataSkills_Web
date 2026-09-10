@@ -389,7 +389,7 @@ export default function ChallengeTournamentScreen() {
     }
   };
 
-  // ── Auto-search → auto-join (5–20s delay, same as offline scout timing) ──
+  // ── Auto-search → auto-join (2–10s delay, capped under 10s per spec) ──
   const autoFoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (body !== 'searching' || !isFocused) {
@@ -397,7 +397,7 @@ export default function ChallengeTournamentScreen() {
       autoFoundTimerRef.current = null;
       return;
     }
-    const delayMs = 5000 + Math.random() * 15000;
+    const delayMs = 2000 + Math.random() * 8000;
     autoFoundTimerRef.current = setTimeout(() => {
       void handleJoinNow();
     }, delayMs);

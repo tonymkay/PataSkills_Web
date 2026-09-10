@@ -25,6 +25,7 @@
  */
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { getChallengeTopics, makeRaceSeed } from '@/lib/challengeQuestions';
+import { LANDING_SKILLS } from '@/constants/skills';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 export interface CompanionPlayer {
@@ -339,7 +340,17 @@ export async function generateCompanionChallenges(
   filterSlug?: CurriculumSlug,
 ): Promise<CompanionChallenge[]> {
   const catalog = await getCurriculaCatalog();
-  const candidates = filterSlug ? catalog.filter((c) => c.slug === filterSlug) : catalog;
+  // Offline / network failure: getCurriculaCatalog() resolves to [] and
+  // caches that empty result for the rest of the session (see
+  // lib/curriculaCatalog.ts), which otherwise made offline companion
+  // challenges permanently unavailable — Refresh would just re-hit the
+  // same empty cache. Companion races are supposed to work fully offline,
+  // so fall back to the static landing catalog (same four skills every
+  // build ships with) instead of giving up.
+  const catalogOrFallback = catalog.length > 0
+    ? catalog
+    : LANDING_SKILLS.map((s) => ({ slug: s.id, title: s.subtitle, cover_image_path: '' }));
+  const candidates = filterSlug ? catalogOrFallback.filter((c) => c.slug === filterSlug) : catalogOrFallback;
   if (candidates.length === 0) return [];
 
   const challenges: CompanionChallenge[] = [];
