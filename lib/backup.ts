@@ -72,6 +72,43 @@ export async function runManualBackup(): Promise<BackupResult> {
   };
 }
 
+export type BackupCategory = 'mistakes' | 'progress' | 'xp' | 'streak' | 'keys';
+
+/**
+ * Re-runs exactly one backup category's push — used by Settings' per-item
+ * Retry button (StatusModal's onRetry) so a single failed item (e.g. a
+ * flaky connection dropped just the XP push) can be retried on its own,
+ * without re-running (and risking any interference with) the categories
+ * that already succeeded in the same run. Mirrors runManualBackup's own
+ * per-category calls exactly, just one at a time.
+ */
+export async function retryBackupCategory(category: BackupCategory): Promise<Partial<BackupResult>> {
+  const email = await getStoredEmail();
+  switch (category) {
+    case 'mistakes': {
+      const result = await pushAllMistakesToCloud();
+      return { mistakesPushed: result.pushed, mistakesTotal: result.total };
+    }
+    case 'progress': {
+      const skillIds = await discoverLocalSkillIds();
+      const progressSkillsPushed = await pushAllProgressToCloud(email, skillIds);
+      return { progressSkillsPushed, progressSkillsFound: skillIds.length };
+    }
+    case 'xp': {
+      const xpSynced = await pushXpToCloud();
+      return { xpSynced };
+    }
+    case 'streak': {
+      const streakStatus = await pushStreakToCloud();
+      return { streakStatus };
+    }
+    case 'keys': {
+      const keysSynced = await pushKeysToCloud();
+      return { keysSynced, hasEmail: !!email };
+    }
+  }
+}
+
 const LAST_AUTO_BACKUP_KEY = '@play/last_auto_backup_at';
 // Skip an auto-flush if the last one landed under this long ago — a flaky
 // connection can flap online/offline repeatedly within seconds, and this

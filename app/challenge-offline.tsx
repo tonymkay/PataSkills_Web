@@ -115,18 +115,39 @@ export default function ChallengeOfflineScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ slug?: string }>();
-  const filterSlug = params.slug as CurriculumSlug | undefined;
+  const params = useLocalSearchParams<{ slug?: string; skill?: string; auto?: string }>();
+  // `skill` matches the app-wide deep-link convention (see play.tsx's
+  // ?skill=&track=&resume=true); `slug` kept as a fallback since it's the
+  // existing param name nothing internal ever actually passed.
+  const filterSlug = (params.skill ?? params.slug) as CurriculumSlug | undefined;
+  // Offline challenge deep link (Task 2): ?skill=&auto=true skips the
+  // carousel-browse step and jumps straight into the FlagPulse waiting
+  // room for one auto-generated challenge on this skill.
+  const autoJoin = params.auto === 'true';
 
   const [challenges, setChallenges] = useState<CompanionChallenge[]>([]);
   const [joinedChallenge, setJoinedChallenge] = useState<CompanionChallenge | null>(null);
   const [loading, setLoading] = useState(true);
-  const [preparing, setPreparing] = useState(true);
+  // Auto-join mode has no carousel to fake-delay for — driven purely by
+  // `loading` while the single auto-generated challenge resolves instead.
+  const [preparing, setPreparing] = useState(!autoJoin);
   const [batchId, setBatchId] = useState(0);
   const myDisplayName = 'You';
 
   const loadChallenges = async () => {
     setLoading(true);
+    if (autoJoin) {
+      // Refresh in auto mode retries the single auto-generate, never the
+      // 3-card carousel — auto mode never shows a carousel to refresh.
+      const list = filterSlug ? await generateCompanionChallenges(1, filterSlug) : [];
+      if (list.length > 0) {
+        setJoinedChallenge(list[0]);
+      } else {
+        setChallenges([]);
+      }
+      setLoading(false);
+      return;
+    }
     const list = await generateCompanionChallenges(3, filterSlug);
     setChallenges(list);
     setLoading(false);
@@ -134,12 +155,14 @@ export default function ChallengeOfflineScreen() {
   };
 
   useEffect(() => {
+    if (autoJoin) return; // auto mode has no carousel, so no fake delay for it
     const delay = 5000 + Math.random() * 3000;
     const t = setTimeout(() => setPreparing(false), delay);
     return () => clearTimeout(t);
-  }, []);
+  }, [autoJoin]);
 
   useEffect(() => {
+    if (autoJoin) return; // auto mode fetches its own single challenge below instead
     let alive = true;
     (async () => {
       setLoading(true);
@@ -151,7 +174,35 @@ export default function ChallengeOfflineScreen() {
     return () => {
       alive = false;
     };
-  }, [filterSlug]);
+  }, [autoJoin, filterSlug]);
+
+  // Task 2: deep-link auto-join. Skips StoryCarousel and the tap-to-join
+  // step entirely — generates exactly one companion challenge for this
+  // skill and drops straight into the same joinedChallenge waiting-room
+  // state a manual carousel tap would set, so every downstream step
+  // (FlagPulse, initCompanionSession, challenge-start handoff) is reused
+  // untouched. Falls through to the existing "No companion challenges
+  // available" + Refresh empty state if generation comes back empty
+  // (unknown/bad skill slug, or that curriculum has no topics) rather
+  // than hanging on the preparing screen forever.
+  useEffect(() => {
+    if (!autoJoin) return;
+    let active = true;
+    (async () => {
+      setLoading(true);
+      const list = filterSlug ? await generateCompanionChallenges(1, filterSlug) : [];
+      if (!active) return;
+      if (list.length > 0) {
+        setJoinedChallenge(list[0]);
+      } else {
+        setChallenges([]);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [autoJoin, filterSlug]);
 
   useEffect(() => {
     if (!joinedChallenge) return;

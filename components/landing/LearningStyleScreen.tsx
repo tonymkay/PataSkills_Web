@@ -4,12 +4,13 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { getTrackOptionsForSkill, groupTrackOptions } from '@/constants/trackOptions';
 import { getLandingSkill } from '@/constants/skills';
-import { getCompletedTracks } from '@/lib/progress';
+import { getCompletedTracks, getTrackProgress } from '@/lib/progress';
 import { Track, TrackTotals, getTrackTotals, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { ModeCard } from './ModeCard';
 import { ModeCardSkeleton } from './ModeCardSkeleton';
+import { OnboardingStepper } from './OnboardingStepper';
 
 // Matches LandingScreen's bottom-sheet-style width cap so this screen
 // reads consistently when the flow moves from the grid into this list.
@@ -22,6 +23,9 @@ interface LearningStyleScreenProps {
   /** Track a card was tapped for — parent opens the full-page TrackDetailScreen. */
   onPreviewTrack: (track: Track) => void;
   onBack: () => void;
+  /** True only on the first-run onboarding funnel — shows the 3-step
+   *  OnboardingStepper above the heading. See LandingScreen's same prop. */
+  isOnboarding?: boolean;
 }
 
 /**
@@ -36,10 +40,16 @@ interface LearningStyleScreenProps {
  * hands off to the parent to open TrackDetailScreen — this screen owns no
  * preview state itself.
  */
-export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: LearningStyleScreenProps) {
+export function LearningStyleScreen({ skillId, onPreviewTrack, onBack, isOnboarding }: LearningStyleScreenProps) {
   const { colors } = useTheme();
   const skill = getLandingSkill(skillId);
   const [completedTracks, setCompletedTracks] = useState<Track[]>([]);
+  // Real per-track fraction (completedSessions/totalSessions), keyed by
+  // track — distinct from `completedTracks`'s binary done/not-done and
+  // from the skill-wide progress Home/Reports show. A track's own
+  // progress only moves when a session in THAT track finishes (see
+  // markTrackTopicCompleted in lib/progress.ts).
+  const [trackProgress, setTrackProgress] = useState<Record<string, number>>({});
   // Real per-track question counts for the "N questions" label on each
   // row — same source and shape as ModeSwitcherSheet uses.
   const [trackTotals, setTrackTotals] = useState<Record<Track, TrackTotals> | null>(null);
@@ -62,6 +72,7 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
     setAvailableTracks(skill.tracks);
     setTrackTotals(null);
     setTrackDefs(undefined);
+    setTrackProgress({});
     setLoading(true);
   }
 
@@ -74,6 +85,29 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
     getCurriculumTrackDefs(skillId).then(setTrackDefs).catch(() => {}).finally(() => setLoading(false));
   }, [skillId]);
 
+  // Per-track fraction, once this skill's real track list is known —
+  // one getTrackProgress() call per track, same pattern LandingScreen's
+  // refreshProgress() uses for skill-level progress.
+  useEffect(() => {
+    if (trackOptions.length === 0) return;
+    Promise.all(
+      trackOptions.map((o) =>
+        getTrackProgress(skillId, o.track).then((p) => [o.track, p] as const)
+      )
+    )
+      .then((entries) => {
+        setTrackProgress(
+          Object.fromEntries(
+            entries.map(([track, p]) => [
+              track,
+              p.totalSessions > 0 ? Math.min(1, p.completedSessions / p.totalSessions) : 0,
+            ])
+          )
+        );
+      })
+      .catch(() => {});
+  }, [skillId, trackOptions.map((o) => o.track).join(',')]);
+
   const nextUpTrack = trackOptions.find((o) => !completedTracks.includes(o.track))?.track;
 
   return (
@@ -84,6 +118,12 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
+        {isOnboarding && (
+          <View style={styles.stepperWrap}>
+            <OnboardingStepper index={1} />
+          </View>
+        )}
+
         <View style={styles.header}>
           <Pressable onPress={onBack} hitSlop={Spacing.sm} style={styles.backButton}>
             <ArrowLeft size={22} color={colors.onSurface} strokeWidth={2.2} />
@@ -132,9 +172,11 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack }: Learnin
                     <ModeCard
                       image={option.image}
                       title={option.label}
-                      status={isDone ? 'done' : 'notStarted'}
+                      status={
+                        isDone ? 'done' : (trackProgress[option.track] ?? 0) > 0 ? 'inProgress' : 'notStarted'
+                      }
                       highlighted={option.track === nextUpTrack}
-                      progress={isDone ? 1 : 0}
+                      progress={isDone ? 1 : (trackProgress[option.track] ?? 0)}
                       totalQuestions={trackTotals?.[option.track]?.totalQuestions}
                       onPress={() => onPreviewTrack(option.track)}
                     />
@@ -166,6 +208,9 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.lg,
   },
+  stepperWrap: {
+    marginBottom: Spacing.lg,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -191,12 +236,13 @@ const styles = StyleSheet.create({
   },
   connectorLine: {
     width: 2,
-    // Extended by 4px (2px each end) and pulled back with a negative
-    // margin so the line tucks under the adjacent ModeCard's 2px border
-    // instead of stopping at the card's rounded corner, which left a
-    // visible gap where the straight line met the curved edge.
-    height: Spacing.md + 4,
-    marginVertical: -2,
+    // Extended by 8px (4px each end) and pulled back with a negative
+    // margin so the line tucks well under the adjacent ModeCard's 2px
+    // border instead of stopping at the card's rounded corner — the
+    // previous 2px overlap still left a visible gap where the straight
+    // line met the curved edge, so this doubles it.
+    height: Spacing.md + 8,
+    marginVertical: -4,
   },
   groupSpacing: {
     marginTop: Spacing.lg,

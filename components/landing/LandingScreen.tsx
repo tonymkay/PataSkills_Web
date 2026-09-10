@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { SkillGridCard } from './SkillGridCard';
 import { SkillGridCardSkeleton } from './SkillGridCardSkeleton';
+import { OnboardingStepper } from './OnboardingStepper';
 import { LANDING_SKILLS, getLandingSkill } from '@/constants/skills';
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
@@ -27,6 +28,10 @@ interface LandingScreenProps {
   onRestore: (track: Track) => void;
   /** Optional bottom padding for scroll content (e.g. inside tabbed layout). */
   bottomPadding?: number;
+  /** True only on the first-run onboarding funnel (see app/index.tsx's
+   *  root gate) — shows the 3-step OnboardingStepper above the heading.
+   *  Returning users (tabs already unlocked) never see it. */
+  isOnboarding?: boolean;
 }
 
 /**
@@ -36,7 +41,7 @@ interface LandingScreenProps {
  * learning mode later (after a topic completes) reuses the same track
  * list via ModeSwitcherSheet — see components/landing/ModeSwitcherSheet.tsx.
  */
-export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScreenProps) {
+export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding }: LandingScreenProps) {
   const { colors } = useTheme();
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
@@ -160,6 +165,12 @@ export function LandingScreen({ onStart, onRestore, bottomPadding }: LandingScre
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
+        {isOnboarding && (
+          <View style={styles.stepperWrap}>
+            <OnboardingStepper index={0} />
+          </View>
+        )}
+
         <Text style={[styles.heading, { color: colors.onSurface }]}>Choose a skill</Text>
 
         <View style={styles.grid}>
@@ -221,6 +232,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.base,
     paddingBottom: Spacing.lg,
+  },
+  stepperWrap: {
+    marginBottom: Spacing.lg,
   },
   heading: {
     fontFamily: FontFamily.regular,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -33,6 +33,11 @@ export function WatchAdPromptSheet({
 }: WatchAdPromptSheetProps) {
   const { colors } = useTheme();
   const [loadingAd, setLoadingAd] = useState(false);
+  // Guards handleUnlockNextSession against a rapid double-tap granting the
+  // key twice before onAdRewarded() has a chance to transition the screen
+  // away — a ref (not state) so the very next synchronous tap is already
+  // blocked, no render cycle needed.
+  const grantingRef = useRef(false);
   // 'prompt' = "watch an ad?" sheet, 'reward' = key reward screen.
   // Both render inside the SAME <Modal> below — mounting separate native
   // Modals and toggling them in the same tick is what caused the reward
@@ -43,12 +48,19 @@ export function WatchAdPromptSheet({
   // adBreakDone sometimes never fires — leaving the WATCH AD button spinning
   // forever with no timeout). Rather than gamble on that, web goes straight
   // to prompting an app install, same as the subscribe flow.
-  const [step, setStep] = useState<'prompt' | 'download' | 'reward'>('prompt');
+  // 'unavailable' = the ad genuinely failed to load/show (outcome
+  // 'unavailable' from showRewardedForSession — no fill, load timeout, or
+  // an AdEventType.ERROR) — previously this silently fell through to
+  // onDismissToHome() same as a user-skipped ad, so a load failure looked
+  // identical to "I chose not to watch it." Now it gets its own explicit
+  // state with a Try Again action.
+  const [step, setStep] = useState<'prompt' | 'download' | 'reward' | 'unavailable'>('prompt');
 
   // Reset back to the prompt step whenever the sheet is reopened.
   React.useEffect(() => {
     if (visible) {
       setStep('prompt');
+      grantingRef.current = false;
     }
   }, [visible]);
 
@@ -67,12 +79,21 @@ export function WatchAdPromptSheet({
 
     if (outcome === 'earned') {
       setStep('reward');
+    } else if (outcome === 'unavailable') {
+      // Genuine load/show failure, not a user choice — give an explicit
+      // "try again" state instead of silently sending them to Home.
+      setStep('unavailable');
     } else {
+      // 'skipped' — the ad played (or opened) and the learner backed out
+      // without finishing it. That's an intentional choice, so the
+      // existing dismiss-to-home behavior is correct here.
       onDismissToHome();
     }
   };
 
   const handleUnlockNextSession = () => {
+    if (grantingRef.current) return;
+    grantingRef.current = true;
     // Grant the key here, on the actual tap — not the moment the ad
     // finished. Granting it earlier let the background balance-poll (see
     // useKeys) flip isOutOfKeys to false while this screen was still
@@ -94,12 +115,67 @@ export function WatchAdPromptSheet({
         visible={visible}
         transparent
         animationType="fade"
-        onRequestClose={step === 'prompt' || step === 'download' ? onClose : () => {}}
+        onRequestClose={step === 'prompt' || step === 'download' || step === 'unavailable' ? onClose : () => {}}
       >
         {step === 'reward' ? (
           <KeyRewardContent onUnlockNextSession={handleUnlockNextSession} />
         ) : step === 'download' ? (
           <DownloadAppModal visible onClose={onClose} source="ads" />
+        ) : step === 'unavailable' ? (
+          <View style={styles.backdrop}>
+            <View style={styles.sheetWrapper}>
+              <View
+                style={[
+                  styles.sheet,
+                  {
+                    backgroundColor: colors.surfaceContainer || '#1C2029',
+                    borderColor: colors.surfaceContainerHigh || '#2A2E38',
+                  },
+                ]}
+              >
+                <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
+                  <X size={20} color={colors.onSurfaceVariant} />
+                </Pressable>
+
+                <View style={styles.iconWrap}>
+                  <View style={[styles.iconCircle, { backgroundColor: 'rgba(242, 39, 76, 0.14)' }]}>
+                    <Tv size={32} color="#F2274C" strokeWidth={2.2} />
+                  </View>
+                </View>
+
+                <Text style={[styles.title, { color: colors.onSurface }]}>Ad unavailable</Text>
+                <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
+                  No ad could be loaded right now — check your connection and try again.
+                </Text>
+
+                <Pressable
+                  onPress={() => {
+                    setStep('prompt');
+                    void handleWatchAd();
+                  }}
+                  disabled={loadingAd}
+                  style={({ pressed }) => [
+                    styles.watchBtn,
+                    { backgroundColor: StaticColors.achievementAmber },
+                    (pressed || loadingAd) && { opacity: 0.85 },
+                  ]}
+                >
+                  {loadingAd ? (
+                    <ActivityIndicator color="#000" size="small" />
+                  ) : (
+                    <Text style={styles.watchBtnText}>TRY AGAIN</Text>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={onDismissToHome}
+                  style={({ pressed }) => [styles.dismissBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={[styles.dismissBtnText, { color: colors.onSurfaceVariant }]}>Go to Home</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
         ) : (
         <View style={styles.backdrop}>
           <View style={styles.sheetWrapper}>

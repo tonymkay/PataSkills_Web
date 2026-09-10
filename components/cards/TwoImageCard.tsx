@@ -206,7 +206,7 @@ export function TwoImageCard({
           <View style={styles.singleImageContainer}>
             <RoadSignGraphic
               source={question.image}
-              type={question.signRef === 'A' ? 'yield' : 'yield'}
+              type="general"
             />
           </View>
         ) : null}

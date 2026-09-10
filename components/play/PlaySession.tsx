@@ -11,12 +11,13 @@ import { LoadingQuestionsScreen } from '@/components/feedback/DownloadingScreen'
 import { useKeys } from '@/hooks/useKeys';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
-import { getLocalProgress, markTopicCompleted, markTrackCompleted } from '@/lib/progress';
+import { getLocalProgress, markTopicCompleted, markTrackCompleted, markTrackTopicCompleted } from '@/lib/progress';
 import { trackTopicComplete, trackPaywallSeen } from '@/lib/deviceAnalytics';
 import { recordXpEarned } from '@/lib/xp';
 import { recordActivityToday } from '@/lib/streak';
 import { Track } from '@/lib/curriculum';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
+import { topUpPrefetchFromSession } from '@/lib/imagePrefetch';
 
 const XP_PER_CORRECT = 5;
 
@@ -121,6 +122,15 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
   const currentSession = sessions[sessionIndex];
   const hasMoreSessions = sessionIndex + 1 < sessions.length;
 
+  // Belt-and-braces top-up (step 3 of the offline-images plan): whenever
+  // the active session changes, make sure sessionIndex..+4's images are
+  // prefetched. Almost always a no-op — downloadSession()'s background
+  // sweep should already be ahead of the user — this only does real work
+  // if someone blitzes through faster than that sweep keeps up.
+  React.useEffect(() => {
+    topUpPrefetchFromSession(sessions, skillId, sessionIndex);
+  }, [sessions, skillId, sessionIndex]);
+
   // ── Initial spend on entry ──────────────────────────────────────────
   // Uses a ref so the async spend only happens once, even if React
   // re-fires the effect due to state updates inside spendKey → refresh.
@@ -159,6 +169,11 @@ export function PlaySession({ sessions, signCatalog, skillId, track, deepLinked 
       void recordActivityToday();
       // Source of truth: hitting topic complete screen marks topic done
       void markTopicCompleted(skillId, sessionIndex, sessions.length);
+      // Track-scoped counterpart of the call above — skillId+track keyed,
+      // so LearningStyleScreen can show this track's own real progress
+      // instead of the skill-wide completedTopics count (which is shared
+      // across every track and can't distinguish them).
+      void markTrackTopicCompleted(skillId, track, sessionIndex, sessions.length);
       void trackTopicComplete(skillId, track, sessionIndex, stats);
       setScreenDirection('forward');
       setFlowState('topicComplete');

@@ -52,6 +52,55 @@ function completedTracksStorageKey(skillId: CurriculumSlug | string): string {
   return `@play/completed_tracks:${skillId}`;
 }
 
+function trackProgressStorageKey(skillId: CurriculumSlug | string, track: Track): string {
+  return `@play/track_progress:${skillId}:${track}`;
+}
+
+export interface TrackProgressState {
+  completedSessions: number;
+  totalSessions: number;
+}
+
+/**
+ * Per-track session progress, distinct from getLocalProgress()'s
+ * skill-wide completedTopics — that counter is shared across every
+ * track in a skill (see markTopicCompleted's call site in
+ * PlaySession.tsx), so it can't tell LearningStyleScreen how far into
+ * THIS specific track the learner actually is. Written by
+ * markTrackTopicCompleted() alongside (not instead of) the existing
+ * skill-wide call.
+ */
+export async function getTrackProgress(
+  skillId: CurriculumSlug | string,
+  track: Track
+): Promise<TrackProgressState> {
+  try {
+    const raw = await AsyncStorage.getItem(trackProgressStorageKey(skillId, track));
+    if (raw) return JSON.parse(raw) as TrackProgressState;
+  } catch {}
+  return { completedSessions: 0, totalSessions: 0 };
+}
+
+/** Records that `sessionIndex` (0-based) just finished within `track` —
+ *  called from PlaySession.tsx's handleSessionComplete, same call site
+ *  as the existing markTopicCompleted(). Monotonic like that function:
+ *  never decreases completedSessions/totalSessions across calls. */
+export async function markTrackTopicCompleted(
+  skillId: CurriculumSlug | string,
+  track: Track,
+  sessionIndex: number,
+  totalSessions: number
+): Promise<void> {
+  try {
+    const current = await getTrackProgress(skillId, track);
+    const updated: TrackProgressState = {
+      completedSessions: Math.max(current.completedSessions, sessionIndex + 1),
+      totalSessions: Math.max(current.totalSessions, totalSessions),
+    };
+    await AsyncStorage.setItem(trackProgressStorageKey(skillId, track), JSON.stringify(updated));
+  } catch {}
+}
+
 export interface ProgressState {
   completedTopics: number;
   totalTopics: number;

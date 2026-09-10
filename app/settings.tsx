@@ -28,7 +28,7 @@ import { deleteAccount } from '@/lib/account';
 import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 import { getKeysState } from '@/lib/keys';
 import { useKeys } from '@/hooks/useKeys';
-import { runManualBackup } from '@/lib/backup';
+import { runManualBackup, retryBackupCategory, type BackupCategory, type BackupResult } from '@/lib/backup';
 import { StatusModal, ConfirmModal, type StatusModalItem } from '@/components/ui/StatusModal';
 import type { CurrencyCode } from '@/lib/currency';
 
@@ -54,7 +54,9 @@ export default function SettingsScreen() {
   const [currency, setCurrency] = useState<CurrencyCode>('USD');
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
-  const [statusModal, setStatusModal] = useState<{ title: string; items: StatusModalItem[] } | null>(null);
+  const [backupResult, setBackupResult] = useState<BackupResult | null>(null);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [retryingCategory, setRetryingCategory] = useState<BackupCategory | null>(null);
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
@@ -102,51 +104,87 @@ export default function SettingsScreen() {
     setBackingUp(true);
     try {
       const result = await runManualBackup();
-      const items: StatusModalItem[] = [
-        {
-          label: 'Mistakes',
-          value: `${result.mistakesPushed}/${result.mistakesTotal} pushed`,
-          tone: result.mistakesTotal === 0 || result.mistakesPushed === result.mistakesTotal ? 'success' : 'error',
-        },
-        {
-          label: 'Progress',
-          value: `${result.progressSkillsPushed}/${result.progressSkillsFound} skills`,
-          tone:
-            result.progressSkillsFound === 0 || result.progressSkillsPushed === result.progressSkillsFound
-              ? 'success'
-              : 'error',
-        },
-        {
-          label: 'XP',
-          value: result.xpSynced ? 'Synced' : 'Failed',
-          tone: result.xpSynced ? 'success' : 'error',
-        },
-        {
-          label: 'Streak',
-          value:
-            result.streakStatus === 'synced'
-              ? 'Synced'
-              : result.streakStatus === 'no_activity'
-                ? 'No activity yet'
-                : 'Failed',
-          tone:
-            result.streakStatus === 'synced' ? 'success' : result.streakStatus === 'no_activity' ? 'neutral' : 'error',
-        },
-        {
-          label: 'Keys',
-          value: result.keysSynced ? 'Synced' : result.hasEmail ? 'Failed' : 'Skipped (no account linked)',
-          tone: result.keysSynced ? 'success' : result.hasEmail ? 'error' : 'neutral',
-        },
-      ];
-      setStatusModal({ title: 'Backup complete', items });
+      setBackupResult(result);
+      setStatusModalVisible(true);
     } catch {
-      setStatusModal({
-        title: 'Backup failed',
-        items: [{ label: 'Server', value: 'Could not reach the server', tone: 'error' }],
-      });
+      // Whole run couldn't even start (e.g. no connection at all) — no
+      // per-category result to show, so fall back to a single server row
+      // with nothing retryable per-item (retrying the whole thing is just
+      // "Back up now" again).
+      setBackupResult(null);
+      setStatusModalVisible(true);
     } finally {
       setBackingUp(false);
     }
+  };
+
+  // Re-runs exactly one category's push (StatusModal's per-item Retry) and
+  // merges only that category's fields back into backupResult — the other
+  // categories' already-shown success/failure state is untouched.
+  const handleRetryCategory = async (category: BackupCategory) => {
+    if (retryingCategory) return;
+    setRetryingCategory(category);
+    try {
+      const partial = await retryBackupCategory(category);
+      setBackupResult((prev) => (prev ? { ...prev, ...partial } : (partial as BackupResult)));
+    } catch {
+      // Leave backupResult as-is on failure — the item's tone stays
+      // 'error' from whatever value it already had, still retryable.
+    } finally {
+      setRetryingCategory(null);
+    }
+  };
+
+  const buildStatusItems = (result: BackupResult | null): StatusModalItem[] => {
+    if (!result) {
+      return [{ label: 'Server', value: 'Could not reach the server', tone: 'error' }];
+    }
+    return [
+      {
+        label: 'Mistakes',
+        value: `${result.mistakesPushed}/${result.mistakesTotal} pushed`,
+        tone: result.mistakesTotal === 0 || result.mistakesPushed === result.mistakesTotal ? 'success' : 'error',
+        onRetry: () => handleRetryCategory('mistakes'),
+        retrying: retryingCategory === 'mistakes',
+      },
+      {
+        label: 'Progress',
+        value: `${result.progressSkillsPushed}/${result.progressSkillsFound} skills`,
+        tone:
+          result.progressSkillsFound === 0 || result.progressSkillsPushed === result.progressSkillsFound
+            ? 'success'
+            : 'error',
+        onRetry: () => handleRetryCategory('progress'),
+        retrying: retryingCategory === 'progress',
+      },
+      {
+        label: 'XP',
+        value: result.xpSynced ? 'Synced' : 'Failed',
+        tone: result.xpSynced ? 'success' : 'error',
+        onRetry: () => handleRetryCategory('xp'),
+        retrying: retryingCategory === 'xp',
+      },
+      {
+        label: 'Streak',
+        value:
+          result.streakStatus === 'synced'
+            ? 'Synced'
+            : result.streakStatus === 'no_activity'
+              ? 'No activity yet'
+              : 'Failed',
+        tone:
+          result.streakStatus === 'synced' ? 'success' : result.streakStatus === 'no_activity' ? 'neutral' : 'error',
+        onRetry: () => handleRetryCategory('streak'),
+        retrying: retryingCategory === 'streak',
+      },
+      {
+        label: 'Keys',
+        value: result.keysSynced ? 'Synced' : result.hasEmail ? 'Failed' : 'Skipped (no account linked)',
+        tone: result.keysSynced ? 'success' : result.hasEmail ? 'error' : 'neutral',
+        onRetry: () => handleRetryCategory('keys'),
+        retrying: retryingCategory === 'keys',
+      },
+    ];
   };
 
   const handleLogout = () => {
@@ -305,10 +343,10 @@ export default function SettingsScreen() {
       />
 
       <StatusModal
-        visible={!!statusModal}
-        onClose={() => setStatusModal(null)}
-        title={statusModal?.title ?? ''}
-        items={statusModal?.items ?? []}
+        visible={statusModalVisible}
+        onClose={() => setStatusModalVisible(false)}
+        title={backupResult ? 'Backup complete' : 'Backup failed'}
+        items={buildStatusItems(backupResult)}
       />
 
       <ConfirmModal

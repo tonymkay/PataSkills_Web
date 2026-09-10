@@ -12,6 +12,14 @@ export interface StatusModalItem {
   label: string;
   value: string;
   tone: StatusTone;
+  /** Re-runs just this item's push, independently of the others — a
+   *  failed item can be retried without re-triggering (or risking
+   *  invalidating) items that already succeeded. Omitted for items with
+   *  nothing retryable (e.g. tone: 'neutral' skip states). */
+  onRetry?: () => void;
+  /** True while this specific item's retry is in flight — disables the
+   *  retry button and swaps its label to a busy state. */
+  retrying?: boolean;
 }
 
 export interface StatusModalProps {
@@ -69,6 +77,18 @@ export function StatusModal({ visible, onClose, title, items }: StatusModalProps
                   <Text style={[styles.itemValue, { color: toneColor(item.tone) }]} numberOfLines={1}>
                     {item.value}
                   </Text>
+                  {item.tone === 'error' && item.onRetry ? (
+                    <Pressable
+                      onPress={item.onRetry}
+                      disabled={item.retrying}
+                      hitSlop={8}
+                      style={styles.retryBtn}
+                    >
+                      <Text style={[styles.retryBtnText, { color: colors.onSurface }]}>
+                        {item.retrying ? '…' : 'Retry'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ))}
             </View>
@@ -240,6 +260,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     maxWidth: '45%',
     textAlign: 'right',
+  },
+  retryBtn: {
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+  },
+  retryBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   okBtn: {
     height: 48,

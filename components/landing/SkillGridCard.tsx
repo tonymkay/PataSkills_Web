@@ -69,6 +69,10 @@ export function SkillGridCard({ skill, onPress, progress }: SkillGridCardProps) 
         {skill.subtitle}
       </Text>
 
+      <View style={styles.illustrationWrap}>
+        <Image source={{ uri: coverImageUrl }} style={styles.illustration} resizeMode="contain" />
+      </View>
+
       {hasStarted && (
         <View style={styles.segmentRow}>
           {Array.from({ length: GRID_SEGMENT_COUNT }).map((_, i) => (
@@ -82,10 +86,6 @@ export function SkillGridCard({ skill, onPress, progress }: SkillGridCardProps) 
           ))}
         </View>
       )}
-
-      <View style={styles.illustrationWrap}>
-        <Image source={{ uri: coverImageUrl }} style={styles.illustration} resizeMode="contain" />
-      </View>
     </Pressable>
   );
 }

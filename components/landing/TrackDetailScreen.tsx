@@ -12,6 +12,7 @@ import { Track, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curricu
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { Button } from '@/components/ui/Button';
+import { OnboardingStepper } from './OnboardingStepper';
 
 // Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
 // / chunkSignsIntoSessions both slice into groups of 7) — the number of
@@ -29,6 +30,9 @@ interface TrackDetailScreenProps {
   track: Track | null;
   onStartPractice: (track: Track) => void;
   onBack: () => void;
+  /** True only on the first-run onboarding funnel — shows the 3-step
+   *  OnboardingStepper above the header. See LandingScreen's same prop. */
+  isOnboarding?: boolean;
 }
 
 /**
@@ -39,7 +43,7 @@ interface TrackDetailScreenProps {
  * a real page with the preview as a plain card so mobile-browser toolbar
  * quirks can't clip the CTA the way a fixed-position sheet could.
  */
-export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: TrackDetailScreenProps) {
+export function TrackDetailScreen({ skillId, track, onStartPractice, onBack, isOnboarding }: TrackDetailScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [progress, setProgress] = useState({ completedTopics: 0, totalTopics: 46 });
@@ -114,6 +118,12 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack }: T
         </Pressable>
       </View>
 
+      {isOnboarding && (
+        <View style={styles.stepperWrap}>
+          <OnboardingStepper index={2} />
+        </View>
+      )}
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -185,6 +195,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: Spacing.xs,
+  },
+  stepperWrap: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    paddingHorizontal: Spacing.marginMobile,
   },
   scroll: {
     flex: 1,

@@ -309,15 +309,17 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
               track={previewTrack}
               onStartPractice={handleStartFromTrackDetail}
               onBack={closeTrackDetail}
+              isOnboarding={isOnboarding}
             />
           ) : stage === 'learning-style' ? (
             <LearningStyleScreen
               skillId={selectedSkill}
               onPreviewTrack={handlePreviewFromLearningStyle}
               onBack={handleBackToLanding}
+              isOnboarding={isOnboarding}
             />
           ) : (
-            <LandingScreen onStart={handleStart} onRestore={handlePreviewFromLanding} />
+            <LandingScreen onStart={handleStart} onRestore={handlePreviewFromLanding} isOnboarding={isOnboarding} />
           )}
         </Animated.View>
       )}
