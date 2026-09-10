@@ -20,7 +20,6 @@ import { StoryCarousel } from '@/components/challenge/StoryCarousel';
 import { Button } from '@/components/ui/Button';
 import { generateCompanionChallenges, type CompanionChallenge, type CompanionPersona } from '@/lib/challengeCompanions';
 import { initCompanionSession } from '@/lib/challengeCompanionSession';
-import { buildChallengeQuestions } from '@/lib/challengeQuestions';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
 import {
   BrandGradients,
@@ -212,24 +211,10 @@ export default function ChallengeOfflineScreen() {
       if (!active) return;
 
       try {
-        const questions = await buildChallengeQuestions(
-          joinedChallenge.curriculumSlug,
-          joinedChallenge.seed,
-          joinedChallenge.questionCount,
-          joinedChallenge.topicIndex,
-        );
-
-        if (!active) return;
-
-        if (questions.length === 0) {
-          setJoinedChallenge(null);
-          return;
-        }
-
         await initCompanionSession(
           joinedChallenge.creatorPersona,
           myDisplayName,
-          questions.length,
+          joinedChallenge.questionCount,
           joinedChallenge.waitingCompanions,
         );
 
@@ -239,7 +224,10 @@ export default function ChallengeOfflineScreen() {
           isCompanion: true,
           curriculumSlug: joinedChallenge.curriculumSlug,
           curriculumTitle: joinedChallenge.curriculumTitle,
-          questions,
+          questions: [],
+          seed: joinedChallenge.seed,
+          questionCount: joinedChallenge.questionCount,
+          topicIndex: joinedChallenge.topicIndex,
           origin: 'challenge-corner',
           difficulty: joinedChallenge.creatorPersona.difficulty,
         });

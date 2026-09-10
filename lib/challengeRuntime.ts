@@ -45,7 +45,18 @@ export interface PendingChallengeRun {
    *  challenge-tournament.tsx instead of the normal exit path. */
   tournamentId?: string;
   tournamentStage?: number;
+  /** Present once buildChallengeQuestions() has actually run and resolved.
+   *  Empty ([]) on first handoff from the joining screen — challenge-start.tsx
+   *  fills this in during the "Starting in N" countdown by building from
+   *  the recipe fields below, via setPendingChallengeRunQuestions(). */
   questions: QuizQuestion[];
+  /** Recipe buildChallengeQuestions() needs — set by the joining screen
+   *  alongside an empty `questions`, consumed by challenge-start.tsx.
+   *  Absent once `questions` has been filled in for real (online/tournament
+   *  runs that already had questions built pre-refactor keep these unset). */
+  seed?: number;
+  questionCount?: number;
+  topicIndex?: number | null;
   /** Where to exit back to once everything is done. */
   origin: 'challenge-corner' | 'home';
 }
@@ -67,6 +78,13 @@ export function setPendingChallengeRun(run: PendingChallengeRun): void {
 }
 export function getPendingChallengeRun(): PendingChallengeRun | null {
   return pending;
+}
+/** Fills in the real question set once challenge-start.tsx has built it
+ *  from the pending run's recipe fields (seed/questionCount/topicIndex).
+ *  No-ops if there's no pending run (e.g. the user backed out mid-prep). */
+export function setPendingChallengeRunQuestions(questions: QuizQuestion[]): void {
+  if (!pending) return;
+  pending = { ...pending, questions };
 }
 export function setFinishedChallengeRun(run: FinishedChallengeRun): void {
   finished = run;

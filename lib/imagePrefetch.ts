@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { PlaySession } from '@/utils/groupSessions';
-import { SignCatalogEntry } from '@/types/quiz';
+import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 /**
@@ -112,6 +112,25 @@ export async function prefetchPriorityBatch(
 ): Promise<void> {
   const batch = sessions.slice(fromIndex, fromIndex + SESSIONS_PER_BATCH);
   const urls = dedupe(batch.flatMap(urlsForSession));
+  await prefetchUrls(urls, skillId);
+}
+
+/**
+ * Challenge-run counterpart to prefetchPriorityBatch() — a challenge race
+ * is a flat QuizQuestion[] (built by buildChallengeQuestions()), never
+ * chunked into PlaySession[], so it needs its own entry point rather than
+ * going through urlsForSession(). Always blocking, never a background
+ * continuation: a race's question set is small (one seed-shuffled sample,
+ * not a whole skill), so there's no "rest of it" left to sweep afterward.
+ * Reuses the same per-skill done-set as every other prefetch call, so a
+ * challenge on one curriculum never re-downloads images a normal run (or
+ * an earlier challenge) on that same curriculum already cached.
+ */
+export async function prefetchChallengeQuestions(
+  questions: QuizQuestion[],
+  skillId: CurriculumSlug,
+): Promise<void> {
+  const urls = dedupe(questions.flatMap((q) => [...extractUrls(q.image), ...extractUrls(q.images)]));
   await prefetchUrls(urls, skillId);
 }
 

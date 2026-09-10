@@ -16,7 +16,7 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Toggle } from '@/components/ui/Toggle';
-import { navReplace } from '@/lib/navDirection';
+import { navBack, navReplace } from '@/lib/navDirection';
 
 interface TopicRow { title: string; index: number }
 
@@ -57,11 +57,15 @@ export default function ChallengeCreateScreen() {
   const [sheetOpen, setSheetOpen] = useState<'curriculum' | 'topic' | 'deadline' | null>(null);
 
   // Challenge Corner is always the return destination from this screen —
-  // both the in-app back arrow and OS/hardware back. Using replace (not
-  // back/pop) so repeated back-and-forth navigation can't re-stack prior
-  // challenge screens.
+  // both the in-app back arrow and OS/hardware back. Pop the real stack
+  // when there's history to pop — lands on the existing Challenge Corner
+  // instance underneath with the correct native-stack "pop" animation,
+  // instead of stacking a new one via replace(). replace() is only a
+  // fallback for when this screen has no history to pop (e.g. a web
+  // reload landing directly here).
   const goToChallengeCorner = useCallback(() => {
-    navReplace(router, '/challenge-corner', 'backward');
+    if (router.canGoBack()) navBack(router);
+    else navReplace(router, '/challenge-corner', 'backward');
   }, [router]);
 
   useEffect(() => {

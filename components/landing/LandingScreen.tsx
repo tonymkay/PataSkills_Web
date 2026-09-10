@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { SkillGridCard } from './SkillGridCard';
@@ -78,7 +79,7 @@ export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding 
       .finally(() => setCatalogLoading(false));
   }, []);
 
-  const refreshProgress = () => {
+  const refreshProgress = useCallback(() => {
     // Union of the static fallback list and whatever the catalog has
     // resolved so far — covers both the instant-render skills and any
     // DB-only skill, same id set LandingScreen's grid itself builds below.
@@ -92,18 +93,31 @@ export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding 
         );
       })
       .catch(() => {});
-  };
+  }, [catalogRows]);
 
   // Re-run once the catalog resolves (DB-only skills aren't in
   // LANDING_SKILLS, so their progress can't be read until their id is
-  // known) — mirrors the mount-time refreshProgress() call below for the
+  // known) — mirrors the focus-effect refreshProgress() call below for the
   // static list.
   useEffect(() => {
     if (catalogRows.length > 0) refreshProgress();
-  }, [catalogRows]);
+  }, [catalogRows, refreshProgress]);
+
+  // Re-reads AsyncStorage progress every time this screen regains focus —
+  // not just on first mount. Tabs stay mounted for the app's lifetime
+  // under expo-router's <Tabs>, so a topic finished elsewhere (or via
+  // this same screen's own flow, then navigated back to) needs a fresh
+  // read each time the learner returns here, exactly like Home and
+  // Reports already do via their own useFocusEffect calls — previously
+  // this screen only ever read progress once, at first mount, so its
+  // cards could go stale for the rest of the session.
+  useFocusEffect(
+    useCallback(() => {
+      refreshProgress();
+    }, [refreshProgress]),
+  );
 
   useEffect(() => {
-    refreshProgress();
     AsyncStorage.getItem('@play/user_email').then((email) => {
       if (email) setLinkedEmail(email);
     }).catch(() => {});

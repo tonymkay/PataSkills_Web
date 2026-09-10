@@ -15,6 +15,8 @@
  */
 import type { QuizQuestion } from '@/types/quiz';
 import { loadRemoteCurriculum, deriveTrack } from '@/lib/curriculum';
+import { loadSignAssets, loadSignPairs } from '@/lib/signs';
+import { hydrateQuestionsList } from '@/utils/hydrateQuestions';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 function seededShuffle<T>(arr: T[], seed: number): T[] {
@@ -41,7 +43,19 @@ export async function getChallengeTopics(
   slug: CurriculumSlug,
 ): Promise<{ title: string; questions: QuizQuestion[] }[]> {
   const remote = await loadRemoteCurriculum(slug);
-  const sessions = deriveTrack(remote.questions, remote.signs, 'full', remote.tracks);
+
+  // Same image-hydration downloadSession() already does for normal runs
+  // (direct sign-key lookup + pairId/signRef resolution) — loadRemoteCurriculum()
+  // alone only resolves the plural `images[]` field via resolvePairedSignImages(),
+  // never the singular `image` field a single-image pairId/signRef question
+  // relies on. Without this, those questions render with no image at all in
+  // a challenge and TwoImageCard falls back to its generic SVG sign.
+  const hasSigns = remote.signs.length > 0;
+  const assets = hasSigns ? await loadSignAssets() : {};
+  const pairs = hasSigns ? await loadSignPairs(assets) : {};
+  const hydratedQuestions = hydrateQuestionsList(remote.questions, assets, pairs);
+
+  const sessions = deriveTrack(hydratedQuestions, remote.signs, 'full', remote.tracks);
   return sessions
     .filter((s): s is Extract<typeof s, { kind: 'quiz' }> => s.kind === 'quiz')
     .map((s) => ({ title: s.title, questions: s.questions }));

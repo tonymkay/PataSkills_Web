@@ -8,10 +8,17 @@ import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AvatarStack, type AvatarStackMember } from '@/components/challenge/AvatarStack';
-import { getPendingChallengeRun } from '@/lib/challengeRuntime';
+import { BouncingDots } from '@/components/feedback/DownloadingScreen';
+import {
+  getPendingChallengeRun,
+  setPendingChallengeRunQuestions,
+} from '@/lib/challengeRuntime';
 import { getCompanionSessionSnapshot } from '@/lib/challengeCompanionSession';
+import { buildChallengeQuestions } from '@/lib/challengeQuestions';
+import { prefetchChallengeQuestions } from '@/lib/imagePrefetch';
 import { CHALLENGE_COUNTDOWN_SECONDS } from '@/lib/challengeTimerSettings';
 import { Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
+import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 const COUNT_FROM = CHALLENGE_COUNTDOWN_SECONDS;
 
@@ -28,7 +35,10 @@ export default function ChallengeStartScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const pending = getPendingChallengeRun();
+  const [pending, setPending] = useState(() => getPendingChallengeRun());
+  const [prepReady, setPrepReady] = useState(() => (pending?.questions.length ?? 0) > 0);
+  const [prepError, setPrepError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const startTargetMs =
     pending?.startedAtMs != null
@@ -40,8 +50,38 @@ export default function ChallengeStartScreen() {
   );
   const [participants] = useState<AvatarStackMember[]>(initialParticipants);
 
+  // Prep the real question set + prefetch its images during the countdown
+  // when the joining screen only handed off a recipe (seed/questionCount/
+  // topicIndex, questions: []) — this is what turns the "Starting in 8"
+  // window from pure theater into actual work. retryCount forces a rerun
+  // after a failed attempt even though `pending` itself hasn't changed.
+  useEffect(() => {
+    if (prepReady || !pending || pending.seed === undefined) return undefined;
+    let alive = true;
+    (async () => {
+      try {
+        const questions = await buildChallengeQuestions(
+          pending.curriculumSlug as CurriculumSlug,
+          pending.seed!,
+          pending.questionCount!,
+          pending.topicIndex,
+        );
+        if (!alive) return;
+        if (questions.length === 0) throw new Error('No questions available for this challenge.');
+        await prefetchChallengeQuestions(questions, pending.curriculumSlug as CurriculumSlug);
+        if (!alive) return;
+        setPendingChallengeRunQuestions(questions);
+        setPending(getPendingChallengeRun());
+        setPrepReady(true);
+      } catch (e) {
+        if (alive) setPrepError(e instanceof Error ? e.message : 'Could not prepare this challenge.');
+      }
+    })();
+    return () => { alive = false; };
+  }, [pending, prepReady, retryCount]);
+
   const proceed = () => {
-    if (pending) {
+    if (pending && prepReady) {
       router.replace('/challenge-run');
       return;
     }
@@ -56,6 +96,7 @@ export default function ChallengeStartScreen() {
       const remaining = Math.max(0, Math.ceil((startTargetMs - Date.now()) / 1000));
       setCount(remaining);
       if (remaining <= 0) {
+        if (!prepReady) return; // hold — prep still running, don't proceed yet
         cancelled = true;
         proceed();
       }
@@ -67,28 +108,58 @@ export default function ChallengeStartScreen() {
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startTargetMs]);
+  }, [startTargetMs, prepReady]);
 
   useEffect(() => {
     if (startTargetMs !== null) return undefined;
     if (count <= 0) {
+      if (!prepReady) return undefined; // hold at 0 — prep still running
       proceed();
       return undefined;
     }
     const t = setTimeout(() => setCount((c) => c - 1), 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [count]);
+  }, [count, prepReady]);
 
   const title = pending?.curriculumTitle ?? 'Challenge';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.lg }}>
-        <Text style={[Typography.headlineXl, { color: colors.onSurfaceVariant }]}>Starting in</Text>
-        <Text style={[Typography.displayLg, { color: StaticColors.timerOrange, fontSize: 88, lineHeight: 96 }]}>
-          {String(Math.max(1, count))}
-        </Text>
+        {prepError ? (
+          <>
+            <Text style={[Typography.headlineMd, { color: colors.onSurface, textAlign: 'center' }]}>
+              Couldn&apos;t start challenge
+            </Text>
+            <Text style={[Typography.bodyLg, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
+              {prepError}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setPrepError(null);
+                setRetryCount((n) => n + 1);
+              }}
+              hitSlop={10}
+            >
+              <Text style={[Typography.bodyMd, { color: colors.onSurface, textDecorationLine: 'underline' }]}>
+                RETRY
+              </Text>
+            </Pressable>
+          </>
+        ) : count <= 1 && !prepReady ? (
+          <>
+            <Text style={[Typography.headlineXl, { color: colors.onSurfaceVariant }]}>Getting ready</Text>
+            <BouncingDots color={colors.tealAccent || '#2BD9C4'} />
+          </>
+        ) : (
+          <>
+            <Text style={[Typography.headlineXl, { color: colors.onSurfaceVariant }]}>Starting in</Text>
+            <Text style={[Typography.displayLg, { color: StaticColors.timerOrange, fontSize: 88, lineHeight: 96 }]}>
+              {String(Math.max(1, count))}
+            </Text>
+          </>
+        )}
 
         <View style={{ height: Spacing.xxl }} />
 

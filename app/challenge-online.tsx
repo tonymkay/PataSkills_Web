@@ -26,11 +26,9 @@ import {
   leaveChallenge, subscribeToChallengeStatus,
   type ChallengeMember, type OpenGlobalChallenge,
 } from '@/lib/challenges';
-import { buildChallengeQuestions } from '@/lib/challengeQuestions';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
 import { getCachedTitle } from '@/lib/curriculaCatalog';
-import { navReplace } from '@/lib/navDirection';
-import type { CurriculumSlug } from '@/constants/curriculumAssets';
+import { navBack, navReplace } from '@/lib/navDirection';
 
 type Phase = 'browsing' | 'waiting';
 
@@ -192,13 +190,6 @@ export default function ChallengeOnlineScreen() {
     const stories = await getMyChallengeStories();
     const mine = stories.find((s) => s.challengeId === activeChallengeId);
     if (!mine) return;
-    const questions = await buildChallengeQuestions(
-      mine.curriculumSlug as CurriculumSlug,
-      mine.seed,
-      mine.questionCount,
-      mine.targetTopicCount,
-    );
-    if (questions.length === 0) return;
     if (handedOffRef.current) return;
     handedOffRef.current = true;
     setPendingChallengeRun({
@@ -206,7 +197,10 @@ export default function ChallengeOnlineScreen() {
       curriculumSlug: mine.curriculumSlug,
       curriculumTitle: getCachedTitle(mine.curriculumSlug) ?? mine.curriculumSlug,
       startedAtMs: state.startedAt.getTime(),
-      questions,
+      questions: [],
+      seed: mine.seed,
+      questionCount: mine.questionCount,
+      topicIndex: mine.targetTopicCount,
       origin: 'challenge-corner',
     });
     router.replace('/challenge-start' as any);
@@ -220,12 +214,14 @@ export default function ChallengeOnlineScreen() {
   }, [phase, activeChallengeId, attemptHandoff]);
 
   // Challenge Corner is always the return destination from this screen's
-  // browsing/searching flow — always replace rather than a plain back()
-  // pop, so repeated back-and-forth can't re-stack prior challenge screens
-  // (and this also sidesteps back() silently no-op'ing on web when the
-  // screen was loaded directly with no prior route in nav state).
+  // browsing/searching flow. Pop the real stack when there's history to
+  // pop — lands on the existing Challenge Corner instance underneath with
+  // the correct native-stack "pop" animation, instead of stacking a new
+  // one via replace(). replace() is only a fallback for when this screen
+  // has no history to pop (e.g. a web reload landing directly here).
   const exitScreen = useCallback(() => {
-    navReplace(router, '/challenge-corner', 'backward');
+    if (router.canGoBack()) navBack(router);
+    else navReplace(router, '/challenge-corner', 'backward');
   }, [router]);
 
   const onLeaveWaiting = useCallback(async () => {

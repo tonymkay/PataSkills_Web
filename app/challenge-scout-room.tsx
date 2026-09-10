@@ -8,7 +8,6 @@ import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { Avatar } from '@/components/profile/Avatar';
 import { generateScoutChallenge, type ScoutChallenge } from '@/lib/challengeScouts';
 import { getScoutSessionSnapshot, initScoutSession, stopScoutSession, subscribeScoutSession } from '@/lib/challengeScoutSession';
-import { buildChallengeQuestions } from '@/lib/challengeQuestions';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
 import { IconSize, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
@@ -84,14 +83,7 @@ export default function ChallengeScoutRoom() {
     if (!challenge) return;
     let active = true;
     (async () => {
-      const questions = await buildChallengeQuestions(
-        challenge.curriculumSlug, challenge.seed, challenge.questionCount, challenge.topicIndex,
-      );
-      if (!active || questions.length === 0) {
-        if (active) router.back();
-        return;
-      }
-      await initScoutSession(challenge.creatorScout, 'You', questions.length, challenge.waitingScouts);
+      await initScoutSession(challenge.creatorScout, 'You', challenge.questionCount, challenge.waitingScouts);
       if (!active) return;
 
       const { joinTimeline } = getScoutSessionSnapshot();
@@ -112,7 +104,10 @@ export default function ChallengeScoutRoom() {
           isScout: true,
           curriculumSlug: challenge.curriculumSlug,
           curriculumTitle: challenge.curriculumTitle,
-          questions,
+          questions: [],
+          seed: challenge.seed,
+          questionCount: challenge.questionCount,
+          topicIndex: challenge.topicIndex,
           origin: params.origin === 'home' ? 'home' : 'challenge-corner',
           difficulty: challenge.difficulty,
         });

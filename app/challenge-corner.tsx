@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { HomeBottomGlow } from '@/constants/gradients';
 import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
-import { navPush, navReplace } from '@/lib/navDirection';
+import { navPush, navBack, navReplace } from '@/lib/navDirection';
 import { getMyChallengeStories, type ChallengeStory } from '@/lib/challenges';
 
 type MenuRowSpec = {
@@ -78,14 +78,16 @@ export default function ChallengeCornerScreen() {
   const insets = useSafeAreaInsets();
   const accent = colors.tealAccent;
 
-  // Challenge Corner can be reached through several nested sub-flows
-  // (create/online/offline/tournament, each with their own pushes), so a
-  // plain router.back() pop follows whatever that stack happened to build
-  // up to and can loop through intermediate screens instead of landing
-  // anywhere predictable. Both the header arrow and the OS-level back
-  // (hardware button / gesture) always jump straight to Home instead of
-  // popping the stack.
-  const goHome = () => navReplace(router, '/(tabs)/home', 'backward');
+  // Both the header arrow and the OS-level back (hardware button / gesture)
+  // pop the real stack when there's history to pop — this lands on
+  // whatever Home instance is already underneath, with the correct
+  // native-stack "pop" animation, instead of pushing/replacing in a new
+  // one. replace() is only a fallback for the rare case where this screen
+  // has no history to pop (e.g. a web reload landing directly here).
+  const goHome = () => {
+    if (router.canGoBack()) navBack(router);
+    else navReplace(router, '/(tabs)/home', 'backward');
+  };
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {

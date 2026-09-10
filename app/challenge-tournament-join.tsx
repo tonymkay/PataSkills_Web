@@ -13,7 +13,7 @@ import { ArrowLeft, Ticket } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { ScreenTransition } from '@/components/nav/ScreenTransition';
-import { navReplace } from '@/lib/navDirection';
+import { navBack, navReplace } from '@/lib/navDirection';
 import { FontFamily, Radius, Spacing, StaticColors, useTheme } from '@/theme/tokens';
 import { joinTournamentByCode, type JoinByCodeResult } from '@/lib/tournaments';
 import { joinChallengeByCode } from '@/lib/challenges';
@@ -48,10 +48,15 @@ export default function ChallengeTournamentJoinScreen() {
   const [busy, setBusy] = useState(false);
 
   // Challenge Corner is always the return destination from this screen —
-  // both the in-app back arrow and OS/hardware back. Replace (not back/pop)
-  // so repeated back-and-forth can't re-stack prior challenge screens.
+  // both the in-app back arrow and OS/hardware back. Pop the real stack
+  // when there's history to pop — lands on the existing Challenge Corner
+  // instance underneath with the correct native-stack "pop" animation,
+  // instead of stacking a new one via replace(). replace() is only a
+  // fallback for when this screen has no history to pop (e.g. a web
+  // reload landing directly here).
   const goToChallengeCorner = useCallback(() => {
-    navReplace(router, '/challenge-corner', 'backward');
+    if (router.canGoBack()) navBack(router);
+    else navReplace(router, '/challenge-corner', 'backward');
   }, [router]);
 
   useEffect(() => {

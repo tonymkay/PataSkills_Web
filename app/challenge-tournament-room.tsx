@@ -16,7 +16,7 @@ import { ArrowLeft, Trophy } from 'lucide-react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { Avatar } from '@/components/profile/Avatar';
-import { buildChallengeQuestions, makeRaceSeed } from '@/lib/challengeQuestions';
+import { makeRaceSeed } from '@/lib/challengeQuestions';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
 import {
   isLocalTournamentId,
@@ -121,14 +121,11 @@ export default function ChallengeTournamentRoom() {
       // Each stage races fresh over the whole curriculum — the tournament's
       // topicTitle (above) is fixed at creation purely for display; there's
       // no per-stage topic index to scope to, so topicIndex stays null.
-      const questions = await buildChallengeQuestions(slug, makeRaceSeed(), 10, null);
-      if (!active || questions.length === 0) {
-        if (active) router.back();
-        return;
-      }
+      const seed = makeRaceSeed();
+      const questionCount = 10;
 
       // Init scout session for the race
-      await initScoutSession(pool.scouts[0], 'You', questions.length, pool.scouts.slice(1));
+      await initScoutSession(pool.scouts[0], 'You', questionCount, pool.scouts.slice(1));
       if (!active) return;
       setLoading(false);
 
@@ -154,7 +151,10 @@ export default function ChallengeTournamentRoom() {
           tournamentStage: tournamentState.currentStage,
           curriculumSlug: slug,
           curriculumTitle: tournamentState.curriculumTitle,
-          questions,
+          questions: [],
+          seed,
+          questionCount,
+          topicIndex: null,
           origin: 'challenge-corner',
           difficulty: 'medium',
         });
