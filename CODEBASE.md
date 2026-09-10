@@ -320,7 +320,7 @@ Grid of `play_signs`; tap to swap `image_path`.
 | `/challenge-corner` | `challenge-corner.tsx` | Static 5-row menu: Add, Join with a Code, Online Challenge, Offline Challenge, Tournaments. No Live row. |
 | `/challenge-create` | `challenge-create.tsx` | Create Challenge form: curriculum picker, topic, deadline, Global toggle (on = anyone can browse/join in `challenge-online`'s search; off = private, joinable only via invite code). Calls `createChallenge()` from `lib/challenges.ts`, which now returns `{ challengeId, inviteCode }`. On success routes straight into `/challenge-online?challengeId=…` — the creator lands in the same waiting room a joiner would. If this device already has a `status='waiting'` challenge it created (`getMyChallengeStories()`), the Create button swaps to "Check your challenge" and routes there instead of allowing a second create. |
 | `/challenge-tournament-join` | `challenge-tournament-join.tsx` | Single code-entry screen for both invite types. Tries `joinChallengeByCode()` first (no email needed); on a genuine "no such code" miss, falls back to `joinTournamentByCode()` (may prompt for the invite email). Routes to `/challenge-online` or `/challenge-tournament-room` depending on which matched. Reached from the Challenge Corner "Join with a Code" row. |
-| `/challenge-offline` | `challenge-offline.tsx` | Companion-owned offline races. `StoryCarousel` of `CompanionChallenge` cards, join → FlagPulse waiting room → `initCompanionSession` → `challenge-start`. |
+| `/challenge-offline` | `challenge-offline.tsx` | Companion-owned offline races. `StoryCarousel` of `CompanionChallenge` cards, join → FlagPulse waiting room → `initCompanionSession` → `challenge-start`. Deep link: `?skill=<slug>&auto=true` (`slug=` also accepted) skips the carousel and tap-to-join entirely — generates one companion challenge via `generateCompanionChallenges(1, skill)` and drops straight into the same `joinedChallenge` waiting-room state; falls back to the "No companion challenges available" + Refresh empty state if generation comes back empty. |
 | `/challenge-online` | `challenge-online.tsx` | Online challenge search **and** the shared waiting room for both browsed-into and directly-created challenges (a `challengeId` param skips straight to the waiting phase). `useChallengeSearch` hook polls for open global challenges + scout gap-filler injection while browsing. Waiting phase: AvatarStack roster + realtime handoff to `challenge-start`. If the current device is the challenge's creator (`getMyChallengeStories()`), also shows the invite code (`Share.share()` to send it) and a "Cancel for everyone" button (`cancelChallenge()`) — exiting the screen normally does *not* cancel a creator's own challenge, only that explicit button does. Offline fallback to `/challenge-offline`. |
 | `/challenge-scout-room` | `challenge-scout-room.tsx` | Scout waiting room. GlobePulse animation, trickle-reveal of scout joins via `initScoutSession` timeline, auto-handoff to `/challenge-start` after last join + buffer. |
 | `/challenge-tournament` | `challenge-tournament.tsx` | Tournament story screen. Searching (TournamentSearchPulse) → Found (avatars + reward preview) → Join → promotion/elimination/final_win bodies. Supports both online (`getTournamentState`) and offline (`getLocalTournamentState`). Auto-search timer with 5–20s random delay. |
@@ -434,7 +434,8 @@ UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install C
 | `curriculaCatalog.ts` | Cached `play_curricula` (`slug, title, cover_image_path` where `is_active`) |
 | `trackDefaults.ts` | Cached `{ images, labels }` from `play_track_defaults` |
 | `curriculum.ts` | Load JSON, `detectAvailableTracks` (JSON tracks **or** legacy roles; **always** include `full` + `reading`), `deriveTrack`, `loadCurriculumCached` |
-| `downloadSession.ts` | Fetch + hydrate + `deriveTrack`; min load beat is in SkillsFlow (`MIN_LOADING_MS = 2000`) |
+| `downloadSession.ts` | Fetch + hydrate + `deriveTrack`; min load beat is in SkillsFlow (`MIN_LOADING_MS = 2000`); blocks on `imagePrefetch.ts`'s priority batch before resolving, then kicks its background sweep |
+| `imagePrefetch.ts` | Local-first image caching (`expo-image`'s `Image.prefetch`), scoped per skillId. `prefetchPriorityBatch()` — current + next 4 sessions, awaited by `downloadSession.ts`. `backgroundPrefetchSkill()` — fire-and-forget sweep of the rest of the skill + sign catalog, resumable via a persisted per-skill "done" URL set in AsyncStorage. `topUpPrefetchFromSession()` — called from `PlaySession.tsx` on session-index change as a belt-and-braces top-up |
 | `signs.ts` | `play_signs` / `play_sign_pairs` |
 | `keys.ts` | Economy (below) |
 | `premium.ts` | `PLANS`, `KEY_PACKS` |
@@ -652,7 +653,7 @@ signs/         road-sign webps
 
 ```
 LandingScreen
-  → LearningStyleScreen → TrackDetailScreen → downloadSession → PlaySession
+  → LearningStyleScreen → TrackDetailScreen → downloadSession (+ imagePrefetch priority batch) → PlaySession
 Out of keys:
   KeysOfferScreen → SessionStateScreen (KeysOptionsContent)
     → keys-packs / subscription-plans / how-free-mode-works
@@ -717,6 +718,7 @@ challenge-corner (menu)
   │     → challenge-scout-room (scout join reveal, when a scout gap-filler was injected) → challenge-start → challenge-run
   │     → challenge-results → challenge-reward (claimChallengeReward)
   ├── Offline → challenge-offline → generateCompanionChallenges()
+  │     (or ?skill=&auto=true deep link → generateCompanionChallenges(1, skill), no carousel)
   │     → initCompanionSession → challenge-start → challenge-run
   │     → challenge-results → challenge-reward
   └── Tournaments → challenge-tournament
