@@ -165,6 +165,39 @@ export async function spendKey(): Promise<number | null> {
   const state = await getKeysState();
   if (state.isPremium) return 999999;
   if (state.balance <= 0) return null;
+
+  const email = await AsyncStorage.getItem(EMAIL_KEY);
+  if (email) {
+    // Atomic, race-safe spend against the account record itself — closes
+    // the multi-device double-spend / stale-overwrite gap that write()'s
+    // blind absolute-balance upsert left open: two devices spending
+    // around the same time now genuinely both decrement instead of
+    // racing to overwrite each other's number. See
+    // supabase/play_keys_atomic_ops.sql. Only falls through to the local-
+    // only path below if the call itself fails (offline) — a real
+    // network failure still needs offline play to keep working.
+    try {
+      const { data, error } = await supabase.rpc('spend_play_key', { p_email: email });
+      if (!error) {
+        if (data === null || data === undefined) {
+          // Server says there was nothing to spend — balance already 0,
+          // or the account row doesn't exist yet. Trust it: this is
+          // exactly the race/overspend guard the RPC exists for, even
+          // if this device's own stale local cache still shows > 0.
+          return null;
+        }
+        const serverBalance = data as number;
+        const next: KeysState = { ...state, balance: serverBalance, synced: true };
+        try {
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return serverBalance;
+      }
+    } catch {}
+  }
+
+  // Offline, or no email linked yet: local-only decrement, same as before
+  // this change.
   const nextBalance = state.balance - 1;
   const next: KeysState = { ...state, balance: nextBalance };
   await write(next);
@@ -173,6 +206,28 @@ export async function spendKey(): Promise<number | null> {
 
 export async function grantBonusKey(count: number, _reason?: string, _ref?: string): Promise<number> {
   const state = await getKeysState();
+
+  const email = await AsyncStorage.getItem(EMAIL_KEY);
+  if (email) {
+    // Same atomic pattern as spendKey() above, for the grant side — closes
+    // the matching race where two grants (e.g. two purchases, or a
+    // purchase landing around the same time as a free-trial reset)
+    // resolve as a blind absolute-value overwrite instead of both
+    // actually taking effect. See supabase/play_keys_atomic_ops.sql.
+    try {
+      const { data, error } = await supabase.rpc('grant_play_keys', { p_email: email, p_amount: count });
+      if (!error && typeof data === 'number') {
+        const next: KeysState = { ...state, balance: data, resetAt: null, synced: true };
+        try {
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next.balance;
+      }
+    } catch {}
+  }
+
+  // Offline, or no email linked yet: local-only increment, same as before
+  // this change.
   const nextBalance = Math.max(0, state.balance) + count;
   const next: KeysState = { ...state, balance: nextBalance, resetAt: null };
   await write(next);

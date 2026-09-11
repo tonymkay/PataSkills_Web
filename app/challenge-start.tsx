@@ -1,7 +1,8 @@
 /**
  * "Starting in N" countdown. Companion/Scout count down locally from mount.
- * Online races (wired in a later step) will pass startedAtMs so every
- * device hits zero on the same wall-clock instant.
+ * Online races (including real online tournament stages, handed off via
+ * ChallengeWaitingRoom) pass startedAtMs so every device hits zero on the
+ * same wall-clock instant.
  */
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';

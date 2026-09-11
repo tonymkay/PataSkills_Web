@@ -114,8 +114,12 @@ export default function ChallengeTournamentJoinScreen() {
           setError('Something went wrong. Please try again.');
           return;
         }
+        // challenge-tournament.tsx owns the whole tournament flow now,
+        // including the shared waiting room — it picks up from params.tournamentId
+        // itself (body starts at 'loading', fetches state, and routes into
+        // ChallengeWaitingRoom once the player taps through).
         router.replace({
-          pathname: '/challenge-tournament-room' as any,
+          pathname: '/challenge-tournament' as any,
           params: { tournamentId },
         });
         return;

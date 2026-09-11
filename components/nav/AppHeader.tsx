@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Settings } from 'lucide-react-native';
 import { useTheme, Spacing, Radius, Typography, IconSize, StaticColors } from '@/theme/tokens';
 import { getStoredEmail } from '@/lib/email';
@@ -41,19 +41,18 @@ export function AppHeader() {
   const router = useRouter();
   const [name, setName] = useState(FALLBACK_NAME);
 
-  useEffect(() => {
-    let mounted = true;
-    getStoredEmail().then((email) => {
-      if (!mounted) return;
-      if (email) {
-        const local = email.split('@')[0];
-        if (local) setName(local);
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      getStoredEmail().then((email) => {
+        if (!mounted) return;
+        setName(email ? email.split('@')[0] || FALLBACK_NAME : FALLBACK_NAME);
+      });
+      return () => {
+        mounted = false;
+      };
+    }, []),
+  );
 
   const avatarColor = colorForName(name);
 

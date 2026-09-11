@@ -1,9 +1,9 @@
 /**
  * Score + live leaderboard. Companion, Scout, and Online are fully wired.
- * Tournament stages (isScout + tournamentId) route back into
- * challenge-tournament.tsx instead of /challenge-reward — that screen owns
- * promotion/elimination/final_win and the actual reward grant. Real online
- * tournament stages aren't wired end-to-end yet (see challenge-start.tsx).
+ * Any run with a tournamentId (local scout-seeded OR a real online stage,
+ * both handed off via ChallengeWaitingRoom in 'tournament' mode) routes
+ * back into challenge-tournament.tsx instead of /challenge-reward — that
+ * screen owns promotion/elimination/final_win and the actual reward grant.
  *
  * Exit is locked until everyone finishes or the 2-minute grace timer
  * (firstResultsAt) clears — same as the old app. Non-tournament runs then

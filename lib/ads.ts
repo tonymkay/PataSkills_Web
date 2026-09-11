@@ -14,7 +14,7 @@ export const BANNER_UNIT_ID =
     ? TEST_BANNER_ANDROID
     : ENV_BANNER_ANDROID || TEST_BANNER_ANDROID;
 
-const LOAD_TIMEOUT_MS = 5_000;
+const LOAD_TIMEOUT_MS = 15_000;
 // Measured from AdEventType.OPENED, not ad.load() — see the OPENED
 // listener in showRewardedForSessionOnce. Needs to comfortably clear a
 // full rewarded-video playthrough (commonly 15-30s) plus the 1.5s/750ms
@@ -80,6 +80,45 @@ export function cancelActiveRewarded(): void {
   activeToken.onCancel?.();
 }
 
+// A rewarded ad instance that has already fired LOADED — held here so a
+// tap on "Watch Ad" can call .show() immediately instead of starting a
+// cold ad.load() at tap time and racing LOAD_TIMEOUT_MS. Consumed (and
+// cleared) the moment showRewardedForSession() picks it up; a fresh
+// preload should be kicked off again after that by whoever calls
+// preloadRewarded() (e.g. WatchAdPromptSheet on becoming visible).
+let preloadedAd: AdsModule | null = null;
+let preloading = false;
+
+/** Starts loading a rewarded ad ahead of time so it's likely already ready
+ *  by the time the person taps "Watch Ad". Safe to call repeatedly — it's
+ *  a no-op while a preload or an active show is already in flight, or once
+ *  one is already loaded and waiting. Android only, same as the rest of
+ *  this module. */
+export function preloadRewarded(): void {
+  if (Platform.OS !== 'android') return;
+  if (preloadedAd || preloading || activeRewarded) return;
+  const m = nativeModule();
+  if (!m) return;
+  preloading = true;
+  void (async () => {
+    try {
+      await configureAds();
+      const { RewardedAd, RewardedAdEventType } = m;
+      const ad = RewardedAd.createForAdRequest(REWARDED_UNIT_ID, {
+        requestNonPersonalizedAdsOnly: true,
+      });
+      const sub = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+        sub();
+        preloadedAd = ad;
+        preloading = false;
+      });
+      ad.load();
+    } catch {
+      preloading = false;
+    }
+  })();
+}
+
 /**
  * Shows rewarded AdMob ad for 1 bonus key session on Android.
  * On web, ads are not supported — returns 'unavailable'.
@@ -110,7 +149,15 @@ async function showRewardedForSessionOnce(m: AdsModule, token: CancelToken): Pro
     if (token.cancelled) return 'unavailable';
 
     const { RewardedAd, RewardedAdEventType, AdEventType } = m;
-    const ad = RewardedAd.createForAdRequest(REWARDED_UNIT_ID, {
+
+    // Consume a preload if one's already sitting there loaded — this is
+    // the common case once WatchAdPromptSheet has had a moment to call
+    // preloadRewarded() ahead of the actual tap, and it's what turns a
+    // reliable-on-retry-only first attempt into a reliable first attempt:
+    // there's no cold ad.load() racing LOAD_TIMEOUT_MS at all in this path.
+    const reusedAd = preloadedAd;
+    if (reusedAd) preloadedAd = null;
+    const ad = reusedAd ?? RewardedAd.createForAdRequest(REWARDED_UNIT_ID, {
       requestNonPersonalizedAdsOnly: true,
     });
 
@@ -138,12 +185,19 @@ async function showRewardedForSessionOnce(m: AdsModule, token: CancelToken): Pro
         if (!opened) done('unavailable');
       };
 
-      subs.push(
-        ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-          if (cancelled) return;
-          ad.show({ immersiveModeEnabled: false }).catch(() => done('unavailable'));
-        }),
-      );
+      if (reusedAd) {
+        // Already fired LOADED during the preload — that event won't fire
+        // again on this same instance, so show immediately instead of
+        // waiting on a listener that's never coming.
+        ad.show({ immersiveModeEnabled: false }).catch(() => done('unavailable'));
+      } else {
+        subs.push(
+          ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+            if (cancelled) return;
+            ad.show({ immersiveModeEnabled: false }).catch(() => done('unavailable'));
+          }),
+        );
+      }
 
       subs.push(
         ad.addAdEventListener(AdEventType.OPENED, () => {
@@ -194,21 +248,25 @@ async function showRewardedForSessionOnce(m: AdsModule, token: CancelToken): Pro
         }),
       );
 
-      // Load-phase timeout: if not loaded within 5s, fail fast. The
-      // opened-triggered overall safety net (above, in the OPENED
-      // listener) covers the post-open case — it used to also be started
-      // here unconditionally at LOAD_TIMEOUT_MS's sibling OVERALL_TIMEOUT_MS,
-      // which is what caused Step 32's bug (see OPENED listener comment).
-      timers.push(
-        setTimeout(() => {
-          if (!opened) done('unavailable');
-        }, LOAD_TIMEOUT_MS),
-      );
+      // Load-phase timeout: if not loaded within LOAD_TIMEOUT_MS, fail
+      // fast. The opened-triggered overall safety net (above, in the
+      // OPENED listener) covers the post-open case — it used to also be
+      // started here unconditionally at LOAD_TIMEOUT_MS's sibling
+      // OVERALL_TIMEOUT_MS, which is what caused Step 32's bug (see OPENED
+      // listener comment). Skipped entirely for a reused preload — it's
+      // already loaded, there's no load phase to time out.
+      if (!reusedAd) {
+        timers.push(
+          setTimeout(() => {
+            if (!opened) done('unavailable');
+          }, LOAD_TIMEOUT_MS),
+        );
 
-      try {
-        ad.load();
-      } catch {
-        done('unavailable');
+        try {
+          ad.load();
+        } catch {
+          done('unavailable');
+        }
       }
     });
   } catch {

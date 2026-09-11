@@ -25,6 +25,7 @@ export default function KeysConfirmScreen() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkoutErrorVisible, setCheckoutErrorVisible] = useState(false);
+  const [checkoutErrorMessage, setCheckoutErrorMessage] = useState('Please try again.');
 
   useEffect(() => {
     AsyncStorage.getItem('@play/user_email').then((stored) => {
@@ -57,6 +58,15 @@ export default function KeysConfirmScreen() {
     const result = await purchaseKeyPack(pack.id, sanitized, params.skill, params.track);
     setBusy(false);
     if (result === 'error') {
+      setCheckoutErrorMessage('Please try again.');
+      setCheckoutErrorVisible(true);
+    } else if (result === 'unavailable') {
+      // Same confirmed cause as subscription-confirm.tsx — billing SDK not
+      // configured/ready (sideloaded build, or RC not yet initialised).
+      setCheckoutErrorMessage('Payments aren\u2019t available on this build. Install from the Play Store to buy keys.');
+      setCheckoutErrorVisible(true);
+    } else if (result === 'cancelled') {
+      setCheckoutErrorMessage('Checkout was cancelled.');
       setCheckoutErrorVisible(true);
     }
   };
@@ -168,7 +178,7 @@ export default function KeysConfirmScreen() {
       visible={checkoutErrorVisible}
       onClose={() => setCheckoutErrorVisible(false)}
       title="Could not start checkout"
-      message="Please try again."
+      message={checkoutErrorMessage}
       primaryLabel="OK"
       onPrimary={() => setCheckoutErrorVisible(false)}
     />

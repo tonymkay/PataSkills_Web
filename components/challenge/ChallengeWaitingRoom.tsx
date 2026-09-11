@@ -67,11 +67,24 @@ export function ChallengeWaitingRoom({
   challengeId,
   onExit,
   title = 'Online Challenge',
+  mode = 'challenge',
+  tournamentId,
+  tournamentStage,
 }: {
   challengeId: string;
   onExit: () => void;
   title?: string;
+  /** 'tournament' suppresses creator-only controls (invite code, Start
+   *  Challenge, Cancel for everyone) that don't apply to a shared
+   *  tournament-stage pool — there's no single creator to gate them on. */
+  mode?: 'challenge' | 'tournament';
+  /** Threaded into the realtime handoff's PendingChallengeRun so
+   *  challenge-results.tsx knows to route back into the tournament flow
+   *  instead of the normal challenge exit path. */
+  tournamentId?: string;
+  tournamentStage?: number;
 }) {
+  const isTournament = mode === 'tournament';
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -94,6 +107,7 @@ export function ChallengeWaitingRoom({
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
+    if (isTournament) return;
     let alive = true;
     getMyChallengeStories().then((stories) => {
       if (!alive) return;
@@ -102,7 +116,7 @@ export function ChallengeWaitingRoom({
       setInviteCode(mine?.inviteCode ?? null);
     });
     return () => { alive = false; };
-  }, [challengeId]);
+  }, [challengeId, isTournament]);
 
   const onShareCode = useCallback(() => {
     if (!inviteCode) return;
@@ -165,9 +179,10 @@ export function ChallengeWaitingRoom({
       questionCount: mine.questionCount,
       topicIndex: mine.targetTopicCount,
       origin: 'challenge-corner',
+      ...(tournamentId ? { tournamentId, tournamentStage } : {}),
     });
     router.replace('/challenge-start' as any);
-  }, [challengeId, router]);
+  }, [challengeId, router, tournamentId, tournamentStage]);
 
   useEffect(() => {
     const unsubscribe = subscribeToChallengeStatus(challengeId, () => void attemptHandoff());
@@ -189,9 +204,12 @@ export function ChallengeWaitingRoom({
   }, [challengeId, isCreator, onExit]);
 
   const onPressBack = useCallback(() => {
+    // A tournament stage's shared pool has no single creator to prompt for
+    // a cancel-for-everyone decision — leaving just leaves.
+    if (isTournament) { void onLeaveWaiting(); return; }
     if (isCreator) { setShowAbortSheet(true); return; }
     void onLeaveWaiting();
-  }, [isCreator, onLeaveWaiting]);
+  }, [isTournament, isCreator, onLeaveWaiting]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -225,37 +243,7 @@ export function ChallengeWaitingRoom({
             Hang tight — the challenge starts once everyone&apos;s in.
           </Text>
         </View>
-        <View style={{ alignItems: 'center', gap: Spacing.sm }}>
-          <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: 'bold', letterSpacing: 0.5, textTransform: 'uppercase' }]}>
-            Players
-          </Text>
-          <AvatarStack
-            members={(members ?? []).map((m, i) => ({ id: m.deviceId || String(i), name: m.displayName ?? 'Player' }))}
-            maxVisible={4}
-            size={40}
-          />
-        </View>
-
-        {canStart && (
-          <Pressable
-            onPress={onStartChallenge}
-            disabled={starting}
-            style={{
-              width: '100%',
-              paddingVertical: Spacing.md,
-              borderRadius: Radius.lg,
-              alignItems: 'center',
-              backgroundColor: colors.primary,
-              opacity: starting ? 0.7 : 1,
-            }}
-          >
-            <Text style={[Typography.bodyMd, { color: colors.onPrimary ?? '#000', fontWeight: 'bold' }]}>
-              {starting ? 'Starting\u2026' : 'Start Challenge'}
-            </Text>
-          </Pressable>
-        )}
-
-        {isCreator && inviteCode && (
+        {!isTournament && isCreator && inviteCode && (
           <View style={{ alignItems: 'center', gap: Spacing.sm, width: '100%' }}>
             <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: 'bold', letterSpacing: 0.5, textTransform: 'uppercase' }]}>
               Invite code
@@ -278,14 +266,51 @@ export function ChallengeWaitingRoom({
                 Share via WhatsApp, email & more
               </Text>
             </Pressable>
-            <Pressable onPress={onCancelChallenge} disabled={cancelling} hitSlop={8}>
-              <Text style={[Typography.bodySm, { color: '#ef4444', fontWeight: '600' }]}>
-                {cancelling ? 'Cancelling\u2026' : 'Cancel for everyone'}
-              </Text>
-            </Pressable>
+          </View>
+        )}
+
+        {(isTournament || joinedOthers >= 1) && (
+          <View style={{ alignItems: 'center', gap: Spacing.sm }}>
+            <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: 'bold', letterSpacing: 0.5, textTransform: 'uppercase' }]}>
+              Players
+            </Text>
+            <AvatarStack
+              members={(members ?? []).map((m, i) => ({ id: m.deviceId || String(i), name: m.displayName ?? 'Player' }))}
+              maxVisible={4}
+              size={40}
+            />
           </View>
         )}
       </ScrollView>
+
+      <View style={{ paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.sm, gap: Spacing.sm }}>
+        {!isTournament && canStart && (
+          <Pressable
+            onPress={onStartChallenge}
+            disabled={starting}
+            style={{
+              width: '100%',
+              paddingVertical: Spacing.md,
+              borderRadius: Radius.lg,
+              alignItems: 'center',
+              backgroundColor: colors.primary,
+              opacity: starting ? 0.7 : 1,
+            }}
+          >
+            <Text style={[Typography.bodyMd, { color: colors.onPrimary ?? '#000', fontWeight: 'bold' }]}>
+              {starting ? 'STARTING\u2026' : 'START CHALLENGE'}
+            </Text>
+          </Pressable>
+        )}
+
+        {!isTournament && isCreator && inviteCode && (
+          <Pressable onPress={onCancelChallenge} disabled={cancelling} hitSlop={8} style={{ alignItems: 'center', paddingVertical: Spacing.xs }}>
+            <Text style={[Typography.bodySm, { color: '#ef4444', fontWeight: '600' }]}>
+              {cancelling ? 'Cancelling\u2026' : 'Cancel for everyone'}
+            </Text>
+          </Pressable>
+        )}
+      </View>
 
       <View style={{ alignItems: 'center', paddingBottom: Spacing.md }}>
         <BottomBannerAd />

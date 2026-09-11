@@ -290,6 +290,17 @@ export async function generateScoutChallenge(filterSlug?: CurriculumSlug): Promi
     const rosterSize = MIN_ROSTER + Math.floor(Math.random() * (MAX_ROSTER - MIN_ROSTER + 1));
     const waitingScouts = pickOtherScouts(creatorScout.id, rosterSize - 1);
 
+    // Scouts simulate their own "total" independently of the real quiz
+    // (there's no DB row backing them), so this has to match exactly what
+    // buildChallengeQuestions() will actually serve the human for this
+    // same topic: Math.min(requestedCount, pool.length) — see
+    // lib/challengeQuestions.ts. Previously this was hardcoded to 10
+    // regardless of how many real questions the picked topic had, so a
+    // topic with fewer than 10 questions left the human racing on a
+    // smaller real total than the scouts' simulated one.
+    const desiredQuestionCount = 10;
+    const questionCount = Math.min(desiredQuestionCount, topic.questions.length);
+
     return {
       challengeId: `scout-challenge-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       curriculumSlug: curriculum.slug as CurriculumSlug,
@@ -299,7 +310,7 @@ export async function generateScoutChallenge(filterSlug?: CurriculumSlug): Promi
       creatorScout,
       waitingScouts,
       seed: makeRaceSeed(),
-      questionCount: 10,
+      questionCount,
       difficulty: creatorScout.difficulty,
     };
   }

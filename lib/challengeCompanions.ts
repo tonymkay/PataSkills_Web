@@ -384,6 +384,14 @@ export async function generateCompanionChallenges(
       waitingCompanions.push(shuffled[w]);
     }
 
+    // Same fix as generateScoutChallenge() in lib/challengeScouts.ts —
+    // must match Math.min(requestedCount, pool.length) from
+    // buildChallengeQuestions() (lib/challengeQuestions.ts), or a topic
+    // with fewer than 10 real questions leaves the human racing on a
+    // smaller real total than the companions' simulated one.
+    const desiredQuestionCount = 10;
+    const questionCount = Math.min(desiredQuestionCount, topic.questions.length);
+
     challenges.push({
       challengeId: `companion-challenge-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       curriculumSlug: curriculum.slug as CurriculumSlug,
@@ -393,7 +401,7 @@ export async function generateCompanionChallenges(
       creatorPersona,
       waitingCompanions,
       seed: makeRaceSeed(),
-      questionCount: 10,
+      questionCount,
     });
   }
 

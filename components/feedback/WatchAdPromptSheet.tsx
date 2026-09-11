@@ -13,7 +13,7 @@ import { useTheme } from '@/theme/ThemeContext';
 import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily } from '@/constants/typography';
 import { StaticColors } from '@/constants/colors';
-import { showRewardedForSession } from '@/lib/ads';
+import { showRewardedForSession, preloadRewarded } from '@/lib/ads';
 import { grantBonusKey } from '@/lib/keys';
 import { KeyRewardContent } from './KeyRewardSuccessModal';
 import { DownloadAppModal } from '@/components/ui/DownloadAppModal';
@@ -61,6 +61,11 @@ export function WatchAdPromptSheet({
     if (visible) {
       setStep('prompt');
       grantingRef.current = false;
+      // Kick off the rewarded-ad load the moment the sheet appears rather
+      // than waiting for the actual tap — gives it a head start so the
+      // ad is likely already loaded by the time handleWatchAd() runs,
+      // instead of racing a cold ad.load() against LOAD_TIMEOUT_MS.
+      preloadRewarded();
     }
   }, [visible]);
 

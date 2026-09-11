@@ -38,14 +38,17 @@ import Animated, {
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { Avatar } from '@/components/profile/Avatar';
 import { AvatarStack } from '@/components/challenge/AvatarStack';
+import { ChallengeWaitingRoom } from '@/components/challenge/ChallengeWaitingRoom';
 import { Button } from '@/components/ui/Button';
 import { Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
-import { getFinishedChallengeRun } from '@/lib/challengeRuntime';
+import { getFinishedChallengeRun, setPendingChallengeRun } from '@/lib/challengeRuntime';
+import { makeRaceSeed, getChallengeTopics } from '@/lib/challengeQuestions';
 import {
   createTournament,
   findTournamentByChallenge,
   getTournamentState,
+  getTournamentStageState,
   claimTournamentReward,
   joinTournament,
   type TournamentState,
@@ -58,9 +61,18 @@ import {
   stopLocalScoutTournament,
   isLocalTournamentId,
   getLocalStagePool,
+  getMyStagePool,
   type LocalTournamentState,
 } from '@/lib/challengeScoutTournamentSession';
+import {
+  initScoutSession,
+  getScoutSessionSnapshot,
+  stopScoutSession,
+  subscribeScoutSession,
+} from '@/lib/challengeScoutSession';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
+
+const LOCAL_STAGE_START_BUFFER_MS = 1400;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +177,96 @@ export default function ChallengeTournamentScreen() {
   const [loading, setLoading] = useState(false);
   const [tState, setTState] = useState<TournamentState | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+
+  // ── Stage waiting room ──
+  // Online: a real play_challenges row for the current shared-pool stage —
+  // rendered via the exact same ChallengeWaitingRoom every other online
+  // challenge/join flow uses, in 'tournament' mode.
+  const [waitingChallengeId, setWaitingChallengeId] = useState<string | null>(null);
+  // Local (fully offline, bot-seeded) stage — no real challenge row exists
+  // to hand ChallengeWaitingRoom, so this stays a self-contained trickle-
+  // reveal + auto-handoff view, same mechanics the old
+  // challenge-tournament-room.tsx local branch used.
+  const [localStageActive, setLocalStageActive] = useState(false);
+  const [localRevealedIds, setLocalRevealedIds] = useState<Set<string>>(new Set());
+  const [localTotalRoster, setLocalTotalRoster] = useState(0);
+  const [localTopicTitle, setLocalTopicTitle] = useState<string | null>(null);
+  const [, forceLocalTick] = useState(0);
+  const localProceededRef = useRef(false);
+  const localTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const clearLocalTimers = () => {
+    localTimersRef.current.forEach((t) => clearTimeout(t));
+    localTimersRef.current = [];
+  };
+  useEffect(() => subscribeScoutSession(() => forceLocalTick((n) => n + 1)), []);
+
+  useEffect(() => {
+    if (!localStageActive) return;
+    let active = true;
+    (async () => {
+      const pool = getMyStagePool();
+      const tournamentState = getLocalTournamentState();
+      if (!pool || !tournamentState || !active) {
+        if (active) setLocalStageActive(false);
+        return;
+      }
+      setLocalTopicTitle(tournamentState.topicTitle || null);
+      setLocalTotalRoster(1 + pool.scouts.length);
+
+      const slug = tournamentState.curriculumSlug as CurriculumSlug;
+      const seed = makeRaceSeed();
+      // topicIndex stays null below (whole-curriculum pool, same as the
+      // old room's local branch), so the real served count — same
+      // Math.min(requestedCount, pool.length) buildChallengeQuestions()
+      // applies — is against the WHOLE curriculum's question pool, not
+      // one topic. Mirror that here so the scouts' simulated "total"
+      // can't drift from what the human actually races on.
+      const topics = await getChallengeTopics(slug);
+      const poolSize = topics.reduce((sum, t) => sum + t.questions.length, 0);
+      const desiredQuestionCount = 10;
+      const questionCount = poolSize > 0 ? Math.min(desiredQuestionCount, poolSize) : desiredQuestionCount;
+
+      await initScoutSession(pool.scouts[0], 'You', questionCount, pool.scouts.slice(1));
+      if (!active) return;
+
+      const { joinTimeline } = getScoutSessionSnapshot();
+      let lastOffset = 0;
+      joinTimeline.forEach(({ deviceId, offsetMs }) => {
+        lastOffset = Math.max(lastOffset, offsetMs);
+        const t = setTimeout(() => {
+          if (!active) return;
+          setLocalRevealedIds((prev) => new Set(prev).add(deviceId));
+        }, offsetMs);
+        localTimersRef.current.push(t);
+      });
+
+      const handoffTimer = setTimeout(() => {
+        if (!active || localProceededRef.current) return;
+        localProceededRef.current = true;
+        setPendingChallengeRun({
+          isScout: true,
+          tournamentId,
+          tournamentStage: tournamentState.currentStage,
+          curriculumSlug: slug,
+          curriculumTitle: tournamentState.curriculumTitle,
+          questions: [],
+          seed,
+          questionCount,
+          topicIndex: null,
+          origin: 'challenge-corner',
+          difficulty: 'medium',
+        });
+        router.replace('/challenge-start' as any);
+      }, lastOffset + LOCAL_STAGE_START_BUFFER_MS);
+      localTimersRef.current.push(handoffTimer);
+    })();
+    return () => {
+      active = false;
+      clearLocalTimers();
+      if (!localProceededRef.current) stopScoutSession();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localStageActive, tournamentId]);
 
   // ── Reanimated progress (internal timer for search timeout) ──
   const progress = useSharedValue(0);
@@ -353,18 +455,13 @@ export default function ChallengeTournamentScreen() {
     if (!tid) tid = (await doCreate()) ?? undefined;
     if (!tid) return;
     if (isLocalTournamentId(tid)) {
-      router.replace({
-        pathname: '/challenge-tournament-room' as any,
-        params: { tournamentId: tid },
-      });
+      setLocalStageActive(true);
       return;
     }
     try {
       await joinTournament(tid);
-      router.replace({
-        pathname: '/challenge-tournament-room' as any,
-        params: { tournamentId: tid },
-      });
+      const stage = await getTournamentStageState(tid);
+      if (stage?.challengeId) setWaitingChallengeId(stage.challengeId);
     } catch { /* silent */ }
   };
 
@@ -372,13 +469,12 @@ export default function ChallengeTournamentScreen() {
     let tid = tournamentId;
     if (!tid) tid = (await doCreate()) ?? undefined;
     if (!tid) return;
-    router.replace({
-      pathname: '/challenge-tournament-room' as any,
-      params: {
-        tournamentId: tid,
-        stage: String(tState?.currentStage ?? 1),
-      },
-    });
+    if (isLocalTournamentId(tid)) {
+      setLocalStageActive(true);
+      return;
+    }
+    const stage = await getTournamentStageState(tid);
+    if (stage?.challengeId) setWaitingChallengeId(stage.challengeId);
   };
 
   const handleCollectReward = async () => {
@@ -652,6 +748,71 @@ export default function ChallengeTournamentScreen() {
   };
 
   // ── Main render ──
+
+  // Online tournament-stage waiting room — the exact same shared component
+  // every real challenge waiting room uses, in 'tournament' mode.
+  if (waitingChallengeId) {
+    return (
+      <ChallengeWaitingRoom
+        challengeId={waitingChallengeId}
+        onExit={() => { setWaitingChallengeId(null); handleBackExit(); }}
+        title="Tournament"
+        mode="tournament"
+        tournamentId={tournamentId}
+        tournamentStage={tState?.currentStage}
+      />
+    );
+  }
+
+  // Local (fully offline, bot-seeded) tournament-stage waiting room.
+  if (localStageActive) {
+    const session = getScoutSessionSnapshot();
+    const revealedPlayers = session.players.filter(
+      (p) => p.deviceId === session.deviceId || localRevealedIds.has(p.deviceId),
+    );
+    const onLocalBack = () => {
+      clearLocalTimers();
+      if (!localProceededRef.current) stopScoutSession();
+      setLocalStageActive(false);
+    };
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+        <View style={styles.header}>
+          <Pressable onPress={onLocalBack} hitSlop={10}>
+            <X size={24} color={colors.onSurface} strokeWidth={2.5} />
+          </Pressable>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.xxl, paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.xxl }}>
+          <View style={{ alignItems: 'center', gap: Spacing.sm }}>
+            <TournamentSearchPulse />
+            {localTopicTitle ? (
+              <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', marginTop: Spacing.md, textAlign: 'center' }]}>
+                {localTopicTitle}
+              </Text>
+            ) : null}
+            <Text style={[Typography.bodyMd, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
+              {revealedPlayers.length >= localTotalRoster
+                ? "Everyone's in — starting now"
+                : `${revealedPlayers.length} / ${localTotalRoster} joined — waiting for players`}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'center', gap: Spacing.sm }}>
+            <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: 'bold', letterSpacing: 0.5, textTransform: 'uppercase' }]}>
+              Players
+            </Text>
+            <AvatarStack
+              members={revealedPlayers.map((p) => ({ id: p.deviceId, name: p.displayName ?? 'Player' }))}
+              maxVisible={4}
+              size={40}
+            />
+          </View>
+        </View>
+        <View style={{ alignItems: 'center', paddingBottom: Spacing.md }}>
+          <BottomBannerAd />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>

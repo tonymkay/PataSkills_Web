@@ -24,6 +24,7 @@ export default function SubscriptionConfirmScreen() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkoutErrorVisible, setCheckoutErrorVisible] = useState(false);
+  const [checkoutErrorMessage, setCheckoutErrorMessage] = useState('Please try again.');
 
   useEffect(() => {
     AsyncStorage.getItem('@play/user_email').then((stored) => {
@@ -55,6 +56,19 @@ export default function SubscriptionConfirmScreen() {
     const result = await purchasePlan(plan.packageId, sanitized, params.skill, params.track);
     setBusy(false);
     if (result === 'error') {
+      setCheckoutErrorMessage('Please try again.');
+      setCheckoutErrorVisible(true);
+    } else if (result === 'unavailable') {
+      // Billing SDK not configured/ready — confirmed cause: a sideloaded
+      // build not installed through a Play Store testing track, or the
+      // RevenueCat SDK not yet initialised. Previously fell through
+      // silently here with no feedback at all.
+      setCheckoutErrorMessage('Payments aren\u2019t available on this build. Install from the Play Store to subscribe.');
+      setCheckoutErrorVisible(true);
+    } else if (result === 'cancelled') {
+      // User backed out of the store sheet — not an error, just no longer
+      // silent about it either.
+      setCheckoutErrorMessage('Checkout was cancelled.');
       setCheckoutErrorVisible(true);
     }
   };
@@ -180,7 +194,7 @@ export default function SubscriptionConfirmScreen() {
       visible={checkoutErrorVisible}
       onClose={() => setCheckoutErrorVisible(false)}
       title="Could not start checkout"
-      message="Please try again."
+      message={checkoutErrorMessage}
       primaryLabel="OK"
       onPrimary={() => setCheckoutErrorVisible(false)}
     />

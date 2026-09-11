@@ -172,6 +172,13 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
     //     online. A genuinely different/unknown email still fails here
     //     rather than being misread as "never seen before".
     if (acctError) {
+      // Surface the real cause instead of just "could not reach the
+      // server" for everything — RLS denial, malformed query, genuine
+      // network failure, and "client not ready yet" all currently look
+      // identical to the user. This makes the next occurrence diagnosable
+      // from device logs instead of a guess.
+      console.warn('[restore] account SELECT failed:', acctError);
+
       const offlineResult = await restoreFromLocalCacheIfSameDevice(email);
       if (offlineResult) return offlineResult;
 
