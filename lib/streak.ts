@@ -134,6 +134,11 @@ async function syncStreakToCloud(dates: string[]): Promise<boolean> {
       },
       { onConflict: 'device_id' }
     );
+    if (error) {
+      // Same visibility fix as lib/xp.ts's syncXpToCloud — was previously
+      // swallowed entirely.
+      console.warn('[streak] play_user_stats upsert failed:', error);
+    }
     return !error;
   } catch {
     return false;

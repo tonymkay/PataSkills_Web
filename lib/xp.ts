@@ -70,6 +70,12 @@ async function syncXpToCloud(totalXp: number): Promise<boolean> {
       },
       { onConflict: 'device_id' }
     );
+    if (error) {
+      // Was previously swallowed entirely — "Failed" in the backup summary
+      // gave no way to tell RLS denial from a schema mismatch from
+      // anything else. Now visible in device logs.
+      console.warn('[xp] play_user_stats upsert failed:', error);
+    }
     return !error;
   } catch {
     return false;
