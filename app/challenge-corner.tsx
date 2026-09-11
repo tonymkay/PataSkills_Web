@@ -170,7 +170,12 @@ export default function ChallengeCornerScreen() {
       iconColor: colors.white,
       title: 'Tournaments',
       subtitle: <WinnerRewardSubtext rewardKeys={5} />,
-      onPress: () => navPush(router, '/challenge-tournament'),
+      // source: 'scout-local' routes this into the self-contained
+      // bot-tournament system (createLocalScoutTournament) instead of the
+      // online RPC path — the online path has no matchmaking at all, so a
+      // tournament created from here could never have anyone else in the
+      // room. The local path guarantees the field is always filled.
+      onPress: () => navPush(router, { pathname: '/challenge-tournament', params: { source: 'scout-local' } }),
     },
   ];
 

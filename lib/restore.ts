@@ -32,6 +32,30 @@ async function pushLocalIfUnsynced(email: string): Promise<void> {
   } catch {}
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The Supabase client can still be finishing its own async init (reading
+ * the persisted session, etc.) in the first moment or so after a cold
+ * boot — exactly when onboarding's and Settings' restore modals are
+ * likeliest to be opened. A query fired into that window fails with a
+ * network-shaped error even though connectivity is fine, which is why
+ * keys-confirm (always reached well into a warm session) never sees this
+ * but onboarding/Settings intermittently do. One short retry absorbs
+ * that startup race without masking a real, sustained network failure.
+ */
+async function selectAccountWithRetry(email: string) {
+  const attempt = () =>
+    supabase.from('play_accounts').select('balance, is_premium, reset_at, reset_count').eq('email', email).maybeSingle();
+
+  let result = await attempt();
+  if (result.error) {
+    await sleep(500);
+    result = await attempt();
+  }
+  return result;
+}
+
 export interface RestoreResult {
   success: boolean;
   email: string;
@@ -54,6 +78,7 @@ async function applyRestoredState(
   resetCount: number,
 ): Promise<void> {
   await AsyncStorage.setItem('@play/user_email', email);
+  await AsyncStorage.removeItem('@play/logged_out_pending');
   await markHasEverLoggedIn();
 
   const restoredState: KeysState = {
@@ -99,6 +124,7 @@ async function restoreFromLocalCacheIfSameDevice(email: string): Promise<Restore
       : { balance: INITIAL_KEYS, initialized: true, resetAt: null, isPremium: false };
 
     await AsyncStorage.setItem('@play/user_email', email);
+    await AsyncStorage.removeItem('@play/logged_out_pending');
     await markHasEverLoggedIn();
 
     const balance = local.isPremium ? 999999 : local.balance;
@@ -142,11 +168,7 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
     //    Push first (see pushLocalIfUnsynced) so "as-is" actually reflects
     //    this device's latest spend if it never confirmed syncing.
     await pushLocalIfUnsynced(email);
-    const { data: account, error: acctError } = await supabase
-      .from('play_accounts')
-      .select('balance, is_premium, reset_at, reset_count')
-      .eq('email', email)
-      .maybeSingle();
+    const { data: account, error: acctError } = await selectAccountWithRetry(email);
 
     if (!acctError && account) {
       const isPremium = !!account.is_premium;
@@ -243,6 +265,7 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
     if (offlineResult) return offlineResult;
 
     await AsyncStorage.setItem('@play/user_email', email);
+    await AsyncStorage.removeItem('@play/logged_out_pending');
     return {
       success: true,
       email,
@@ -315,7 +338,7 @@ export async function logoutAccount(): Promise<void> {
     await pushKeysToCloud();
   } catch {}
   try {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
   } catch {}
   // Preserve the email in a separate, logout-surviving key so
   // AccountGateScreen (app/_layout.tsx) can still greet this device by
@@ -324,6 +347,15 @@ export async function logoutAccount(): Promise<void> {
   try {
     const email = await AsyncStorage.getItem(EMAIL_KEY);
     if (email) await AsyncStorage.setItem('@play/last_logged_out_email', email);
+  } catch {}
+  // Explicit, durable "this device is logged out" flag — set only here,
+  // cleared only by a confirmed successful login (applyRestoredState /
+  // restoreFromLocalCacheIfSameDevice). The gate checks this instead of
+  // inferring logout state from whether '@play/user_email' happens to be
+  // empty, since that key alone can't be fully trusted end-to-end (e.g. a
+  // lingering Supabase session getting silently restored later).
+  try {
+    await AsyncStorage.setItem('@play/logged_out_pending', 'true');
   } catch {}
   try {
     await AsyncStorage.removeItem('@play/user_email');

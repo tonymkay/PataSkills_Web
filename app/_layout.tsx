@@ -58,10 +58,21 @@ function RootLayoutInner() {
 
   useEffect(() => {
     (async () => {
-      const [everLoggedIn, email] = await Promise.all([getHasEverLoggedIn(), getStoredEmail()]);
+      const [everLoggedIn, email, loggedOutPending] = await Promise.all([
+        getHasEverLoggedIn(),
+        getStoredEmail(),
+        AsyncStorage.getItem('@play/logged_out_pending'),
+      ]);
       const fallbackEmail = email || (await AsyncStorage.getItem('@play/last_logged_out_email')) || '';
       setLastEmail(fallbackEmail);
-      setGated(everLoggedIn && !email);
+      // Gate on the explicit, durable flag (set only by logoutAccount(),
+      // cleared only by a confirmed successful login) rather than solely
+      // on '@play/user_email' being empty — that key alone can't be fully
+      // trusted end-to-end (e.g. a lingering Supabase session getting
+      // silently restored after a hard app kill). !email stays as a
+      // belt-and-suspenders fallback for a device that somehow never got
+      // the flag written.
+      setGated(everLoggedIn && (loggedOutPending === 'true' || !email));
       setGateChecked(true);
     })();
   }, []);
