@@ -27,3 +27,25 @@ export async function markHasEverLoggedIn(): Promise<void> {
     await AsyncStorage.setItem(HAS_LOGGED_IN_KEY, 'true');
   } catch {}
 }
+
+// --- Mid-session gate trigger --------------------------------------------
+// app/_layout.tsx only evaluates "is this device logged out?" once, on cold
+// boot. A logout that happens *during* a running session must still show
+// the permanent AccountGateScreen immediately — otherwise the Stack (and
+// whatever screen the user was on, e.g. Settings) is still sitting there
+// underneath, reachable the instant the user presses back. This tiny
+// pub/sub lets lib/restore.ts's logoutAccount() notify _layout.tsx to
+// re-gate right now, with no dependency between the two modules.
+type GateListener = () => void;
+let gateListeners: GateListener[] = [];
+
+export function notifyLoggedOut(): void {
+  gateListeners.forEach((listener) => listener());
+}
+
+export function subscribeToLogout(listener: GateListener): () => void {
+  gateListeners.push(listener);
+  return () => {
+    gateListeners = gateListeners.filter((l) => l !== listener);
+  };
+}

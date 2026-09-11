@@ -181,7 +181,14 @@ export default function ChallengeTournamentRoom() {
         const state = await getTournamentStageState(tournamentId);
         if (!active || !state) return;
         setTopicTitle(null); // online doesn't expose topic title in stage state
-        setTotalRoster(state.memberDeviceIds.length);
+        // Was state.memberDeviceIds.length — the same array revealedPlayers
+        // is built from, which made "revealedPlayers.length >= totalRoster"
+        // trivially true on the very first poll (comparing a set against
+        // its own length) regardless of how many players had actually
+        // joined. targetSize is the real pool capacity the stage is
+        // waiting to fill — same joinedCount/targetSize pattern Global
+        // Challenge already uses correctly.
+        setTotalRoster(state.targetSize);
         setRevealedIds(new Set(state.memberDeviceIds));
         setLoading(false);
 

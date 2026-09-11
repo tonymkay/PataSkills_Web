@@ -15,7 +15,7 @@
  * host decides what "exit" means (pop the stack, or flip local state).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Pressable, Share, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { X, Globe2, Share2 } from 'lucide-react-native';
@@ -28,7 +28,7 @@ import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
 import {
   cancelChallenge, getChallengeMembers, getChallengeState, getMyChallengeStories,
-  leaveChallenge, subscribeToChallengeStatus, type ChallengeMember,
+  leaveChallenge, startChallenge, subscribeToChallengeStatus, type ChallengeMember,
 } from '@/lib/challenges';
 import { setPendingChallengeRun } from '@/lib/challengeRuntime';
 import { getCachedTitle } from '@/lib/curriculaCatalog';
@@ -91,6 +91,7 @@ export function ChallengeWaitingRoom({
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [showAbortSheet, setShowAbortSheet] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -113,6 +114,21 @@ export function ChallengeWaitingRoom({
   const onCancelChallenge = useCallback(() => {
     setShowAbortSheet(true);
   }, []);
+
+  // Creator-only: lets the host start early once at least one other player
+  // has actually joined, instead of waiting on some external condition.
+  // The realtime subscription/poll above (attemptHandoff) picks up the
+  // resulting 'running' status the same way it would for any other start.
+  const joinedOthers = (members ?? []).filter((m) => m.status === 'joined').length;
+  const canStart = isCreator && joinedOthers >= 1;
+
+  const onStartChallenge = useCallback(async () => {
+    setStarting(true);
+    try {
+      await startChallenge(challengeId);
+    } catch { /* best-effort — polling/subscription still catches a real start */ }
+    setStarting(false);
+  }, [challengeId]);
 
   const onKeepWaiting = useCallback(() => {
     setShowAbortSheet(false);
@@ -188,14 +204,18 @@ export function ChallengeWaitingRoom({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.marginMobile, paddingVertical: Spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.marginMobile, paddingVertical: Spacing.sm, backgroundColor: colors.background, zIndex: 10 }}>
         <Pressable onPress={onPressBack} hitSlop={10}>
           <X size={IconSize.header} color={colors.onSurface} strokeWidth={2.5} />
         </Pressable>
         <Text style={[Typography.headlineMd, { color: colors.onSurface }]}>{title}</Text>
       </View>
 
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.xxl, paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.xxl }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ alignItems: 'center', gap: Spacing.xxl, paddingHorizontal: Spacing.marginMobile, paddingTop: 40, paddingBottom: Spacing.xxl }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={{ alignItems: 'center', gap: Spacing.sm }}>
           <GlobePulse />
           <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', marginTop: Spacing.md }]}>
@@ -215,6 +235,25 @@ export function ChallengeWaitingRoom({
             size={40}
           />
         </View>
+
+        {canStart && (
+          <Pressable
+            onPress={onStartChallenge}
+            disabled={starting}
+            style={{
+              width: '100%',
+              paddingVertical: Spacing.md,
+              borderRadius: Radius.lg,
+              alignItems: 'center',
+              backgroundColor: colors.primary,
+              opacity: starting ? 0.7 : 1,
+            }}
+          >
+            <Text style={[Typography.bodyMd, { color: colors.onPrimary ?? '#000', fontWeight: 'bold' }]}>
+              {starting ? 'Starting\u2026' : 'Start Challenge'}
+            </Text>
+          </Pressable>
+        )}
 
         {isCreator && inviteCode && (
           <View style={{ alignItems: 'center', gap: Spacing.sm, width: '100%' }}>
@@ -246,7 +285,7 @@ export function ChallengeWaitingRoom({
             </Pressable>
           </View>
         )}
-      </View>
+      </ScrollView>
 
       <View style={{ alignItems: 'center', paddingBottom: Spacing.md }}>
         <BottomBannerAd />

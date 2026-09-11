@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
   Image,
+  Platform,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -26,6 +27,7 @@ import { Spacing, Radius } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
 import { BrandGradients, getSheetGradient } from '@/constants/gradients';
 import { Button } from '@/components/ui/Button';
+import { DownloadAppModal } from '@/components/ui/DownloadAppModal';
 import { QuizQuestion, SignCatalogEntry } from '@/types/quiz';
 
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -37,6 +39,16 @@ interface LearnMoreSheetProps {
   signCatalog?: SignCatalogEntry[];
   /** True when the learner isn't premium — swaps the explanation for a paywall. */
   locked?: boolean;
+  /** Called when the learner taps the watch-ad-to-unlock button (only
+   *  rendered while `locked`). Resolves 'earned' if the reward landed —
+   *  the caller (CardDeck) is the one that actually adds this question's
+   *  id to its per-session unlocked set and flips `locked` to false on
+   *  the next render; this component owns none of that state itself, so
+   *  a session redo (fresh CardDeck mount) naturally re-gates every
+   *  question again. Resolves 'skipped' or 'unavailable' otherwise — see
+   *  lib/ads.ts's RewardOutcome. Omitted (no-op) on screens that don't
+   *  wire up an ad unlock, e.g. challenge-run's LearnMoreSheet. */
+  onWatchAd?: () => Promise<'earned' | 'skipped' | 'unavailable'>;
   onClose: () => void;
 }
 
@@ -62,7 +74,7 @@ function resolveSignEntry(
   return candidates.find((s) => s.signRef === inferredRef) ?? candidates[0];
 }
 
-export function LearnMoreSheet({ visible, question, signCatalog, locked = false, onClose }: LearnMoreSheetProps) {
+export function LearnMoreSheet({ visible, question, signCatalog, locked = false, onWatchAd, onClose }: LearnMoreSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -70,10 +82,18 @@ export function LearnMoreSheet({ visible, question, signCatalog, locked = false,
   const [modalRendered, setModalRendered] = useState(visible);
   const translateY = useSharedValue(SCREEN_H);
   const backdropOpacity = useSharedValue(0);
+  // 'idle' = default paywall CTA. 'loading' = ad in flight (Button's own
+  // spinner). 'unavailable' = the ad genuinely failed to load/show or was
+  // skipped — button relabels to "Try again" rather than silently doing
+  // nothing. 'download' = web fallback, same as WatchAdPromptSheet — swaps
+  // this whole sheet's content for DownloadAppModal rather than pretending
+  // to show a rewarded ad that doesn't reliably exist on web.
+  const [adState, setAdState] = useState<'idle' | 'loading' | 'unavailable' | 'download'>('idle');
 
   useEffect(() => {
     if (visible) {
       setModalRendered(true);
+      setAdState('idle');
       backdropOpacity.value = withTiming(1, { duration: 220 });
       translateY.value = withTiming(0, {
         duration: 360,
@@ -103,6 +123,28 @@ export function LearnMoreSheet({ visible, question, signCatalog, locked = false,
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
   }));
+
+  // Web has no reliable rewarded-ad product (same reasoning as
+  // WatchAdPromptSheet) — skip straight to the install prompt instead of
+  // pretending to load an ad. Native: actually show the rewarded ad; on
+  // 'earned' the parent's onWatchAd is what unlocks this question (see
+  // the prop doc above) — this component just reflects loading/failure,
+  // it never marks anything unlocked itself.
+  const handleWatchAdToUnlock = async () => {
+    if (Platform.OS === 'web') {
+      setAdState('download');
+      return;
+    }
+    setAdState('loading');
+    const outcome = (await onWatchAd?.()) ?? 'unavailable';
+    if (outcome !== 'earned') {
+      setAdState('unavailable');
+    }
+    // On 'earned' we deliberately leave adState alone — the parent's state
+    // update flips the `locked` prop to false on its next render, which
+    // swaps this sheet over to the unlocked explanation content below;
+    // there's no separate reward screen to show first (see prop doc).
+  };
 
   if (!modalRendered && !visible) return null;
   if (!question) return null;

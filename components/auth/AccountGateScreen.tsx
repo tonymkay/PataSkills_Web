@@ -92,6 +92,7 @@ export function AccountGateScreen({ lastEmail, onLoggedIn }: AccountGateScreenPr
         onClose={() => setModalVisible(false)}
         onSuccess={handleSuccess}
         currentEmail={null}
+        autoRestoreEmail={lastEmail}
       />
     </View>
   );

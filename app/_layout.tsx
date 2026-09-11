@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { BackHandler, Platform, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -13,7 +14,7 @@ import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { initNotifications } from '@/lib/notifications';
 import { configureBilling } from '@/lib/billing';
 import { initAutoBackupOnReconnect } from '@/lib/backup';
-import { getHasEverLoggedIn } from '@/lib/authGate';
+import { getHasEverLoggedIn, subscribeToLogout } from '@/lib/authGate';
 import { getStoredEmail } from '@/lib/email';
 import { AccountGateScreen } from '@/components/auth/AccountGateScreen';
 
@@ -58,11 +59,33 @@ function RootLayoutInner() {
   useEffect(() => {
     (async () => {
       const [everLoggedIn, email] = await Promise.all([getHasEverLoggedIn(), getStoredEmail()]);
-      setLastEmail(email || '');
+      const fallbackEmail = email || (await AsyncStorage.getItem('@play/last_logged_out_email')) || '';
+      setLastEmail(fallbackEmail);
       setGated(everLoggedIn && !email);
       setGateChecked(true);
     })();
   }, []);
+
+  // Mid-session logout: put the gate up the instant logoutAccount() runs,
+  // from anywhere in the app (Settings, etc.) — don't wait for the next
+  // cold boot. See lib/authGate.ts notifyLoggedOut/subscribeToLogout.
+  useEffect(() => {
+    return subscribeToLogout(() => {
+      AsyncStorage.getItem('@play/last_logged_out_email')
+        .then((email) => setLastEmail(email || ''))
+        .catch(() => {});
+      setGated(true);
+    });
+  }, []);
+
+  // Trap the Android hardware/gesture back button while the permanent
+  // account gate is up — there is no dismiss/skip; logging back in is the
+  // only way out, so back must not navigate anywhere or close the app.
+  useEffect(() => {
+    if (!gated) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [gated]);
 
   if (!fontsLoaded || !gateChecked) return null;
 

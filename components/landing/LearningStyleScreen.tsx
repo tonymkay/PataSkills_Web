@@ -168,11 +168,18 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack, isOnboard
             ))
           ) : (
             groupTrackOptions(trackOptions).map((group, groupIdx) => (
-            <View key={group.groupTitle ?? `g${groupIdx}`} style={groupIdx > 0 ? styles.groupSpacing : undefined}>
+            <View
+              key={group.groupTitle ?? `g${groupIdx}`}
+              style={groupIdx > 0 && group.groupTitle ? styles.groupSpacing : undefined}
+            >
               {/* Connecting line between this group and the previous one,
                   matching the skeleton's flat connector-per-item loop —
                   most tracks are ungrouped (singleton groups), so without
-                  this the line only ever appeared inside a named group. */}
+                  this the line only ever appeared inside a named group.
+                  No groupSpacing here (see the View's style above) — an
+                  ungrouped card must sit flush under the connector so the
+                  line actually tucks under the previous card's border
+                  instead of floating Spacing.lg below it. */}
               {groupIdx > 0 && !group.groupTitle && (
                 <View style={styles.connector}>
                   <View style={[styles.connectorLine, { backgroundColor: colors.outlineVariant }]} />

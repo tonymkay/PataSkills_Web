@@ -188,6 +188,13 @@ export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding 
         style={styles.container}
         contentContainerStyle={[
           styles.containerContent,
+          // The larger top gap only exists for the onboarding funnel, to
+          // leave breathing room above the OnboardingStepper. The Skills
+          // tab (isOnboarding false) renders this same screen under
+          // AppHeader and doesn't need it — previously this padding was
+          // flat/unconditional, so fixing it for onboarding pushed "Choose
+          // a skill" down on the Skills tab too.
+          { paddingTop: isOnboarding ? Spacing.xl : Spacing.sm },
           bottomPadding !== undefined && { paddingBottom: bottomPadding },
         ]}
         showsVerticalScrollIndicator={false}
@@ -258,7 +265,6 @@ const styles = StyleSheet.create({
   containerContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.marginMobile,
-    paddingTop: Spacing.xl,
     paddingBottom: Spacing.lg,
   },
   stepperWrap: {

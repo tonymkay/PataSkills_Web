@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -29,28 +29,26 @@ interface RestoreAccountModalProps {
   /** Called once logoutAccount() has finished, so the caller can clear its
    *  own linkedEmail state. */
   onLoggedOut?: () => void;
+  /** Known email for a device that has logged in before and is currently
+   *  logged out (AccountGateScreen's case). When set, the modal skips the
+   *  email-input form entirely and restores this exact email as soon as
+   *  it opens — one device stays linked to one account, so there is no
+   *  "type your email again" step for a returning login. */
+  autoRestoreEmail?: string | null;
 }
 
-export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail, onLoggedOut }: RestoreAccountModalProps) {
+export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail, onLoggedOut, autoRestoreEmail }: RestoreAccountModalProps) {
   const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restoreSuccess, setRestoreSuccess] = useState<RestoreResult | null>(null);
-  // Switches the already-logged-in view over to the sign-in form, e.g. to
-  // link a different account. Reset to false whenever the modal reopens.
-  const [switchingAccount, setSwitchingAccount] = useState(false);
 
-  const handleEmailRestore = async () => {
-    if (!email.trim()) {
-      setError('Please enter your email address');
-      return;
-    }
-
+  const runRestore = async (targetEmail: string) => {
     setBusy(true);
     setError(null);
 
-    const result = await restoreAccountByEmail(email);
+    const result = await restoreAccountByEmail(targetEmail);
     setBusy(false);
 
     if (result.success) {
@@ -58,6 +56,23 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
     } else {
       setError(result.message);
     }
+  };
+
+  // Returning-login shortcut: as soon as the modal opens for a device with
+  // a known previous email, restore it immediately — no email field shown.
+  useEffect(() => {
+    if (visible && autoRestoreEmail && !restoreSuccess && !busy) {
+      void runRestore(autoRestoreEmail);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, autoRestoreEmail]);
+
+  const handleEmailRestore = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email address');
+      return;
+    }
+    await runRestore(email);
   };
 
   const handleGoogleToken = async (idToken: string) => {
@@ -88,7 +103,6 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
     onClose();
     setError(null);
     setRestoreSuccess(null);
-    setSwitchingAccount(false);
   };
 
   const handleLogout = async () => {
@@ -100,9 +114,10 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
   };
 
   // Show the account/logout view whenever this device has a linked email
-  // and the person hasn't asked to switch accounts or just finished a
-  // fresh restore (which has its own success screen).
-  const showAccountView = Boolean(currentEmail) && !switchingAccount && !restoreSuccess;
+  // and hasn't just finished a fresh restore (which has its own success
+  // screen). There is no "switch accounts" path — one device stays linked
+  // to one account.
+  const showAccountView = Boolean(currentEmail) && !restoreSuccess;
 
   return (
     <Modal
@@ -126,7 +141,13 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
             <X size={20} color={colors.onSurfaceVariant} />
           </Pressable>
 
-          {showAccountView ? (
+          {autoRestoreEmail && !restoreSuccess && !error ? (
+            /* Returning-login shortcut in flight — never show the email
+             * form for a device that already has a known account email. */
+            <View style={styles.contentWrap}>
+              <ActivityIndicator color={colors.onSurface} size="large" />
+            </View>
+          ) : showAccountView ? (
             /* Already-linked account screen — log out or switch accounts */
             <View style={styles.contentWrap}>
               <View style={[styles.accountIconBox, { backgroundColor: 'rgba(43, 217, 196, 0.14)' }]}>
@@ -162,15 +183,6 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
                 )}
               </Pressable>
 
-              <Pressable
-                onPress={() => setSwitchingAccount(true)}
-                hitSlop={10}
-                style={styles.switchAccountLinkWrap}
-              >
-                <Text style={[styles.switchAccountLinkText, { color: colors.onSurfaceVariant }]}>
-                  Use a different account
-                </Text>
-              </Pressable>
             </View>
           ) : restoreSuccess ? (
             /* Success confirmation screen */
@@ -444,15 +456,6 @@ const styles = StyleSheet.create({
   logoutBtnText: {
     fontFamily: FontFamily.bold,
     fontSize: 15,
-  },
-  switchAccountLinkWrap: {
-    marginTop: Spacing.md,
-    paddingVertical: Spacing.xs,
-  },
-  switchAccountLinkText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 13,
-    textDecorationLine: 'underline',
   },
   emailBadge: {
     flexDirection: 'row',

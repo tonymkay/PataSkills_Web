@@ -4,7 +4,7 @@ import { KeysState, INITIAL_KEYS, pushKeysToCloud } from '@/lib/keys';
 import { sanitizeAndValidateEmail } from '@/lib/email';
 import { syncProgressWithCloud } from '@/lib/progress';
 import { linkDeviceToEmail } from '@/lib/deviceAnalytics';
-import { markHasEverLoggedIn } from '@/lib/authGate';
+import { markHasEverLoggedIn, notifyLoggedOut } from '@/lib/authGate';
 
 const STORAGE_KEY = '@play/keys';
 const EMAIL_KEY = '@play/user_email';
@@ -76,6 +76,47 @@ async function applyRestoredState(
 }
 
 /**
+ * Offline/same-device fallback: this device just logged out of `email`
+ * (or already had it locally cached) and the cloud lookup below couldn't
+ * be reached at all. Since there is no guest mode — a device only ever
+ * has one account — there is nothing ambiguous to resolve here: if the
+ * email being restored matches this device's own last-known email, its
+ * local `@play/keys` cache (never wiped by logout) IS that account's
+ * state as of this device's last write, and login can proceed from it
+ * exactly as if the network had answered. Only used when the network
+ * call itself failed; a confirmed "no such account" from a reachable
+ * server is NOT routed through this path.
+ */
+async function restoreFromLocalCacheIfSameDevice(email: string): Promise<RestoreResult | null> {
+  try {
+    const knownEmail =
+      (await AsyncStorage.getItem(EMAIL_KEY)) || (await AsyncStorage.getItem('@play/last_logged_out_email'));
+    if (knownEmail !== email) return null;
+
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const local: KeysState = raw
+      ? JSON.parse(raw)
+      : { balance: INITIAL_KEYS, initialized: true, resetAt: null, isPremium: false };
+
+    await AsyncStorage.setItem('@play/user_email', email);
+    await markHasEverLoggedIn();
+
+    const balance = local.isPremium ? 999999 : local.balance;
+    return {
+      success: true,
+      email,
+      keys: balance,
+      isPremium: !!local.isPremium,
+      message: local.isPremium
+        ? 'Unlimited Subscription restored!'
+        : `${balance} keys restored to your balance.`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Restores an account by email. A persistent `play_accounts` row — kept in
  * sync with the local balance on every spend/grant (see lib/keys.ts) — is
  * the source of truth once it exists. Only the very first time an email is
@@ -124,9 +165,29 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
       };
     }
 
-    // 2. First time this email has ever logged in on any device — seed the
-    //    account from historical purchases (if the table/lookup works),
-    //    otherwise just the free starting balance.
+    // 1b. The SELECT itself failed (network/RLS/etc). No guest mode exists
+    //     on this device, so if this is the same account it was already
+    //     using, its own local cache is a valid restore — login must not
+    //     require connectivity just because it also needs to work while
+    //     online. A genuinely different/unknown email still fails here
+    //     rather than being misread as "never seen before".
+    if (acctError) {
+      const offlineResult = await restoreFromLocalCacheIfSameDevice(email);
+      if (offlineResult) return offlineResult;
+
+      return {
+        success: false,
+        email,
+        keys: 0,
+        isPremium: false,
+        message: 'Could not reach the server — please try again.',
+      };
+    }
+
+    // 2. Confirmed no account row exists — first time this email has ever
+    //    logged in on any device. Seed the account from historical
+    //    purchases (if the table/lookup works), otherwise just the free
+    //    starting balance.
     let totalKeys = 0;
     let isPremium = false;
     try {
@@ -171,6 +232,9 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
         : `${resolvedKeys} keys restored to your balance.`,
     };
   } catch (e) {
+    const offlineResult = await restoreFromLocalCacheIfSameDevice(email);
+    if (offlineResult) return offlineResult;
+
     await AsyncStorage.setItem('@play/user_email', email);
     return {
       success: true,
@@ -246,7 +310,18 @@ export async function logoutAccount(): Promise<void> {
   try {
     await supabase.auth.signOut();
   } catch {}
+  // Preserve the email in a separate, logout-surviving key so
+  // AccountGateScreen (app/_layout.tsx) can still greet this device by
+  // name/email after '@play/user_email' below is cleared. This key is
+  // display-only — it is never treated as "logged in".
+  try {
+    const email = await AsyncStorage.getItem(EMAIL_KEY);
+    if (email) await AsyncStorage.setItem('@play/last_logged_out_email', email);
+  } catch {}
   try {
     await AsyncStorage.removeItem('@play/user_email');
   } catch {}
+  // Fire immediately, mid-session — see lib/authGate.ts. This is what
+  // actually puts the permanent gate up right now, not just on next boot.
+  notifyLoggedOut();
 }

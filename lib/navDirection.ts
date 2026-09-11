@@ -34,6 +34,7 @@ type RouterLike = {
   push: (href: any) => void;
   replace: (href: any) => void;
   back: () => void;
+  dismissTo: (href: any) => void;
 };
 
 /** Navigate forward to a new screen — slides in from the right. */
@@ -55,4 +56,16 @@ export function navReplace(router: RouterLike, href: any, direction: 'forward' |
 export function navBack(router: RouterLike) {
   pendingDirection = 'backward';
   router.back();
+}
+
+/** Return to an already-mounted ancestor screen, popping every screen
+ *  above it in one call (expo-router's dismissTo) instead of pushing or
+ *  replacing a new instance on top of the existing one. Always a "return
+ *  trip" — slides in from the left, same as navBack. If href isn't
+ *  actually in history, expo-router falls back to a plain replace, which
+ *  keeps this safe to call from a screen with no prior stack (e.g. a cold
+ *  deep link). */
+export function navDismissTo(router: RouterLike, href: any) {
+  pendingDirection = 'backward';
+  router.dismissTo(href);
 }

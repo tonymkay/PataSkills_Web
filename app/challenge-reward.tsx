@@ -13,6 +13,7 @@ import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { Button } from '@/components/ui/Button';
 import { BrandGradients, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import { clearChallengeRewardSummary, getChallengeRewardSummary } from '@/lib/challengeRuntime';
+import { navDismissTo } from '@/lib/navDirection';
 import { grantBonusKey } from '@/lib/keys';
 
 const KEYS_ICON = require('@/assets/premium/key.webp');
@@ -44,7 +45,12 @@ export default function ChallengeRewardScreen() {
   const onContinue = () => {
     const origin = summary?.origin;
     clearChallengeRewardSummary();
-    router.replace(origin === 'challenge-corner' ? '/challenge-corner' : '/(tabs)/home');
+    // The origin screen (Challenge Corner, or Home for a companion/offline
+    // run) is already sitting underneath the whole challenge-online →
+    // …-start → …-run → …-results → …-reward chain that got here via
+    // replace()s. dismissTo pops back down to that existing instance
+    // instead of stacking a fresh duplicate on top of it.
+    navDismissTo(router, origin === 'challenge-corner' ? '/challenge-corner' : '/(tabs)/home');
   };
 
   return (

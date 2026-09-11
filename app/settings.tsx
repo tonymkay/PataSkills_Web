@@ -195,8 +195,10 @@ export default function SettingsScreen() {
     setLogoutConfirmVisible(false);
     try {
       await logoutAccount();
-      setEmail(null);
     } catch {}
+    setEmail(null);
+    if (router.canDismiss()) router.dismissAll();
+    router.replace('/');
   };
 
   const handleDeleteAccount = () => {

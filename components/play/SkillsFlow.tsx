@@ -10,6 +10,7 @@ import { LearningStyleScreen } from '@/components/landing/LearningStyleScreen';
 import { TrackDetailScreen } from '@/components/landing/TrackDetailScreen';
 import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
 import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
+import { navDismissTo } from '@/lib/navDirection';
 import { areTabsUnlocked } from '@/lib/progress';
 import { trackSessionStarted, trackTopicLoadingStarted } from '@/lib/deviceAnalytics';
 import { Track } from '@/lib/curriculum';
@@ -212,7 +213,13 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
     // 'session', below.
     const unlocked = await areTabsUnlocked();
     if (unlocked) {
-      router.replace('/(tabs)/home');
+      // /(tabs)/home is already sitting underneath this pushed /play route
+      // for every real exit (tapped from a Home/Skills card) — dismissTo
+      // pops back down to that existing instance instead of replace()
+      // stacking a duplicate (tabs) entry on top of it. Falls back to a
+      // plain replace on its own if there's genuinely no history (e.g. a
+      // cold deep link straight into /play), same as before this change.
+      navDismissTo(router, '/(tabs)/home');
       return;
     }
 

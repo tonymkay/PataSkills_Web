@@ -482,29 +482,6 @@ export default function ChallengeTournamentScreen() {
               </Text>
             ) : null}
 
-            {!isOffline && (inviteCode ?? tState?.inviteCode) ? (
-              <View
-                style={{
-                  marginTop: Spacing.lg, alignItems: 'center', gap: Spacing.xs,
-                  backgroundColor: colors.surfaceContainerHigh, borderRadius: 16,
-                  paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
-                }}
-              >
-                <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant }]}>
-                  Invite a friend with this code
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: 4,
-                    color: GREEN,
-                  }}
-                  selectable
-                >
-                  {inviteCode ?? tState?.inviteCode}
-                </Text>
-              </View>
-            ) : null}
-
             {(fieldPhotos.length > 0 || fieldNames.length > 0) && (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.lg }}>
                 <View style={{ flexDirection: 'row' }}>
