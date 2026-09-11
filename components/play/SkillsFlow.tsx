@@ -203,11 +203,13 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
   }, [runDownload, urlTrack, trackIsDeepLinked]);
 
   const handleExit = useCallback(async () => {
-    setSessions([]);
-    setSignCatalog([]);
-    setError(null);
-    setProgress(null);
-
+    // Don't clear `sessions` here: it's still PlaySession's live prop
+    // while this await is in flight, and clearing it synchronously made
+    // currentSession briefly undefined — tripping PlaySession's
+    // `!currentSession` fallback (the outOfKeys "Other ways to Proceed"
+    // screen) for one paint before navigation landed. Clear only once
+    // we've decided PlaySession is unmounting or the stage is leaving
+    // 'session', below.
     const unlocked = await areTabsUnlocked();
     if (unlocked) {
       router.replace('/(tabs)/home');
@@ -223,6 +225,10 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
       return;
     }
 
+    setSessions([]);
+    setSignCatalog([]);
+    setError(null);
+    setProgress(null);
     setStageDirection('backward');
     setStage('landing');
   }, [router, standalone]);

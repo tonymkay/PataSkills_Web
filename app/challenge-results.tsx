@@ -10,10 +10,9 @@
  * go to /challenge-reward.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { Trophy } from 'lucide-react-native';
 import { Avatar } from '@/components/profile/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -81,7 +80,7 @@ function ProgressPill({
 
 export default function ChallengeResultsScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [run] = useState<FinishedChallengeRun | null>(() => getFinishedChallengeRun());
@@ -399,59 +398,64 @@ export default function ChallengeResultsScreen() {
         )}
       </View>
 
-      <BottomSheet visible={reviewOpen} onClose={closeReview} maxHeightPercent={0.6}>
-        <View style={reviewStyles.headerRow}>
-          <Text style={[Typography.titleMedium, { color: colors.onSurface, fontWeight: '800' }]}>Review</Text>
-          <Pressable
-            onPress={closeReview}
-            hitSlop={12}
-            style={[reviewStyles.closeButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
-          >
-            <Ionicons name="close" size={18} color={colors.onSurfaceVariant} />
-          </Pressable>
-        </View>
-
-        <ScrollView
-          style={reviewStyles.scrollView}
-          contentContainerStyle={{ paddingBottom: Spacing.md, gap: Spacing.gutter }}
-          showsVerticalScrollIndicator={false}
-        >
-          {run.questions.map((q, i) => {
-            const correct = run.correct[i];
-            return (
-              <View
-                key={q.id}
-                style={{
-                  borderRadius: Radius.xl, borderWidth: 1.5, borderColor: colors.outlineVariant,
-                  backgroundColor: colors.surfaceContainerLow, paddingHorizontal: Spacing.lg,
-                  paddingVertical: Spacing.lg, gap: Spacing.md, alignItems: 'center',
-                }}
-              >
-                <Text style={[Typography.bodySm, { color: correct ? GREEN : StaticColors.wrongChipBg }]}>
-                  {`Question ${i + 1}`}
-                </Text>
-                <Text style={[Typography.bodyMd, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
-                  {q.question}
-                </Text>
+      <BottomSheet visible={reviewOpen} onClose={closeReview}>
+        <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+          <View style={{ gap: Spacing.gutter, paddingBottom: Spacing.md }}>
+            <Text style={[Typography.headlineSm, { color: colors.onSurface }]}>Review</Text>
+            {run.questions.map((q, i) => {
+              const correct = run.correct[i];
+              return (
                 <View
+                  key={q.id}
                   style={{
-                    alignSelf: 'center',
-                    backgroundColor: correct ? colors.correctBg : StaticColors.wrongChipBg,
-                    borderRadius: Radius.full,
-                    paddingHorizontal: Spacing.md,
-                    paddingVertical: 7,
+                    borderRadius: Radius.xl, borderWidth: 1.5, borderColor: colors.outlineVariant,
+                    backgroundColor: colors.surfaceContainerLow, paddingHorizontal: Spacing.lg,
+                    paddingVertical: Spacing.lg, gap: Spacing.md, alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: correct ? colors.correctDark : StaticColors.wrongChipLetterBg, fontSize: 11, lineHeight: 18, fontWeight: 'bold' }}>
-                    {correct ? 'CORRECT' : 'MISSED'}
+                  <Text style={[Typography.answerQNum, { color: correct ? GREEN : StaticColors.wrongChipBg }]}>
+                    {`Question ${i + 1}`}
                   </Text>
+                  <Text style={[Typography.resultQuestion, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
+                    {q.question}
+                  </Text>
+
+                  <View style={{ alignSelf: 'stretch', justifyContent: 'center' }}>
+                    <View
+                      style={{
+                        position: 'absolute', left: 0, right: 0, top: '50%', height: 1, marginTop: -0.5,
+                        backgroundColor: colors.outlineVariant,
+                      }}
+                    />
+                    <View
+                      style={{
+                        alignSelf: 'center',
+                        backgroundColor: correct ? colors.correctBg : StaticColors.wrongChipBg,
+                        borderRadius: Radius.full,
+                        paddingHorizontal: Spacing.md,
+                        paddingVertical: 7,
+                      }}
+                    >
+                      <Text style={[Typography.badgeText, { color: correct ? colors.correctDark : StaticColors.wrongChipLetterBg, fontSize: 11, lineHeight: 18 }]}>
+                        {correct ? 'CORRECT' : 'MISSED'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ gap: Spacing.xs, alignSelf: 'stretch' }}>
+                    {!correct && (
+                      <Text style={[Typography.correctAnswerLabel, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
+                        Correct answer is:
+                      </Text>
+                    )}
+                    <Text style={[Typography.correctAnswerText, { color: GREEN, textAlign: 'center' }]}>
+                      {resolveCorrectAnswerText(q)}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={[Typography.bodyMd, { color: GREEN, textAlign: 'center' }]}>
-                  {resolveCorrectAnswerText(q)}
-                </Text>
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
         </ScrollView>
       </BottomSheet>
 
@@ -467,22 +471,3 @@ export default function ChallengeResultsScreen() {
     </View>
   );
 }
-
-const reviewStyles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: Spacing.md,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollView: {
-    flexGrow: 0,
-  },
-});

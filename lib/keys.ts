@@ -34,6 +34,13 @@ export interface KeysState {
    *  went from 0 back to INITIAL_KEYS via the timer). Drives the escalating
    *  duration in resetDurationFor — defaults to 0 for new/legacy state. */
   resetCount?: number;
+  /** Whether the last write's cloud leg actually landed. False after a
+   *  failed/skipped Supabase upsert (no email linked, network error, RLS
+   *  denial, etc.) — callers that need to guarantee the server has the
+   *  latest balance (logout, restore) check this before trusting a plain
+   *  spend-time push already covered it. Undefined/missing on legacy
+   *  state is treated as "unknown, assume needs a push". */
+  synced?: boolean;
 }
 
 async function read(): Promise<KeysState> {
@@ -54,32 +61,41 @@ async function read(): Promise<KeysState> {
  * docs/sync-gaps-fix-plan.md Gap 4.
  */
 async function write(state: KeysState): Promise<boolean> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {}
+  // synced starts false for this write; flipped true below only if the
+  // cloud leg actually succeeds. Persisted as part of the same local
+  // write so a later reader (logout, restore) can tell without re-hitting
+  // the network first.
+  let synced = false;
 
   // Best-effort sync to the linked account (if any) so the balance survives
   // logout/login and reinstalls — the account record, not this local copy,
   // is the source of truth once a device has ever logged in. Failure here
-  // never blocks gameplay; the local write above already succeeded.
+  // never blocks gameplay; the local write below still happens either way.
   try {
     const email = await AsyncStorage.getItem(EMAIL_KEY);
-    if (!email) return false;
-    const { error } = await supabase.from('play_accounts').upsert(
-      {
-        email,
-        balance: state.balance,
-        is_premium: !!state.isPremium,
-        reset_at: state.resetAt ? new Date(state.resetAt).toISOString() : null,
-        reset_count: state.resetCount ?? 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'email' },
-    );
-    return !error;
+    if (email) {
+      const { error } = await supabase.from('play_accounts').upsert(
+        {
+          email,
+          balance: state.balance,
+          is_premium: !!state.isPremium,
+          reset_at: state.resetAt ? new Date(state.resetAt).toISOString() : null,
+          reset_count: state.resetCount ?? 0,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'email' },
+      );
+      synced = !error;
+    }
   } catch {
-    return false;
+    synced = false;
   }
+
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, synced }));
+  } catch {}
+
+  return synced;
 }
 
 /**

@@ -1,6 +1,6 @@
 # PataSkills Play — Master Codebase Documentation
 
-> **Generated from source**: 2026-09-08 · Updated 2026-09-10: challenge/friend-invite codes (`play_challenge_invite_code.sql`), creator waiting-room (invite code + cancel-for-everyone) reusing `challenge-online.tsx`, `challenge-tournament-join.tsx` documented (was missing), pending-challenge guard on `challenge-create.tsx` · Root: `desktop/platform/PataProducts/play/`  
+> **Generated from source**: 2026-09-08 · Updated 2026-09-10: challenge/friend-invite codes (`play_challenge_invite_code.sql`), creator waiting-room (invite code + cancel-for-everyone) reusing `challenge-online.tsx`, `challenge-tournament-join.tsx` documented (was missing), pending-challenge guard on `challenge-create.tsx` · Updated 2026-09-11: permanent account gate — `lib/authGate.ts` (new), `components/auth/AccountGateScreen.tsx` (new), `app/_layout.tsx` gate check, `lib/restore.ts` sets the flag on login · Root: `desktop/platform/PataProducts/play/`  
 > Companion specs: `userdata.md` (storage keys + tables), `json-conversion.md` (content pipeline).
 
 ---
@@ -240,12 +240,21 @@ WOFF/WOFF2 as assets. `babel-preset-expo` (Reanimated/worklets).
 
 ```
 GestureHandlerRootView → SafeAreaProvider → ThemeProvider(defaultMode="dark")
-  → RootLayoutInner: StatusBar light, NavigationDarkTheme background, Stack headerShown:false
+  → RootLayoutInner: permanent account gate check → StatusBar light, NavigationDarkTheme background, Stack headerShown:false
 ```
 
 On mount: hide splash when fonts load; `initNotifications()`; `configureBilling()` (local premium expiry). Native loads Sora via `useFonts(fontAssets)`; web uses `@font-face` in `+html.tsx` (empty font map). Stack animation `slide_from_right` on native, `none` on web (`ScreenTransition` handles web slides).
 
+**Permanent account gate.** Before the `Stack` (i.e. before any route, including deep links) is allowed to render, a second effect resolves `getHasEverLoggedIn()` (`lib/authGate.ts`) and `getStoredEmail()` (`lib/email.ts`) in parallel and sets `gated = everLoggedIn && !email`. Render blocks on `!fontsLoaded || !gateChecked` (returns `null`, same as the old fonts-only check). If `gated`, renders `<AccountGateScreen lastEmail={...} onLoggedIn={() => setGated(false)} />` instead of the `Stack` — full stop, no route underneath is reachable. `onLoggedIn` just flips `gated` back to `false`; `app/index.tsx`'s own `areTabsUnlocked()` gate then takes over as normal.
+
+This is a **one-way, permanent** flag, distinct from the "logged in right now" check:
+- Never logged in on this device → `everLoggedIn` stays `false` forever → guest mode, untouched, no gate ever.
+- Logged in and still logged in (`@play/user_email` set) → not gated.
+- Logged in once, then logged out (`logoutAccount()` clears `@play/user_email` but never `@play/has_logged_in`) → gated on every cold boot until they log back in. There is no guest fallback once this flag is set.
+
 ### `index.tsx` — RootGate
+
+Only reached at all once `_layout.tsx`'s permanent account gate above has cleared (not gated, or just logged back in) — this component has no awareness of the account gate itself.
 
 - While AsyncStorage is loading (`areTabsUnlocked()`, `@play/tabs_unlocked`): logo splash — `assets/images/icon-dark.png` + theme background, no copy, shown on every cold launch regardless of unlock state
 - Unlocked: `<Redirect href="/(tabs)/home" />`
@@ -343,6 +352,7 @@ Used by `WatchingAdContent.tsx` (display-ad fallback). **Current out-of-keys pro
 ### Auth
 
 - `RestoreAccountModal` — account view / success / email+Google restore
+- `AccountGateScreen` — permanent hard gate (see `app/_layout.tsx` §5). Icon, "Welcome back {email local-part}", read-only `getTotalXp()` / `getStreakData().currentStreak` stat boxes, single **Log in** button that opens `RestoreAccountModal` (forced to its sign-in-form view via `currentEmail={null}`). No close/skip — `onLoggedIn` is the only exit, fired from the modal's `onSuccess`.
 - `GoogleWebButton.tsx` — native empty stub
 - `GoogleWebButton.web.tsx` — GIS button → `onIdToken`
 
@@ -441,7 +451,8 @@ UI: `Button`, `Toggle`, `ConnectionError`, **`DownloadAppModal`** (web install C
 | `premium.ts` | `PLANS`, `KEY_PACKS` |
 | `currency.ts` | `KES_PER_USD = 129` |
 | `billing.ts` | Paystack checkout, `getSubscriptionInfo`, `enforceLocalExpiry` / `configureBilling`; on success also calls `linkDeviceToEmail()` and stamps `device_id` on `play_purchases` |
-| `restore.ts` | Email/Google restore; `logoutAccount` |
+| `restore.ts` | Email/Google restore; `applyRestoredState()` (shared by both) also calls `markHasEverLoggedIn()`; `logoutAccount` clears `@play/user_email` only — never the permanent flag |
+| `authGate.ts` | **New.** `@play/has_logged_in` — permanent, one-way, device-level "has this device ever logged in" flag. `getHasEverLoggedIn()` / `markHasEverLoggedIn()` (idempotent). Set from `restore.ts`; survives `logoutAccount()` (which only clears `@play/user_email`) by design. **Does** get cleared by `account.ts`'s `deleteAccount()`, since that goes through `storage.ts`'s `clearAllLocal()` — a prefix wipe of every `@play/*` key, deliberately including this one, so a deleted account returns to a true clean-guest first-run rather than landing back on the gate with nothing to log into. Read by `app/_layout.tsx`'s gate check |
 | `email.ts` | Validate + truncate |
 | `ads.ts` | Android AdMob rewarded only; non-Android → `'unavailable'` |
 | `adSettings.ts` | Ad frequency/cooldown config for challenge screens |
@@ -680,6 +691,7 @@ premium expiresAt → setPremium(false), local + play_accounts
 
 ```
 RootLayout
+└── permanent account gate (app/_layout.tsx — everLoggedIn && !email) → AccountGateScreen  [blocks everything below]
 └── Stack
     ├── index RootGate → logo splash → GetStartedScreen → SkillsFlow isOnboarding  OR  Redirect /(tabs)/home
     ├── (tabs) + FloatingTabBar

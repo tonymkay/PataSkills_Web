@@ -12,7 +12,7 @@ import { Track, getAvailableTracks, getCurriculumTrackDefs } from '@/lib/curricu
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { Button } from '@/components/ui/Button';
-import { OnboardingStepper } from './OnboardingStepper';
+import { OnboardingStepper, STEPPER_FILL_DURATION } from './OnboardingStepper';
 
 // Matches the session chunk size in utils/groupSessions.ts (chunkIntoSessions
 // / chunkSignsIntoSessions both slice into groups of 7) — the number of
@@ -58,6 +58,11 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack, isO
   const [availableTracks, setAvailableTracks] = useState<Track[]>(skill.tracks);
   const [trackDefs, setTrackDefs] = useState<CurriculumTrackDefinition[] | undefined>();
   const [isLoadingTracks, setIsLoadingTracks] = useState(true);
+  // True for the brief window between tapping "Start Practice" and
+  // actually advancing — lets the OnboardingStepper's third segment
+  // visibly fill to 100% before this screen unmounts. No-op (never set)
+  // once isOnboarding is false.
+  const [activating, setActivating] = useState(false);
 
   if (prevSkillId !== skillId) {
     setPrevSkillId(skillId);
@@ -101,6 +106,15 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack, isO
 
   if (!track) return null;
 
+  const handleStartPractice = (t: Track) => {
+    if (!isOnboarding) {
+      onStartPractice(t);
+      return;
+    }
+    setActivating(true);
+    setTimeout(() => onStartPractice(t), STEPPER_FILL_DURATION);
+  };
+
   // Fallback to first available track if requested track is not supported for this skill
   const effectiveTrack = !isLoadingTracks && !availableTracks.includes(track)
     ? (availableTracks[0] ?? track)
@@ -112,15 +126,18 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack, isO
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack} hitSlop={Spacing.sm} style={styles.backButton}>
-          <ArrowLeft size={22} color={colors.onSurface} strokeWidth={2.2} />
-        </Pressable>
-      </View>
-
-      {isOnboarding && (
-        <View style={styles.stepperWrap}>
-          <OnboardingStepper index={2} />
+      {isOnboarding ? (
+        // No back arrow during onboarding — the stepper below is the only
+        // navigation surface for this funnel. It takes over the header's
+        // top spacing so headroom still matches the other two screens.
+        <View style={[styles.stepperWrap, styles.stepperWrapStandalone]}>
+          <OnboardingStepper index={2} activating={activating} />
+        </View>
+      ) : (
+        <View style={styles.header}>
+          <Pressable onPress={onBack} hitSlop={Spacing.sm} style={styles.backButton}>
+            <ArrowLeft size={22} color={colors.onSurface} strokeWidth={2.2} />
+          </Pressable>
         </View>
       )}
 
@@ -167,7 +184,7 @@ export function TrackDetailScreen({ skillId, track, onStartPractice, onBack, isO
       <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
         <Button
           label="Start Practice"
-          onPress={() => onStartPractice(effectiveTrack)}
+          onPress={() => handleStartPractice(effectiveTrack)}
           variant="gradient"
           gradientColors={BrandGradients.discovery.colors}
           gradientStart={{ x: 0, y: 0 }}
@@ -200,6 +217,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: CONTENT_MAX_WIDTH,
     paddingHorizontal: Spacing.marginMobile,
+  },
+  // Onboarding-only: the header row (and its top padding) is skipped
+  // entirely, so this carries the same top spacing directly — matching
+  // LandingScreen's and LearningStyleScreen's containerContent paddingTop.
+  stepperWrapStandalone: {
+    paddingTop: Spacing.xl,
   },
   scroll: {
     flex: 1,

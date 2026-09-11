@@ -313,12 +313,21 @@ export default function ChallengeTournamentScreen() {
 
   // ── Handlers ──
 
-  const handleJoinNow = async () => {
+  // Returns whether the join actually landed — the auto-search effect uses
+  // this to retry instead of leaving the user stuck on "Looking for a
+  // tournament…" forever with no feedback the moment resolving a curriculum
+  // slug or creating/joining the tournament fails (e.g. a transient network
+  // blip or RPC error swallowed inside doCreate()).
+  const handleJoinNow = async (): Promise<boolean> => {
     const activeSlug = await resolveActiveCurriculumSlug(params.slug);
-    if (!activeSlug) return;
+    if (!activeSlug) return false;
     resolvedSlugRef.current = activeSlug;
     const tid = await doCreate();
-    if (tid) setBody('ready');
+    if (tid) {
+      setBody('ready');
+      return true;
+    }
+    return false;
   };
 
   const resetToSearching = useCallback(() => {
@@ -390,6 +399,13 @@ export default function ChallengeTournamentScreen() {
   };
 
   // ── Auto-search → auto-join (2–10s delay, capped under 10s per spec) ──
+  // Retries every 4s on failure instead of firing once and going silent —
+  // previously a single failed attempt (bad curriculum-slug resolve, a
+  // network blip, an RPC error) left the user parked on "Looking for a
+  // tournament…" with the pulse animation still running and no way out
+  // except the X, until the unrelated 60s search timer eventually bounced
+  // them back to Challenge Corner with zero explanation. This gives the
+  // connection several more chances inside that same window.
   const autoFoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (body !== 'searching' || !isFocused) {
@@ -397,11 +413,17 @@ export default function ChallengeTournamentScreen() {
       autoFoundTimerRef.current = null;
       return;
     }
-    const delayMs = 2000 + Math.random() * 8000;
-    autoFoundTimerRef.current = setTimeout(() => {
-      void handleJoinNow();
-    }, delayMs);
+    let cancelled = false;
+    const attempt = (delayMs: number) => {
+      autoFoundTimerRef.current = setTimeout(() => {
+        void handleJoinNow().then((ok) => {
+          if (!ok && !cancelled) attempt(4000);
+        });
+      }, delayMs);
+    };
+    attempt(2000 + Math.random() * 8000);
     return () => {
+      cancelled = true;
       if (autoFoundTimerRef.current) clearTimeout(autoFoundTimerRef.current);
       autoFoundTimerRef.current = null;
     };

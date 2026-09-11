@@ -1,11 +1,36 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
-import { KeysState, INITIAL_KEYS } from '@/lib/keys';
+import { KeysState, INITIAL_KEYS, pushKeysToCloud } from '@/lib/keys';
 import { sanitizeAndValidateEmail } from '@/lib/email';
 import { syncProgressWithCloud } from '@/lib/progress';
 import { linkDeviceToEmail } from '@/lib/deviceAnalytics';
+import { markHasEverLoggedIn } from '@/lib/authGate';
 
 const STORAGE_KEY = '@play/keys';
+const EMAIL_KEY = '@play/user_email';
+
+/**
+ * If this device already has a local balance for this exact email (i.e.
+ * it's the same account re-logging in, not a fresh device/email), and
+ * that balance's last write() never confirmed landing in the cloud, push
+ * it now — before the SELECT below reads the server's value. Without
+ * this, restore always trusted whatever the server had regardless of
+ * whether the device's own latest spend ever actually made it there,
+ * which is exactly what let a still-online restore hand back a stale,
+ * pre-spend balance (see docs — keys/restore sync gap).
+ */
+async function pushLocalIfUnsynced(email: string): Promise<void> {
+  try {
+    const linkedEmail = await AsyncStorage.getItem(EMAIL_KEY);
+    if (linkedEmail !== email) return;
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const local = JSON.parse(raw) as KeysState;
+    if (local.synced === false) {
+      await pushKeysToCloud();
+    }
+  } catch {}
+}
 
 export interface RestoreResult {
   success: boolean;
@@ -29,6 +54,7 @@ async function applyRestoredState(
   resetCount: number,
 ): Promise<void> {
   await AsyncStorage.setItem('@play/user_email', email);
+  await markHasEverLoggedIn();
 
   const restoredState: KeysState = {
     balance: isPremium ? 999999 : balance,
@@ -72,6 +98,9 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
   try {
     // 1. An account record already exists — it's the durable balance for
     //    this email; use it as-is, however many times this email logs in.
+    //    Push first (see pushLocalIfUnsynced) so "as-is" actually reflects
+    //    this device's latest spend if it never confirmed syncing.
+    await pushLocalIfUnsynced(email);
     const { data: account, error: acctError } = await supabase
       .from('play_accounts')
       .select('balance, is_premium, reset_at, reset_count')
@@ -206,6 +235,14 @@ export async function restoreAccountWithGoogle(idToken: string): Promise<Restore
  * until this device's numbers get re-synced by whatever restores next.
  */
 export async function logoutAccount(): Promise<void> {
+  // Guaranteed last-chance push: spendKey()'s own write() already tries a
+  // best-effort cloud sync on every spend, but that's a single fire-and-
+  // forget attempt — if it silently failed (network blip, RLS denial,
+  // etc.) nothing else was going to retry it before the email below gets
+  // cleared and this device goes anonymous. This is that retry.
+  try {
+    await pushKeysToCloud();
+  } catch {}
   try {
     await supabase.auth.signOut();
   } catch {}

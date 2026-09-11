@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +13,9 @@ import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { initNotifications } from '@/lib/notifications';
 import { configureBilling } from '@/lib/billing';
 import { initAutoBackupOnReconnect } from '@/lib/backup';
+import { getHasEverLoggedIn } from '@/lib/authGate';
+import { getStoredEmail } from '@/lib/email';
+import { AccountGateScreen } from '@/components/auth/AccountGateScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -29,6 +32,15 @@ function RootLayoutInner() {
   const { colors } = useTheme();
   const [fontsLoaded] = useFonts(Platform.OS === 'web' ? {} : fontAssets);
 
+  // Permanent account gate check (see lib/authGate.ts). Runs once per cold
+  // boot, before the Stack (and therefore every route, including deep
+  // links) is allowed to render. gateChecked stays false — same as
+  // !fontsLoaded — until this resolves, so there's no flash of unlocked
+  // content while it's pending.
+  const [gateChecked, setGateChecked] = useState(false);
+  const [gated, setGated] = useState(false);
+  const [lastEmail, setLastEmail] = useState('');
+
   const onLayout = useCallback(async () => {
     if (fontsLoaded) {
       await SplashScreen.hideAsync();
@@ -43,7 +55,25 @@ function RootLayoutInner() {
     return unsubscribeAutoBackup;
   }, [onLayout]);
 
-  if (!fontsLoaded) return null;
+  useEffect(() => {
+    (async () => {
+      const [everLoggedIn, email] = await Promise.all([getHasEverLoggedIn(), getStoredEmail()]);
+      setLastEmail(email || '');
+      setGated(everLoggedIn && !email);
+      setGateChecked(true);
+    })();
+  }, []);
+
+  if (!fontsLoaded || !gateChecked) return null;
+
+  if (gated) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBar style="light" />
+        <AccountGateScreen lastEmail={lastEmail} onLoggedIn={() => setGated(false)} />
+      </View>
+    );
+  }
 
   // react-navigation's native-stack renders its own screen "card"
   // container underneath whatever each screen paints, and that card

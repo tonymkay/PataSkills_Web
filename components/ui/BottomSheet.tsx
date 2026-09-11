@@ -93,10 +93,7 @@ export function BottomSheet({
             style={[
               styles.sheet,
               webMaxHeight ? { maxHeight: webMaxHeight } : null,
-              {
-                borderColor: isDark ? colors.outlineVariant : '#E2E8F0',
-                paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.md),
-              },
+              { paddingBottom: Math.max(insets.bottom + Spacing.base, Spacing.md) },
             ]}
           >
             {showHandle && (
@@ -129,16 +126,9 @@ const styles = StyleSheet.create({
     width: '100%',
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    borderWidth: 1,
-    borderBottomWidth: 0,
     paddingHorizontal: Spacing.marginMobile,
     paddingTop: Spacing.sm,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 24,
   },
   contentClamp: {
     flexShrink: 1,
@@ -149,8 +139,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   handle: {
-    width: 42,
-    height: 5,
+    width: Spacing.xl,
+    height: Spacing.xs,
     borderRadius: Radius.full,
   },
 });

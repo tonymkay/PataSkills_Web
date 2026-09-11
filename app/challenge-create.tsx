@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Alert, BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, Globe, Check } from 'lucide-react-native';
 import { IconSize, Radius, Spacing, Typography, useTheme } from '@/theme/tokens';
 import { getCurriculaCatalog, type CurriculumCatalogRow } from '@/lib/curriculaCatalog';
@@ -16,6 +16,7 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Toggle } from '@/components/ui/Toggle';
+import { ChallengeWaitingRoom } from '@/components/challenge/ChallengeWaitingRoom';
 import { navBack, navReplace } from '@/lib/navDirection';
 
 interface TopicRow { title: string; index: number }
@@ -52,6 +53,27 @@ export default function ChallengeCreateScreen() {
     });
   }, []);
   useEffect(() => { checkPending(); }, [checkPending]);
+
+  // ── in-place waiting room (no navigation) ──
+  // Local state instead of router.replace: staying on this screen means a
+  // focus re-check (below) can flip us straight back out the moment the
+  // challenge is aborted or expires, without relying on route params.
+  const [waitingChallengeId, setWaitingChallengeId] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      getMyChallengeStories().then((stories) => {
+        const mine = stories.find((s) => s.isCreator && s.status === 'waiting' && !s.isTournament);
+        setPending(mine ?? null);
+        setWaitingChallengeId(mine ? mine.challengeId : null);
+      });
+    }, []),
+  );
+
+  const onExitWaitingRoom = useCallback(() => {
+    setWaitingChallengeId(null);
+    checkPending();
+  }, [checkPending]);
 
   // ── bottom-sheet shim (simple modal) ──
   const [sheetOpen, setSheetOpen] = useState<'curriculum' | 'topic' | 'deadline' | null>(null);
@@ -116,12 +138,10 @@ export default function ChallengeCreateScreen() {
       });
       if (!created) throw new Error('Check your connection and try again.');
       if (!created.inviteCode) throw new Error('Could not generate a challenge code. Please try again.');
-      // Straight into the waiting room — same screen/flow a joiner lands in,
-      // just as the creator this time.
-      router.replace({
-        pathname: '/challenge-online' as any,
-        params: { challengeId: created.challengeId, origin: 'create' },
-      });
+      // Straight into the waiting room — in place, no navigation. Same
+      // component a joiner lands in via challenge-online.tsx, just hosted
+      // locally here so the focus re-check can flip us back out.
+      setWaitingChallengeId(created.challengeId);
     } catch (e) {
       Alert.alert(
         'Could not create the challenge',
@@ -130,17 +150,14 @@ export default function ChallengeCreateScreen() {
     } finally {
       setCreating(false);
     }
-  }, [curriculum, topic, canCreate, isGlobal, deadlineHours, router]);
+  }, [curriculum, topic, canCreate, isGlobal, deadlineHours]);
 
   // Already have a waiting challenge — go check on it instead of creating
   // a second one.
   const onCheckPending = useCallback(() => {
     if (!pending) return;
-    router.replace({
-      pathname: '/challenge-online' as any,
-      params: { challengeId: pending.challengeId, origin: 'create' },
-    });
-  }, [pending, router]);
+    setWaitingChallengeId(pending.challengeId);
+  }, [pending]);
 
   // ── helpers ──
   const pickerRowStyle = {
@@ -155,6 +172,16 @@ export default function ChallengeCreateScreen() {
   };
 
   const deadlineLabel = DEADLINES.find((d) => d.hours === deadlineHours)?.label ?? 'No deadline';
+
+  if (waitingChallengeId) {
+    return (
+      <ChallengeWaitingRoom
+        challengeId={waitingChallengeId}
+        onExit={onExitWaitingRoom}
+        title="Your Challenge"
+      />
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>

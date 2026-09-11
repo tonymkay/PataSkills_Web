@@ -7,62 +7,25 @@
  * A challengeId param (e.g. deep link) skips straight to the waiting room.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Pressable, Share, Text, View } from 'react-native';
+import { BackHandler, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Globe2, Search, WifiOff, Share2 } from 'lucide-react-native';
+import { X, Search, WifiOff } from 'lucide-react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, interpolate,
 } from 'react-native-reanimated';
 import { IconSize, Radius, Spacing, StaticColors, Typography, useTheme } from '@/theme/tokens';
 import { StoryCarousel } from '@/components/challenge/StoryCarousel';
-import { AvatarStack } from '@/components/challenge/AvatarStack';
+import { ChallengeWaitingRoom } from '@/components/challenge/ChallengeWaitingRoom';
 import { BottomBannerAd } from '@/components/ads/BottomBannerAd';
-import { QuitConfirmSheet } from '@/components/feedback/QuitConfirmSheet';
 import { useChallengeSearch } from '@/hooks/useChallengeSearch';
 import { useOnline } from '@/hooks/useOnline';
-import {
-  cancelChallenge, getChallengeMembers, getChallengeState, getMyChallengeStories,
-  leaveChallenge, subscribeToChallengeStatus,
-  type ChallengeMember, type OpenGlobalChallenge,
-} from '@/lib/challenges';
-import { setPendingChallengeRun } from '@/lib/challengeRuntime';
-import { getCachedTitle } from '@/lib/curriculaCatalog';
+import { type OpenGlobalChallenge } from '@/lib/challenges';
 import { navBack, navReplace } from '@/lib/navDirection';
 
 type Phase = 'browsing' | 'waiting';
 
 // ── Animated pulse components ────────────────────────────────────────────
-
-function GlobePulse() {
-  const { colors } = useTheme();
-  const pulse = useSharedValue(0);
-  useEffect(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 1800 }), -1, false);
-  }, [pulse]);
-
-  const ring1 = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.8, 1.8]) }],
-    opacity: interpolate(pulse.value, [0, 1], [0.4, 0]),
-  }));
-  const ring2 = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.5, 1.3]) }],
-    opacity: interpolate(pulse.value, [0, 1], [0.35, 0]),
-  }));
-
-  return (
-    <View style={{ width: 180, height: 180, alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View style={[{ position: 'absolute', width: 140, height: 140, borderRadius: 70, borderWidth: 1.5, borderColor: colors.primary }, ring1]} />
-      <Animated.View style={[{ position: 'absolute', width: 140, height: 140, borderRadius: 70, borderWidth: 1.5, borderColor: colors.primary }, ring2]} />
-      <View style={{
-        width: 100, height: 100, borderRadius: 50, backgroundColor: colors.surfaceContainerHigh,
-        alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.outlineVariant, zIndex: 10,
-      }}>
-        <Globe2 size={36} color={StaticColors.selection.activeBorder} strokeWidth={2.2} />
-      </View>
-    </View>
-  );
-}
 
 function SearchPulse({ color }: { color: string }) {
   const { colors } = useTheme();
@@ -122,97 +85,6 @@ export default function ChallengeOnlineScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // ── Waiting phase: joined-members roster + realtime handoff ─────────────
-
-  const [members, setMembers] = useState<ChallengeMember[] | null>(null);
-  const handedOffRef = useRef(false);
-
-  useEffect(() => {
-    if (phase !== 'waiting' || !activeChallengeId) return;
-    let alive = true;
-    const tick = () => void getChallengeMembers(activeChallengeId).then((m) => alive && setMembers(m));
-    tick();
-    const t = setInterval(tick, 4000);
-    return () => { alive = false; clearInterval(t); };
-  }, [phase, activeChallengeId]);
-
-  // ── Creator-only: invite code + cancel-for-everyone ──────────────────────
-  const [isCreator, setIsCreator] = useState(false);
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [showAbortSheet, setShowAbortSheet] = useState(false);
-
-  useEffect(() => {
-    if (phase !== 'waiting' || !activeChallengeId) return;
-    let alive = true;
-    getMyChallengeStories().then((stories) => {
-      if (!alive) return;
-      const mine = stories.find((s) => s.challengeId === activeChallengeId);
-      setIsCreator(!!mine?.isCreator);
-      setInviteCode(mine?.inviteCode ?? null);
-    });
-    return () => { alive = false; };
-  }, [phase, activeChallengeId]);
-
-  const onShareCode = useCallback(() => {
-    if (!inviteCode) return;
-    void Share.share({
-      message: `Join my challenge on PataSkills! Use code ${inviteCode} under "Join a Challenge".`,
-    });
-  }, [inviteCode]);
-
-  const onCancelChallenge = useCallback(() => {
-    setShowAbortSheet(true);
-  }, []);
-
-  const onKeepWaiting = useCallback(() => {
-    setShowAbortSheet(false);
-  }, []);
-
-  const onConfirmAbort = useCallback(async () => {
-    setShowAbortSheet(false);
-    if (!activeChallengeId) {
-      router.replace('/challenge-corner' as any);
-      return;
-    }
-    setCancelling(true);
-    try {
-      await cancelChallenge(activeChallengeId);
-    } catch { /* best-effort — still route back to Challenge Corner below */ }
-    setCancelling(false);
-    router.replace('/challenge-corner' as any);
-  }, [activeChallengeId, router]);
-
-  const attemptHandoff = useCallback(async () => {
-    if (!activeChallengeId || handedOffRef.current) return;
-    const state = await getChallengeState(activeChallengeId);
-    if (!state || state.status !== 'running' || !state.startedAt) return;
-    const stories = await getMyChallengeStories();
-    const mine = stories.find((s) => s.challengeId === activeChallengeId);
-    if (!mine) return;
-    if (handedOffRef.current) return;
-    handedOffRef.current = true;
-    setPendingChallengeRun({
-      challengeId: activeChallengeId,
-      curriculumSlug: mine.curriculumSlug,
-      curriculumTitle: getCachedTitle(mine.curriculumSlug) ?? mine.curriculumSlug,
-      startedAtMs: state.startedAt.getTime(),
-      questions: [],
-      seed: mine.seed,
-      questionCount: mine.questionCount,
-      topicIndex: mine.targetTopicCount,
-      origin: 'challenge-corner',
-    });
-    router.replace('/challenge-start' as any);
-  }, [activeChallengeId, router]);
-
-  useEffect(() => {
-    if (phase !== 'waiting' || !activeChallengeId) return;
-    const unsubscribe = subscribeToChallengeStatus(activeChallengeId, () => void attemptHandoff());
-    const t = setInterval(() => void attemptHandoff(), 1500);
-    return () => { unsubscribe(); clearInterval(t); };
-  }, [phase, activeChallengeId, attemptHandoff]);
-
   // Challenge Corner is always the return destination from this screen's
   // browsing/searching flow. Pop the real stack when there's history to
   // pop — lands on the existing Challenge Corner instance underneath with
@@ -224,27 +96,16 @@ export default function ChallengeOnlineScreen() {
     else navReplace(router, '/challenge-corner', 'backward');
   }, [router]);
 
-  const onLeaveWaiting = useCallback(async () => {
-    // Creators just step away — the challenge keeps waiting in the
-    // background and challenge-create.tsx will offer to bring them back to
-    // it. Only the explicit "Cancel for everyone" button ends it for real.
-    // Non-creators leaving does still release their spot.
-    if (activeChallengeId && !isCreator) {
-      try { await leaveChallenge(activeChallengeId); } catch { /* best-effort */ }
-    }
-    exitScreen();
-  }, [activeChallengeId, isCreator, exitScreen]);
-
   const onExitBrowsing = useCallback(() => {
     collab.stopSearching();
     exitScreen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exitScreen]);
 
-  // OS/hardware back must land on Challenge Corner too, same as the in-app
-  // X, while this screen is on the searching/found (browsing) leg — the
-  // waiting-room leg already routes its back press through the abort/leave
-  // confirmation flow above.
+  // The waiting-room leg is now handled entirely by ChallengeWaitingRoom
+  // (its own header, its own hardware-back interception, its own abort/
+  // leave confirmation flow) — this listener only needs to cover the
+  // browsing/searching leg of this screen.
   useEffect(() => {
     if (phase !== 'browsing') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -254,14 +115,8 @@ export default function ChallengeOnlineScreen() {
     return () => sub.remove();
   }, [phase, onExitBrowsing]);
 
-  const onPressBack = useCallback(() => {
-    if (phase !== 'waiting') { onExitBrowsing(); return; }
-    if (isCreator) { setShowAbortSheet(true); return; }
-    void onLeaveWaiting();
-  }, [phase, isCreator, onExitBrowsing, onLeaveWaiting]);
-
   const backButton = (
-    <Pressable onPress={onPressBack} hitSlop={10}>
+    <Pressable onPress={onExitBrowsing} hitSlop={10}>
       <X size={IconSize.header} color={colors.onSurface} strokeWidth={2.5} />
     </Pressable>
   );
@@ -269,9 +124,13 @@ export default function ChallengeOnlineScreen() {
   const searchShowingCarousel = phase === 'browsing' && collab.openChallenges.length > 0;
   const isLookingForChallenge = phase === 'browsing' && !searchShowingCarousel;
 
+  if (phase === 'waiting' && activeChallengeId) {
+    return <ChallengeWaitingRoom challengeId={activeChallengeId} onExit={exitScreen} />;
+  }
+
   // ── Offline fallback ────────────────────────────────────────────────────
 
-  if (!online && phase !== 'waiting') {
+  if (!online) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.marginMobile, paddingVertical: Spacing.sm }}>
@@ -324,61 +183,7 @@ export default function ChallengeOnlineScreen() {
         </View>
       )}
 
-      {phase === 'waiting' ? (
-        // ── Waiting room: roster + realtime handoff ──
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.xxl, paddingHorizontal: Spacing.marginMobile, paddingBottom: Spacing.xxl }}>
-          <View style={{ alignItems: 'center', gap: Spacing.sm }}>
-            <GlobePulse />
-            <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', marginTop: Spacing.md }]}>
-              Waiting to start
-            </Text>
-            <Text style={[Typography.bodyMd, { color: colors.onSurfaceVariant, textAlign: 'center' }]}>
-              Hang tight — the challenge starts once everyone&apos;s in.
-            </Text>
-          </View>
-          <View style={{ alignItems: 'center', gap: Spacing.sm }}>
-            <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: 'bold', letterSpacing: 0.5, textTransform: 'uppercase' }]}>
-              Players
-            </Text>
-            <AvatarStack
-              members={(members ?? []).map((m, i) => ({ id: m.deviceId || String(i), name: m.displayName ?? 'Player' }))}
-              maxVisible={4}
-              size={40}
-            />
-          </View>
-
-          {isCreator && inviteCode && (
-            <View style={{ alignItems: 'center', gap: Spacing.sm, width: '100%' }}>
-              <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: 'bold', letterSpacing: 0.5, textTransform: 'uppercase' }]}>
-                Invite code
-              </Text>
-              <Pressable
-                onPress={onShareCode}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-                  paddingVertical: Spacing.sm, paddingHorizontal: Spacing.lg,
-                  borderRadius: Radius.lg, borderWidth: 1.5, borderColor: colors.outlineVariant,
-                }}
-              >
-                <Text style={[Typography.headlineSm, { color: colors.onSurface, fontWeight: 'bold', letterSpacing: 4 }]}>
-                  {inviteCode}
-                </Text>
-                <Share2 size={18} color={colors.onSurfaceVariant} strokeWidth={2} />
-              </Pressable>
-              <Pressable onPress={onShareCode} hitSlop={8}>
-                <Text style={[Typography.bodySm, { color: colors.onSurfaceVariant, fontWeight: '600' }]}>
-                  Share via WhatsApp, email & more
-                </Text>
-              </Pressable>
-              <Pressable onPress={onCancelChallenge} disabled={cancelling} hitSlop={8}>
-                <Text style={[Typography.bodySm, { color: '#ef4444', fontWeight: '600' }]}>
-                  {cancelling ? 'Cancelling\u2026' : 'Cancel for everyone'}
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-      ) : searchShowingCarousel ? (
+      {searchShowingCarousel ? (
         // ── Search found results: StoryCarousel ──
         <View style={{ flex: 1 }}>
           <StoryCarousel<OpenGlobalChallenge>
@@ -427,16 +232,6 @@ export default function ChallengeOnlineScreen() {
       <View style={{ alignItems: 'center', paddingBottom: Spacing.md }}>
         <BottomBannerAd />
       </View>
-
-      <QuitConfirmSheet
-        visible={showAbortSheet}
-        onKeepPlaying={onKeepWaiting}
-        onQuit={() => void onConfirmAbort()}
-        title="Abort this challenge?"
-        subtitle="Players waiting will no longer be able to join."
-        keepLabel="KEEP WAITING"
-        quitLabel={cancelling ? 'ABORTING\u2026' : 'ABORT'}
-      />
     </View>
   );
 }

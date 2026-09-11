@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, FontFamily } from '@/theme/tokens';
 import { SkillGridCard } from './SkillGridCard';
 import { SkillGridCardSkeleton } from './SkillGridCardSkeleton';
-import { OnboardingStepper } from './OnboardingStepper';
+import { OnboardingStepper, STEPPER_FILL_DURATION } from './OnboardingStepper';
 import { LANDING_SKILLS, getLandingSkill } from '@/constants/skills';
 import { getCurriculaCatalog } from '@/lib/curriculaCatalog';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
@@ -71,6 +71,11 @@ export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding 
   // show the exact same progress as Home for the same skill (previously
   // this screen never read progress at all).
   const [progressMap, setProgressMap] = useState<Record<string, { completedTopics: number; totalTopics: number }>>({});
+  // True for the brief window between tapping a skill card and actually
+  // advancing — lets the OnboardingStepper's first segment visibly fill
+  // to 100% before this screen unmounts. No-op (never set) once
+  // isOnboarding is false.
+  const [activating, setActivating] = useState(false);
 
   useEffect(() => {
     getCurriculaCatalog()
@@ -147,6 +152,15 @@ export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding 
       .catch(() => {});
   }, [linkedEmail, catalogRows]);
 
+  const handleSkillPress = useCallback((skillId: CurriculumSlug) => {
+    if (!isOnboarding) {
+      onStart(skillId);
+      return;
+    }
+    setActivating(true);
+    setTimeout(() => onStart(skillId), STEPPER_FILL_DURATION);
+  }, [isOnboarding, onStart]);
+
   const handleRestoreSuccess = (result: RestoreResult) => {
     refreshProgress();
     setLinkedEmail(result.email);
@@ -181,7 +195,7 @@ export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding 
       >
         {isOnboarding && (
           <View style={styles.stepperWrap}>
-            <OnboardingStepper index={0} />
+            <OnboardingStepper index={0} activating={activating} />
           </View>
         )}
 
@@ -195,7 +209,7 @@ export function LandingScreen({ onStart, onRestore, bottomPadding, isOnboarding 
                   key={skill.key}
                   skill={skill}
                   progress={progressMap[skill.key]}
-                  onPress={onStart}
+                  onPress={handleSkillPress}
                 />
               ))}
         </View>
@@ -244,7 +258,7 @@ const styles = StyleSheet.create({
   containerContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.marginMobile,
-    paddingTop: Spacing.base,
+    paddingTop: Spacing.xl,
     paddingBottom: Spacing.lg,
   },
   stepperWrap: {

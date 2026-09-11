@@ -10,7 +10,7 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 import type { CurriculumTrackDefinition } from '@/types/quiz';
 import { ModeCard } from './ModeCard';
 import { ModeCardSkeleton } from './ModeCardSkeleton';
-import { OnboardingStepper } from './OnboardingStepper';
+import { OnboardingStepper, STEPPER_FILL_DURATION } from './OnboardingStepper';
 
 // Matches LandingScreen's bottom-sheet-style width cap so this screen
 // reads consistently when the flow moves from the grid into this list.
@@ -66,6 +66,11 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack, isOnboard
   // list below. Reset on skill change so switching skills re-shows it
   // rather than flashing stale rows from the previous skill.
   const [loading, setLoading] = useState(true);
+  // True for the brief window between tapping a track card and actually
+  // advancing — lets the OnboardingStepper's second segment visibly fill
+  // to 100% before this screen unmounts. No-op (never set) once
+  // isOnboarding is false.
+  const [activating, setActivating] = useState(false);
 
   if (prevSkillId !== skillId) {
     setPrevSkillId(skillId);
@@ -110,6 +115,15 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack, isOnboard
 
   const nextUpTrack = trackOptions.find((o) => !completedTracks.includes(o.track))?.track;
 
+  const handleTrackPress = (track: Track) => {
+    if (!isOnboarding) {
+      onPreviewTrack(track);
+      return;
+    }
+    setActivating(true);
+    setTimeout(() => onPreviewTrack(track), STEPPER_FILL_DURATION);
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -120,17 +134,25 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack, isOnboard
       >
         {isOnboarding && (
           <View style={styles.stepperWrap}>
-            <OnboardingStepper index={1} />
+            <OnboardingStepper index={1} activating={activating} />
           </View>
         )}
 
-        <View style={styles.header}>
-          <Pressable onPress={onBack} hitSlop={Spacing.sm} style={styles.backButton}>
-            <ArrowLeft size={22} color={colors.onSurface} strokeWidth={2.2} />
-          </Pressable>
-          <Text style={[styles.heading, { color: colors.onSurface }]}>Choose Learning Style</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        {isOnboarding ? (
+          // No back arrow during onboarding — the stepper above is the only
+          // navigation surface for this funnel.
+          <Text style={[styles.heading, styles.headingStandalone, { color: colors.onSurface }]}>
+            Choose Learning Style
+          </Text>
+        ) : (
+          <View style={styles.header}>
+            <Pressable onPress={onBack} hitSlop={Spacing.sm} style={styles.backButton}>
+              <ArrowLeft size={22} color={colors.onSurface} strokeWidth={2.2} />
+            </Pressable>
+            <Text style={[styles.heading, { color: colors.onSurface }]}>Choose Learning Style</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        )}
 
         <View style={styles.list}>
           {loading ? (
@@ -178,7 +200,7 @@ export function LearningStyleScreen({ skillId, onPreviewTrack, onBack, isOnboard
                       highlighted={option.track === nextUpTrack}
                       progress={isDone ? 1 : (trackProgress[option.track] ?? 0)}
                       totalQuestions={trackTotals?.[option.track]?.totalQuestions}
-                      onPress={() => onPreviewTrack(option.track)}
+                      onPress={() => handleTrackPress(option.track)}
                     />
                   </View>
                 );
@@ -227,6 +249,10 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 20,
     textAlign: 'center',
+  },
+  headingStandalone: {
+    flex: undefined,
+    marginBottom: Spacing.lg,
   },
   list: {
     width: '100%',

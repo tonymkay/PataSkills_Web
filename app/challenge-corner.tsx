@@ -38,6 +38,17 @@ function WinnerRewardSubtext({ rewardKeys }: { rewardKeys: number }) {
   );
 }
 
+function formatExpiry(deadlineAt: Date | null): string {
+  if (!deadlineAt) return 'Waiting for players';
+  const msLeft = deadlineAt.getTime() - Date.now();
+  if (msLeft <= 0) return 'Expiring soon';
+  const mins = Math.round(msLeft / 60000);
+  if (mins < 60) return `Expires in ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `Expires in ${hours}h ${remMins}m` : `Expires in ${hours}h`;
+}
+
 function MenuRow({ Icon, iconBg, iconColor, title, subtitle, onPress, trailing }: {
   Icon: typeof Globe;
   iconBg: string;
@@ -119,8 +130,8 @@ export default function ChallengeCornerScreen() {
       Icon: Plus,
       iconBg: accent,
       iconColor: colors.white,
-      title: pendingChallenge ? 'Join Your Challenge' : 'Add',
-      subtitle: pendingChallenge ? 'Your challenge is waiting for players' : 'Create a new challenge',
+      title: pendingChallenge ? 'My Challenge' : 'Add',
+      subtitle: pendingChallenge ? formatExpiry(pendingChallenge.deadlineAt) : 'Create a new challenge',
       onPress: () => (pendingChallenge
         ? navPush(router, { pathname: '/challenge-online' as any, params: { challengeId: pendingChallenge.challengeId, origin: 'create' } })
         : navPush(router, '/challenge-create')),
