@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
 import {
   ArrowLeft,
   Mail,
@@ -10,6 +11,7 @@ import {
   DollarSign,
   HelpCircle,
   Info,
+  RefreshCw,
   Shield,
   FileText,
   LogOut,
@@ -31,6 +33,8 @@ import { useKeys } from '@/hooks/useKeys';
 import { runManualBackup, retryBackupCategory, type BackupCategory, type BackupResult } from '@/lib/backup';
 import { StatusModal, ConfirmModal, type StatusModalItem } from '@/components/ui/StatusModal';
 import { DebugUpdateSheet } from '@/components/ui/DebugUpdateSheet';
+import { UpdateReadySheet } from '@/components/ui/UpdateReadySheet';
+import { checkAndFetchUpdate, applyUpdate } from '@/lib/appUpdates';
 import type { CurrencyCode } from '@/lib/currency';
 
 const CURRENCY_STORAGE_KEY = '@play/currency';
@@ -61,6 +65,47 @@ export default function SettingsScreen() {
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
   const [updateInfoVisible, setUpdateInfoVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+
+  // ── Check for updates (Settings row) ──────────────────────────
+  // Manual counterpart to _layout.tsx's automatic on-cold-start check —
+  // lets a learner (or support, walking someone through a fix) pull an
+  // update on demand instead of waiting for the next cold start, and see
+  // exactly what happened rather than it silently applying in the
+  // background. Mirrors PataSkillsV2's app/settings.tsx onCheckUpdate.
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateStatusText, setUpdateStatusText] = useState<string | null>(null);
+  const [restartSheetVisible, setRestartSheetVisible] = useState(false);
+  const { isUpdatePending } = Updates.useUpdates();
+  const updateRowValue = isUpdatePending ? 'Update ready' : (updateStatusText ?? undefined);
+
+  const showUpdateStatus = (text: string, revertAfterMs = 4000) => {
+    setUpdateStatusText(text);
+    setTimeout(() => setUpdateStatusText((current) => (current === text ? null : current)), revertAfterMs);
+  };
+
+  const handleCheckForUpdates = async () => {
+    if (checkingUpdate) return;
+    if (isUpdatePending) {
+      setRestartSheetVisible(true);
+      return;
+    }
+    setCheckingUpdate(true);
+    setUpdateStatusText('Checking…');
+    const result = await checkAndFetchUpdate();
+    setCheckingUpdate(false);
+    if (result.status === 'downloaded') {
+      showUpdateStatus('Update ready');
+      setRestartSheetVisible(true);
+    } else if (result.status === 'upToDate') {
+      showUpdateStatus("You're up to date");
+    } else if (result.status === 'disabled') {
+      showUpdateStatus('Not available in development');
+    } else if (result.status === 'offline') {
+      showUpdateStatus("You're offline");
+    } else {
+      showUpdateStatus('Check failed — try again');
+    }
+  };
 
   useEffect(() => {
     getStoredEmail().then(setEmail).catch(() => {});
@@ -298,6 +343,12 @@ export default function SettingsScreen() {
           value="v1.0.0"
         />
         <SettingsRow
+          icon={<RefreshCw size={IconSize.inline} color={iconColor} />}
+          label="Check for updates"
+          value={updateRowValue}
+          onPress={handleCheckForUpdates}
+        />
+        <SettingsRow
           icon={<UploadCloud size={IconSize.inline} color={iconColor} />}
           label="Update Info"
           onPress={() => setUpdateInfoVisible(true)}
@@ -385,6 +436,12 @@ export default function SettingsScreen() {
       <DebugUpdateSheet
         visible={updateInfoVisible}
         onClose={() => setUpdateInfoVisible(false)}
+      />
+
+      <UpdateReadySheet
+        visible={restartSheetVisible}
+        onClose={() => setRestartSheetVisible(false)}
+        onRestart={() => applyUpdate()}
       />
     </View>
   );
