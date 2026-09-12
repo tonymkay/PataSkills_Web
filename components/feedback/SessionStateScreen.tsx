@@ -292,21 +292,22 @@ export function SessionStateScreen({
       >
         <ScrollView
           style={styles.proceedScroll}
-          contentContainerStyle={styles.proceedContent}
+          contentContainerStyle={[styles.proceedContent, { justifyContent: 'space-between' }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Dismiss Button — top-left, above the title */}
-          <Pressable onPress={handleAttemptExit} hitSlop={12} style={styles.proceedCloseBtnTopLeft}>
-            <X size={22} color={colors.onSurfaceVariant} />
-          </Pressable>
+          <View style={{ width: '100%', alignItems: 'center' }}>
+            {/* Dismiss Button — top-left, above the title */}
+            <Pressable onPress={handleAttemptExit} hitSlop={12} style={styles.proceedCloseBtnTopLeft}>
+              <X size={22} color={colors.onSurfaceVariant} />
+            </Pressable>
 
-          {/* Title */}
-          <Text style={[styles.proceedTitle, { color: colors.onSurface }]}>
-            {title || config.title}
-          </Text>
+            {/* Title */}
+            <Text style={[styles.proceedTitle, { color: colors.onSurface }]}>
+              {title || config.title}
+            </Text>
 
-          {/* Options List */}
-          <View style={styles.proceedOptions}>
+            {/* Options List */}
+            <View style={styles.proceedOptions}>
             {/* Option 1: Buy one time keys */}
             <Pressable
               onPress={() => {
@@ -408,6 +409,7 @@ export function SessionStateScreen({
                 </Text>
               </Pressable>
             )}
+            </View>
           </View>
 
           {/* Continue in Free Mode — same exit action as the X button /
