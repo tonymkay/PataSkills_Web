@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Image, Platform, ScrollView, BackHandler } from 'react-native';
-import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Clock, Bell, Check, X } from 'lucide-react-native';
+import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Check, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,8 +9,7 @@ import { useTheme } from '@/theme/ThemeContext';
 import { FontFamily, Typography } from '@/constants/typography';
 import { Radius, Spacing } from '@/constants/spacing';
 import { StaticColors } from '@/constants/colors';
-import { Toggle } from '@/components/ui/Toggle';
-import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
+import { scheduleResetReminder } from '@/lib/notifications';
 import { truncateEmailMiddle } from '@/lib/email';
 import { areTabsUnlocked } from '@/lib/progress';
 import { RestoreAccountModal } from '@/components/auth/RestoreAccountModal';
@@ -227,19 +226,6 @@ export function SessionStateScreen({
     }).catch(() => {});
   }, [resetAt]);
 
-  const handleToggleReminders = async (val: boolean) => {
-    setRemindersEnabled(val);
-    AsyncStorage.setItem('@play/timer_reminders', val ? 'true' : 'false').catch(() => {});
-    if (val) {
-      const granted = await ensureNotificationPermission();
-      if (granted && resetAt) {
-        scheduleResetReminder(resetAt);
-      }
-    } else {
-      cancelResetReminder();
-    }
-  };
-
   const isOutOfKeys = kind === 'outOfKeys';
 
   // Intercept OS-based back navigation (hardware back button / system back
@@ -409,59 +395,6 @@ export function SessionStateScreen({
               </View>
             </Pressable>
 
-            {/* Option 3: Use Free trial */}
-            <Pressable
-              onPress={() => {
-                setSelectedProceedOption('trial');
-                navPush(router, '/how-free-mode-works');
-              }}
-              style={({ pressed }) => [
-                styles.proceedCard,
-                styles.trialCard,
-                {
-                  backgroundColor: colors.surfaceContainer,
-                  borderColor: selectedProceedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.surfaceContainerHigh,
-                  borderWidth: selectedProceedOption === 'trial' ? 2 : 1,
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <View style={styles.proceedCardRow}>
-                <View style={styles.proceedCardLeft}>
-                  <View style={[styles.trialIconBox, { backgroundColor: 'rgba(43, 217, 196, 0.14)' }]}>
-                    <Clock size={28} color={colors.tealAccent || '#2BD9C4'} strokeWidth={2.4} />
-                  </View>
-                  <View style={styles.proceedCardTextWrap}>
-                    <Text style={[styles.proceedCardTitle, { color: colors.onSurface }]}>
-                      Use Free trial
-                    </Text>
-                    <Text style={[styles.proceedCardSubtitle, { color: colors.tealAccent || '#2BD9C4', fontFamily: FontFamily.semiBold }]}>
-                      {resetAt ? timerText : 'Free session timer active'}
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight
-                  size={22}
-                  color={selectedProceedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant}
-                />
-              </View>
-
-              {/* Reminders Toggle Subrow inside Free Trial card */}
-              <View style={[styles.reminderSubrow, { borderTopColor: colors.surfaceContainerHigh }]}>
-                <View style={styles.reminderLeft}>
-                  <Bell size={16} color={remindersEnabled ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant} />
-                  <Text style={[styles.reminderLabel, { color: colors.onSurfaceVariant }]}>
-                    Get reminders when timer resets
-                  </Text>
-                </View>
-                <Toggle
-                  value={remindersEnabled}
-                  onValueChange={handleToggleReminders}
-                  activeColor={colors.tealAccent || '#2BD9C4'}
-                />
-              </View>
-            </Pressable>
-
             {/* Existing user, login link — hidden once tabs are unlocked;
                 see the tabsUnlocked comment above. */}
             {!tabsUnlocked && (
@@ -475,6 +408,28 @@ export function SessionStateScreen({
                 </Text>
               </Pressable>
             )}
+          </View>
+
+          {/* Continue in Free Mode — same exit action as the X button /
+              OS back (handleAttemptExit), now surfaced as a CTA since the
+              free-trial option itself moved here instead of being a
+              separate list card. */}
+          <View style={styles.freeModeSection}>
+            <Pressable onPress={handleAttemptExit} style={styles.primaryButton}>
+              <Text
+                style={styles.primaryText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                CONTINUE IN FREE MODE
+              </Text>
+            </Pressable>
+            {resetAt ? (
+              <Text style={[styles.freeModeTimerText, { color: colors.tealAccent || '#2BD9C4' }]}>
+                {timerText}
+              </Text>
+            ) : null}
           </View>
         </ScrollView>
 
@@ -706,9 +661,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.gutter,
     borderWidth: 1,
   },
-  trialCard: {
-    paddingBottom: Spacing.sm,
-  },
   proceedCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -724,13 +676,6 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
   },
-  trialIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   proceedCardTextWrap: {
     flex: 1,
     gap: 2,
@@ -745,23 +690,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  reminderSubrow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  freeModeSection: {
+    width: '100%',
+    marginTop: Spacing.xxl,
+  },
+  freeModeTimerText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 16,
+    textAlign: 'center',
     marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-  },
-  reminderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    flex: 1,
-  },
-  reminderLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: 12,
   },
 
   /* Bottom Continue Button (Like CheckButton) */

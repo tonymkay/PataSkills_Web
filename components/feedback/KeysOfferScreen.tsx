@@ -134,7 +134,7 @@ export function KeysOfferScreen({ skillId, track, resetAt, onMaybeLater }: KeysO
             },
           ]}
         >
-          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Skip the timer</Text>
+          <Text style={[styles.cardTitle, { color: colors.achievementAmber }]}>Skip the timer</Text>
 
           <View style={[styles.divider, { backgroundColor: colors.surfaceContainerHigh }]} />
 
