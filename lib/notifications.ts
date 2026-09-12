@@ -1,13 +1,36 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { getKeysState } from '@/lib/keys';
 
 const REMINDERS_KEY = '@play/timer_reminders';
 const SCHEDULED_RESET_KEY = '@play/scheduled_reset_at';
 const LAST_NOTIFIED_KEY = '@play/last_notified_reset_at';
+const ANDROID_CHANNEL_ID = 'keys-reset-reminder';
+const ANDROID_NOTIFICATION_TITLE = '🔑 Your Free Sessions are Ready!';
+const ANDROID_NOTIFICATION_BODY = 'Your 3 practice keys have refilled. Jump back in to continue!';
 
 let foregroundTimer: ReturnType<typeof setTimeout> | null = null;
 let swRegistration: ServiceWorkerRegistration | null = null;
+
+if (Platform.OS === 'android') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+
+async function ensureAndroidChannel(): Promise<void> {
+  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+    name: 'Session reminders',
+    importance: Notifications.AndroidImportance.HIGH,
+  });
+}
 
 /**
  * Register background Service Worker for web notifications that survive tab close.
@@ -31,6 +54,16 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
  * Registers Service Worker upon permission grant on web.
  */
 export async function ensureNotificationPermission(): Promise<boolean> {
+  if (Platform.OS === 'android') {
+    try {
+      const current = await Notifications.getPermissionsAsync();
+      if (current.granted) return true;
+      const requested = await Notifications.requestPermissionsAsync();
+      return requested.granted;
+    } catch {
+      return false;
+    }
+  }
   try {
     if (Platform.OS === 'web' || typeof window !== 'undefined') {
       if ('Notification' in window) {
@@ -95,6 +128,24 @@ export async function showKeysReadyNotification(resetAt?: number): Promise<void>
  * Dispatches to both the background Service Worker (survives tab close) and foreground timer.
  */
 export async function scheduleResetReminder(resetAt: number | null): Promise<void> {
+  if (Platform.OS === 'android') {
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      if (resetAt && resetAt > Date.now()) {
+        await ensureAndroidChannel();
+        await Notifications.scheduleNotificationAsync({
+          content: { title: ANDROID_NOTIFICATION_TITLE, body: ANDROID_NOTIFICATION_BODY },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: new Date(resetAt),
+            channelId: ANDROID_CHANNEL_ID,
+          },
+        });
+      }
+    } catch {}
+    return;
+  }
+
   if (foregroundTimer) {
     clearTimeout(foregroundTimer);
     foregroundTimer = null;
@@ -146,6 +197,13 @@ export async function scheduleResetReminder(resetAt: number | null): Promise<voi
  * Cancels any pending scheduled reset reminder notification.
  */
 export async function cancelResetReminder(): Promise<void> {
+  if (Platform.OS === 'android') {
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    } catch {}
+    return;
+  }
+
   if (foregroundTimer) {
     clearTimeout(foregroundTimer);
     foregroundTimer = null;
