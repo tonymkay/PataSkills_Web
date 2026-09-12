@@ -26,6 +26,10 @@ interface KeysOptionsContentProps {
   balance?: number | null;
   /** Whether the account has unlimited premium pass. */
   isPremium?: boolean;
+  /** Whether to render the "Use Free trial" card (with its countdown +
+   *  reminder toggle). Defaults to true; pass false when the host screen
+   *  already renders that status/reminder UI itself (e.g. the Keys tab). */
+  showTrialCard?: boolean;
   /** Optional custom buy-keys handler. Falls back to navigating to /keys-packs. */
   onBuyKeysPress?: () => void;
   /** Optional custom subscribe handler. Falls back to navigating to /subscription-plans. */
@@ -44,6 +48,7 @@ export function KeysOptionsContent({
   resetAt: resetAtProp,
   balance: balanceProp,
   isPremium: isPremiumProp,
+  showTrialCard = true,
   onBuyKeysPress,
   onSubscribePress,
 }: KeysOptionsContentProps) {
@@ -220,59 +225,61 @@ export function KeysOptionsContent({
       </Pressable>
 
       {/* Option 3: Use Free trial */}
-      <Pressable
-        onPress={() => {
-          setSelectedOption('trial');
-          navPush(router, '/how-free-mode-works');
-        }}
-        style={({ pressed }) => [
-          styles.card,
-          !hasKeys && styles.trialCard,
-          {
-            backgroundColor: colors.surfaceContainer,
-            borderColor: selectedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.surfaceContainerHigh,
-            borderWidth: selectedOption === 'trial' ? 2 : 1,
-          },
-          pressed && { opacity: 0.8 },
-        ]}
-      >
-        <View style={styles.cardRow}>
-          <View style={styles.cardLeft}>
-            <View style={[styles.trialIconBox, { backgroundColor: 'rgba(43, 217, 196, 0.14)' }]}>
-              <Clock size={28} color={colors.tealAccent || '#2BD9C4'} strokeWidth={2.4} />
+      {showTrialCard && (
+        <Pressable
+          onPress={() => {
+            setSelectedOption('trial');
+            navPush(router, '/how-free-mode-works');
+          }}
+          style={({ pressed }) => [
+            styles.card,
+            !hasKeys && styles.trialCard,
+            {
+              backgroundColor: colors.surfaceContainer,
+              borderColor: selectedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.surfaceContainerHigh,
+              borderWidth: selectedOption === 'trial' ? 2 : 1,
+            },
+            pressed && { opacity: 0.8 },
+          ]}
+        >
+          <View style={styles.cardRow}>
+            <View style={styles.cardLeft}>
+              <View style={[styles.trialIconBox, { backgroundColor: 'rgba(43, 217, 196, 0.14)' }]}>
+                <Clock size={28} color={colors.tealAccent || '#2BD9C4'} strokeWidth={2.4} />
+              </View>
+              <View style={styles.cardTextWrap}>
+                <Text style={[styles.cardTitle, { color: colors.onSurface }]}>
+                  Use Free trial
+                </Text>
+                <Text style={[styles.cardSubtitle, { color: colors.tealAccent || '#2BD9C4', fontFamily: FontFamily.semiBold }]}>
+                  {trialSubtitle}
+                </Text>
+              </View>
             </View>
-            <View style={styles.cardTextWrap}>
-              <Text style={[styles.cardTitle, { color: colors.onSurface }]}>
-                Use Free trial
-              </Text>
-              <Text style={[styles.cardSubtitle, { color: colors.tealAccent || '#2BD9C4', fontFamily: FontFamily.semiBold }]}>
-                {trialSubtitle}
-              </Text>
-            </View>
-          </View>
-          <ChevronRight
-            size={22}
-            color={selectedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant}
-          />
-        </View>
-
-        {/* Reminders Toggle Subrow - only shown when out of keys and cooldown timer is active */}
-        {!hasKeys && (
-          <View style={[styles.reminderSubrow, { borderTopColor: colors.surfaceContainerHigh }]}>
-            <View style={styles.reminderLeft}>
-              <Bell size={16} color={remindersEnabled ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant} />
-              <Text style={[styles.reminderLabel, { color: colors.onSurfaceVariant }]}>
-                Get reminders when timer resets
-              </Text>
-            </View>
-            <Toggle
-              value={remindersEnabled}
-              onValueChange={handleToggleReminders}
-              activeColor={colors.tealAccent || '#2BD9C4'}
+            <ChevronRight
+              size={22}
+              color={selectedOption === 'trial' ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant}
             />
           </View>
-        )}
-      </Pressable>
+
+          {/* Reminders Toggle Subrow - only shown when out of keys and cooldown timer is active */}
+          {!hasKeys && (
+            <View style={[styles.reminderSubrow, { borderTopColor: colors.surfaceContainerHigh }]}>
+              <View style={styles.reminderLeft}>
+                <Bell size={16} color={remindersEnabled ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant} />
+                <Text style={[styles.reminderLabel, { color: colors.onSurfaceVariant }]}>
+                  Get reminders when timer resets
+                </Text>
+              </View>
+              <Toggle
+                value={remindersEnabled}
+                onValueChange={handleToggleReminders}
+                activeColor={colors.tealAccent || '#2BD9C4'}
+              />
+            </View>
+          )}
+        </Pressable>
+      )}
     </View>
   );
 }

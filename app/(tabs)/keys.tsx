@@ -1,14 +1,17 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, Image, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Sparkles, ChevronRight } from 'lucide-react-native';
+import { Sparkles, ChevronRight, Bell } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Spacing, Radius, IconSize, StaticColors } from '@/theme/tokens';
 import { AppHeader } from '@/components/nav/AppHeader';
 import { KeysOptionsContent } from '@/components/feedback/KeysOptionsContent';
+import { Toggle } from '@/components/ui/Toggle';
 import { FontFamily } from '@/constants/typography';
 import { useKeys } from '@/hooks/useKeys';
 import { getSubscriptionInfo, type SubscriptionInfo } from '@/lib/billing';
+import { ensureNotificationPermission, scheduleResetReminder, cancelResetReminder } from '@/lib/notifications';
 
 /**
  * "Keys" tab — the standalone, always-accessible version of the
@@ -21,8 +24,10 @@ export default function KeysTab() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { balance, isPremium, refresh } = useKeys();
+  const { balance, isPremium, resetAt, refresh } = useKeys();
   const [subInfo, setSubInfo] = useState<SubscriptionInfo | null>(null);
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   // Re-read the balance/premium flag from storage every time this tab
   // regains focus. useKeys() only reads AsyncStorage on its own mount, so
@@ -43,6 +48,41 @@ export default function KeysTab() {
       }
     }, [isPremium]),
   );
+
+  useEffect(() => {
+    AsyncStorage.getItem('@play/timer_reminders').then((val) => {
+      setRemindersEnabled(val === 'true');
+    }).catch(() => {});
+  }, []);
+
+  // Live countdown tick for the "Resets in..." subtitle
+  useEffect(() => {
+    if (!resetAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [resetAt]);
+
+  const handleToggleReminders = async (val: boolean) => {
+    setRemindersEnabled(val);
+    AsyncStorage.setItem('@play/timer_reminders', val ? 'true' : 'false').catch(() => {});
+    if (val) {
+      const granted = await ensureNotificationPermission();
+      if (granted && resetAt) {
+        scheduleResetReminder(resetAt);
+      }
+    } else {
+      cancelResetReminder();
+    }
+  };
+
+  const hasSessionsLeft = balance !== null && balance > 0;
+  const secondsLeft = resetAt ? Math.max(0, Math.ceil((resetAt - now) / 1000)) : 0;
+  const timerHours = Math.floor(secondsLeft / 3600);
+  const timerMinutes = Math.floor((secondsLeft % 3600) / 60);
+  const timerText =
+    timerHours > 0
+      ? `Resets in ${timerHours}hours ${String(timerMinutes).padStart(2, '0')}mins`
+      : `Resets in ${timerMinutes}mins`;
 
   const displayCount = balance !== null ? String(balance) : '...';
 
@@ -140,27 +180,37 @@ export default function KeysTab() {
         ) : (
           /* ─── Free / Limited Keys State ─── */
           <>
-            {/* Keys Count Hero */}
-            <View style={styles.keysCountRow}>
-              <Text style={[styles.keysCountText, { color: StaticColors.achievementAmber }]}>
-                {displayCount}
-              </Text>
-              <Image
-                source={require('@/assets/premium/key.webp')}
-                style={styles.keyIcon}
-                resizeMode="contain"
-              />
-            </View>
-
-            <Text style={[styles.keysLeftText, { color: colors.onSurfaceVariant }]}>
-              {`${displayCount} ${balance === 1 ? 'key' : 'keys'} left`}
+            {/* Free Trial Status Hero */}
+            <Text style={[styles.heroHeading, { color: colors.onSurface }]}>
+              {hasSessionsLeft ? 'You are on Free Trial' : 'You are out of Free Sessions!'}
             </Text>
 
-            <Text style={[styles.heading, { color: colors.onSurface }]}>
-              Unlock more sessions
+            <Text style={[styles.heroSubtitle, { color: colors.tealAccent || '#2BD9C4' }]}>
+              {hasSessionsLeft
+                ? `${displayCount} session${balance === 1 ? '' : 's'} left today`
+                : timerText}
             </Text>
 
-            <KeysOptionsContent balance={balance} isPremium={false} />
+            {!hasSessionsLeft && (
+              <View style={styles.reminderRow}>
+                <View style={styles.reminderLeft}>
+                  <Bell
+                    size={18}
+                    color={remindersEnabled ? (colors.tealAccent || '#2BD9C4') : colors.onSurfaceVariant}
+                  />
+                  <Text style={[styles.reminderLabel, { color: colors.onSurfaceVariant }]}>
+                    Get Reminder when timer resets
+                  </Text>
+                </View>
+                <Toggle
+                  value={remindersEnabled}
+                  onValueChange={handleToggleReminders}
+                  activeColor={colors.tealAccent || '#2BD9C4'}
+                />
+              </View>
+            )}
+
+            <KeysOptionsContent balance={balance} isPremium={false} showTrialCard={false} />
           </>
         )}
       </ScrollView>
@@ -177,36 +227,36 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.base,
   },
   /* Free State Styles */
-  keysCountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    marginBottom: 2,
-  },
-  keysCountText: {
+  heroHeading: {
     fontFamily: FontFamily.bold,
-    fontSize: 48,
-    lineHeight: 54,
+    fontSize: 24,
+    lineHeight: 30,
     textAlign: 'center',
+    marginTop: Spacing.sm,
+    marginBottom: 4,
   },
-  keyIcon: {
-    width: 44,
-    height: 44,
-  },
-  keysLeftText: {
+  heroSubtitle: {
     fontFamily: FontFamily.medium,
     fontSize: 14,
     lineHeight: 18,
     textAlign: 'center',
-    marginBottom: Spacing.sm,
-  },
-  heading: {
-    fontFamily: FontFamily.regular,
-    fontSize: 22,
-    lineHeight: 28,
-    textAlign: 'center',
     marginBottom: Spacing.lg,
+  },
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.lg,
+  },
+  reminderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    flex: 1,
+  },
+  reminderLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
   },
   /* Premium State Styles */
   premiumContainer: {
