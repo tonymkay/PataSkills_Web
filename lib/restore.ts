@@ -230,7 +230,20 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
       }
     } catch {}
 
-    const resolvedKeys = Math.max(INITIAL_KEYS, totalKeys);
+    // This device's own current local balance — the anonymous play this
+    // device already did before this email ever existed. A first-time
+    // account creation must never discard it; the account starts at
+    // whichever is higher.
+    let localBalance = INITIAL_KEYS;
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const local: KeysState = JSON.parse(raw);
+        localBalance = local.isPremium ? INITIAL_KEYS : local.balance;
+      }
+    } catch {}
+
+    const resolvedKeys = Math.max(INITIAL_KEYS, totalKeys, localBalance);
 
     await applyRestoredState(email, resolvedKeys, isPremium, null, 0);
 

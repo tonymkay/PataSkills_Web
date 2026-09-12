@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Image, Platform, ScrollView } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Image, Platform, ScrollView, BackHandler } from 'react-native';
 import { KeyRound, Lock, Medal, Share2, Sparkles, Star, ChevronRight, Clock, Bell, Check, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -241,6 +241,18 @@ export function SessionStateScreen({
   };
 
   const isOutOfKeys = kind === 'outOfKeys';
+
+  // Intercept OS-based back navigation (hardware back button / system back
+  // gestures) on the out-of-keys screen so it opens the same ad prompt as
+  // the X button, instead of letting back navigate away without it.
+  useEffect(() => {
+    if (!isOutOfKeys) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleAttemptExit();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isOutOfKeys]);
   const showStats = kind === 'topicComplete' || kind === 'chapterComplete';
   const showRewardValue = kind === 'rewardUnlocked';
   const isSessionUnlocked = kind === 'sessionUnlocked';

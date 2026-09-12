@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View, Image, TextInput, Platform, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Mail } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +29,10 @@ interface KeysOfferScreenProps {
    *  see keys-confirm.tsx's identical comment. */
   skillId?: CurriculumSlug;
   track?: Track;
+  /** Epoch ms when the free-session timer resets — drives the "Resets in
+   *  Xhours Ymins" countdown under the heading. Same source of truth
+   *  SessionStateScreen's outOfKeys screen uses for its own countdown. */
+  resetAt?: number | null;
   /** "Maybe later" — dismisses to the existing outOfKeys screen. */
   onMaybeLater: () => void;
 }
@@ -38,14 +43,33 @@ interface KeysOfferScreenProps {
  * paths), before SessionStateScreen's "Choose how to proceed" list.
  * Dismissing via "Maybe later" or OS back navigation opens that screen.
  */
-export function KeysOfferScreen({ skillId, track, onMaybeLater }: KeysOfferScreenProps) {
+export function KeysOfferScreen({ skillId, track, resetAt, onMaybeLater }: KeysOfferScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const pack = keyPackById(OFFER_PACK_ID)!;
 
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!resetAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [resetAt]);
+
+  // Same countdown source of truth as SessionStateScreen's outOfKeys
+  // screen — resetAt is the real timestamp, this is just its display.
+  const secondsLeft = resetAt ? Math.max(0, Math.ceil((resetAt - now) / 1000)) : 0;
+  const timerHours = Math.floor(secondsLeft / 3600);
+  const timerMinutes = Math.floor((secondsLeft % 3600) / 60);
+  const timerText = resetAt
+    ? timerHours > 0
+      ? `Resets in ${timerHours}hours ${timerMinutes}mins`
+      : `Resets in ${timerMinutes}mins`
+    : null;
 
   useEffect(() => {
     AsyncStorage.getItem('@play/user_email').then((stored) => {
@@ -94,10 +118,12 @@ export function KeysOfferScreen({ skillId, track, onMaybeLater }: KeysOfferScree
       ]}
     >
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} bounces={false}>
-        <Text style={styles.headingWrap}>
-          <Text style={[styles.heading, { color: colors.onSurface }]}>Unlock the next{'\n'}</Text>
-          <Text style={[styles.heading, { color: StaticColors.achievementAmber }]}>{pack.keys} Sessions!</Text>
+        <Text style={[styles.heading, { color: colors.onSurface }, !timerText && { marginBottom: Spacing.xl }]}>
+          You are out of Free Sessions!
         </Text>
+        {timerText && (
+          <Text style={[styles.timerSubtitle, { color: colors.tealAccent || '#2BD9C4' }]}>{timerText}</Text>
+        )}
 
         <View
           style={[
@@ -108,24 +134,27 @@ export function KeysOfferScreen({ skillId, track, onMaybeLater }: KeysOfferScree
             },
           ]}
         >
-          <Text style={[styles.cardSublabel, { color: colors.onSurfaceVariant }]}>Total Payment</Text>
-          <Text style={[styles.cardPrice, { color: colors.onSurface }]}>
-            {currency ? `${currency} ` : ''}{amount}
-          </Text>
+          <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Skip the timer</Text>
 
           <View style={[styles.divider, { backgroundColor: colors.surfaceContainerHigh }]} />
 
-          <Text style={[styles.cardSublabel, { color: colors.onSurfaceVariant }]}>You Receive</Text>
           <View style={styles.rewardRow}>
-            <Image
-              source={require('@/assets/premium/key.webp')}
-              style={styles.keyImage}
-              resizeMode="contain"
-            />
-            <Text style={[styles.rewardText, { color: StaticColors.achievementAmber }]}>
-              {pack.keys} Keys
+            <View style={styles.rewardRowLeft}>
+              <Image
+                source={require('@/assets/premium/key.webp')}
+                style={styles.keyImage}
+                resizeMode="contain"
+              />
+              <Text style={[styles.rewardText, { color: colors.onSurface }]}>
+                {pack.keys} Keys
+              </Text>
+            </View>
+            <Text style={[styles.priceText, { color: colors.onSurface }]}>
+              {currency ? `${currency} ` : ''}{amount}
             </Text>
           </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.surfaceContainerHigh }]} />
 
           <View style={styles.emailSection}>
             <Text style={[styles.emailLabel, { color: colors.onSurface }]}>
@@ -171,6 +200,16 @@ export function KeysOfferScreen({ skillId, track, onMaybeLater }: KeysOfferScree
               ? 'Paid securely via Google Play. Your keys link directly to this email.'
               : 'Paid securely via Paystack. Your keys link directly to this email.'}
           </Text>
+
+          <Pressable
+            onPress={() => router.push('/how-keys-work')}
+            hitSlop={Spacing.sm}
+            style={styles.howKeysWorkLink}
+          >
+            <Text style={[styles.howKeysWorkText, { color: colors.onSurfaceVariant }]}>
+              How Keys Work
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -208,8 +247,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Spacing.md,
   },
-  headingWrap: {
+  timerSubtitle: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 16,
     textAlign: 'center',
+    marginTop: Spacing.xs,
     marginBottom: Spacing.xl,
   },
   heading: {
@@ -224,18 +266,10 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     alignItems: 'center',
   },
-  cardSublabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: 13,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  cardPrice: {
-    fontFamily: FontFamily.extraBold,
-    fontSize: 34,
-    lineHeight: 40,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.md,
+  cardTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    textAlign: 'center',
   },
   divider: {
     width: '100%',
@@ -245,9 +279,13 @@ const styles = StyleSheet.create({
   rewardRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  rewardRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.sm,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.lg,
   },
   keyImage: {
     width: 32,
@@ -255,7 +293,11 @@ const styles = StyleSheet.create({
   },
   rewardText: {
     fontFamily: FontFamily.extraBold,
-    fontSize: 24,
+    fontSize: 18,
+  },
+  priceText: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 18,
   },
   emailSection: {
     width: '100%',
@@ -295,6 +337,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     marginTop: Spacing.md,
+  },
+  howKeysWorkLink: {
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  howKeysWorkText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    textDecorationLine: 'underline',
   },
   footer: {
     gap: Spacing.sm,

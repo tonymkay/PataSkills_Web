@@ -17,7 +17,6 @@ import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
 import { SignCatalogEntry } from '@/types/quiz';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
-import { LANDING_SKILLS } from '@/constants/skills';
 
 type Stage = 'landing' | 'learning-style' | 'track-detail' | 'downloading' | 'session';
 
@@ -43,11 +42,19 @@ function parseTrack(value?: string): Track | null {
   return trimmed.length > 0 ? (trimmed as Track) : null;
 }
 
-// Validated against LANDING_SKILLS, mirroring parseTrack() above — an
-// unrecognized/mistyped ?skill= falls back to DEFAULT_SKILL rather than
-// erroring, same backward-compatible spirit as an old track-only link.
+// Accepts any non-empty slug, mirroring parseTrack() above. Previously
+// this only accepted values present in the static LANDING_SKILLS list,
+// which silently fell back to DEFAULT_SKILL (driving-theory) for every
+// DB-only skill (e.g. Football) added purely as a play_curricula row —
+// every downstream consumer (LearningStyleScreen, downloadSession,
+// getLandingSkill(), the curricula catalog fetch) already resolves an
+// unknown slug against the DB rather than requiring a static match, so
+// this was the one remaining gatekeeper blocking any skill added after
+// the original four.
 function parseSkill(value?: string): CurriculumSlug | null {
-  return LANDING_SKILLS.some((s) => s.id === value) ? (value as CurriculumSlug) : null;
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? (trimmed as CurriculumSlug) : null;
 }
 
 /**

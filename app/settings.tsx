@@ -30,6 +30,7 @@ import { getKeysState } from '@/lib/keys';
 import { useKeys } from '@/hooks/useKeys';
 import { runManualBackup, retryBackupCategory, type BackupCategory, type BackupResult } from '@/lib/backup';
 import { StatusModal, ConfirmModal, type StatusModalItem } from '@/components/ui/StatusModal';
+import { DebugUpdateSheet } from '@/components/ui/DebugUpdateSheet';
 import type { CurrencyCode } from '@/lib/currency';
 
 const CURRENCY_STORAGE_KEY = '@play/currency';
@@ -58,6 +59,7 @@ export default function SettingsScreen() {
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [retryingCategory, setRetryingCategory] = useState<BackupCategory | null>(null);
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+  const [updateInfoVisible, setUpdateInfoVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   useEffect(() => {
@@ -295,6 +297,11 @@ export default function SettingsScreen() {
           label="About"
           value="v1.0.0"
         />
+        <SettingsRow
+          icon={<UploadCloud size={IconSize.inline} color={iconColor} />}
+          label="Update Info"
+          onPress={() => setUpdateInfoVisible(true)}
+        />
 
         {/* ── Legal ── */}
         <SectionHeader title="Legal" />
@@ -373,6 +380,11 @@ export default function SettingsScreen() {
         secondaryLabel="Cancel"
         onSecondary={() => setDeleteConfirmVisible(false)}
         destructive
+      />
+
+      <DebugUpdateSheet
+        visible={updateInfoVisible}
+        onClose={() => setUpdateInfoVisible(false)}
       />
     </View>
   );
