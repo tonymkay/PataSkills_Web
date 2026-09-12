@@ -32,7 +32,7 @@ import { getKeysState } from '@/lib/keys';
 import { useKeys } from '@/hooks/useKeys';
 import { runManualBackup, retryBackupCategory, type BackupCategory, type BackupResult } from '@/lib/backup';
 import { StatusModal, ConfirmModal, type StatusModalItem } from '@/components/ui/StatusModal';
-import { DebugUpdateSheet } from '@/components/ui/DebugUpdateSheet';
+// import { DebugUpdateSheet } from '@/components/ui/DebugUpdateSheet'; // disabled — only "Check for updates" is needed
 import { UpdateReadySheet } from '@/components/ui/UpdateReadySheet';
 import { checkAndFetchUpdate, applyUpdate } from '@/lib/appUpdates';
 import type { CurrencyCode } from '@/lib/currency';
@@ -63,7 +63,7 @@ export default function SettingsScreen() {
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [retryingCategory, setRetryingCategory] = useState<BackupCategory | null>(null);
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
-  const [updateInfoVisible, setUpdateInfoVisible] = useState(false);
+  // const [updateInfoVisible, setUpdateInfoVisible] = useState(false); // Update Info row disabled — only "Check for updates" is needed
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   // ── Check for updates (Settings row) ──────────────────────────
@@ -348,11 +348,11 @@ export default function SettingsScreen() {
           value={updateRowValue}
           onPress={handleCheckForUpdates}
         />
-        <SettingsRow
+        {/* <SettingsRow
           icon={<UploadCloud size={IconSize.inline} color={iconColor} />}
           label="Update Info"
           onPress={() => setUpdateInfoVisible(true)}
-        />
+        /> */}
 
         {/* ── Legal ── */}
         <SectionHeader title="Legal" />
@@ -433,10 +433,10 @@ export default function SettingsScreen() {
         destructive
       />
 
-      <DebugUpdateSheet
+      {/* <DebugUpdateSheet
         visible={updateInfoVisible}
         onClose={() => setUpdateInfoVisible(false)}
-      />
+      /> */}
 
       <UpdateReadySheet
         visible={restartSheetVisible}
