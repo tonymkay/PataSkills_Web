@@ -5,7 +5,6 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import * as Updates from 'expo-updates';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider as NavigationThemeProvider, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
@@ -56,19 +55,6 @@ function RootLayoutInner() {
     const unsubscribeAutoBackup = initAutoBackupOnReconnect();
     return unsubscribeAutoBackup;
   }, [onLayout]);
-
-  useEffect(() => {
-    if (__DEV__ || Platform.OS === 'web') return;
-    (async () => {
-      try {
-        const update = await Updates.checkForUpdateAsync();
-        if (update.isAvailable) {
-          await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
-        }
-      } catch {}
-    })();
-  }, []);
 
   useEffect(() => {
     (async () => {
