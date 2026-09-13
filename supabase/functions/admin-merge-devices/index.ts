@@ -11,14 +11,11 @@
 // automatically. That key never lives in any repo, .env file, or app
 // codebase — this function is the only place it's used for this action.
 //
-// Deploy:
+// No auth check — deployed --no-verify-jwt, open to anyone who has the
+// function URL. Deploy:
 //   supabase functions deploy admin-merge-devices --no-verify-jwt
-//   supabase secrets set ADMIN_ACTIONS_SECRET=<same value as PlayDashboard's
-//     PLAY_ADMIN_ACTIONS_SECRET env var>
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const ADMIN_ACTIONS_SECRET = Deno.env.get('ADMIN_ACTIONS_SECRET') ?? '';
 
 const admin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -31,10 +28,6 @@ interface Body {
 }
 
 Deno.serve(async (req) => {
-  if (ADMIN_ACTIONS_SECRET && (req.headers.get('Authorization') ?? '') !== `Bearer ${ADMIN_ACTIONS_SECRET}`) {
-    return new Response('unauthorized', { status: 401 });
-  }
-
   let body: Body;
   try {
     body = await req.json();
