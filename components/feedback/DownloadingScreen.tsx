@@ -11,6 +11,11 @@ const LOADING_LABEL = 'Loading questions…';
 interface DownloadingScreenProps {
   progress: DownloadProgress | null;
   error: string | null;
+  /** True when `error` is specifically because the device has no internet
+   *  connection (see downloadSession()'s `offline` flag) — swaps the
+   *  generic "Couldn't load session" copy for a clearer, more actionable
+   *  offline-specific message. Same Retry button either way. */
+  offline?: boolean;
   onRetry: () => void;
 }
 
@@ -62,7 +67,7 @@ export function BouncingDots({ color }: { color: string }) {
   );
 }
 
-export function DownloadingScreen({ progress, error, onRetry }: DownloadingScreenProps) {
+export function DownloadingScreen({ progress, error, offline, onRetry }: DownloadingScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -81,7 +86,7 @@ export function DownloadingScreen({ progress, error, onRetry }: DownloadingScree
         {error ? (
           <>
             <Text style={[Typography.headlineMd, styles.title, { color: colors.onSurface }]}>
-              Couldn't load session
+              {offline ? "You're offline" : "Couldn't load session"}
             </Text>
             <Text style={[Typography.bodyLarge, styles.subtitle, { color: colors.onSurfaceVariant }]}>
               {error}

@@ -726,18 +726,18 @@ export default function ChallengeTournamentScreen() {
         return (
           <>
             <Button label="Join Tournament" variant="gradient" loading={loading} onPress={handleSeeTarget} />
-            <Button label="Search again" variant="outline" onPress={handleSearchAgain} />
+            <Button label="Search again" variant="outline" onPress={handleSearchAgain} textColor={colors.onSurface} />
           </>
         );
       case 'promotion':
         return (
           <>
             <Button label="Continue" variant="gradient" loading={loading} onPress={handleContinue} />
-            <Button label="Leave Challenge" variant="outline" onPress={resetToSearching} />
+            <Button label="Leave Challenge" variant="outline" onPress={resetToSearching} textColor={colors.onSurface} />
           </>
         );
       case 'elimination':
-        return <Button label="Got It" variant="outline" onPress={resetToSearching} />;
+        return <Button label="Got It" variant="outline" onPress={resetToSearching} textColor={colors.onSurface} />;
       case 'final_win':
         return (
           <Button label="Collect Reward" variant="gradient" loading={loading} onPress={handleCollectReward} />

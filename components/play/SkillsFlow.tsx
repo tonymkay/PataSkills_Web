@@ -94,6 +94,7 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
   });
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
   const [sessions, setSessions] = useState<PlaySessionData[]>([]);
   const [signCatalog, setSignCatalog] = useState<SignCatalogEntry[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track>('full');
@@ -107,6 +108,7 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
     setStageDirection('forward');
     setStage('downloading');
     setError(null);
+    setOffline(false);
     setProgress(null);
     setCurrentTrack(track);
     setTrackIsDeepLinked(deepLinked);
@@ -119,6 +121,7 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
     }
     if ('error' in result) {
       setError(result.error);
+      setOffline(!!result.offline);
       return;
     }
     // Topic-level deep link (§E of the multi-skill architecture doc): jump
@@ -322,7 +325,7 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
           exiting={stage === 'landing' ? undefined : FadeOut.duration(180)}
         >
           {stage === 'downloading' ? (
-            <DownloadingScreen progress={progress} error={error} onRetry={handleRetry} />
+            <DownloadingScreen progress={progress} error={error} offline={offline} onRetry={handleRetry} />
           ) : stage === 'track-detail' ? (
             <TrackDetailScreen
               skillId={selectedSkill}

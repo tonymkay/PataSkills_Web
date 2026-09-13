@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { supabase, getPlayAssetPublicUrl } from './supabase';
 import { QuizQuestion, SignCatalogEntry, CurriculumTrackDefinition } from '@/types/quiz';
 import { groupQuestionsBySession, chunkIntoSessions, chunkSignsIntoSessions, chunkByTopicBounded, PlaySession, QuizPlaySession } from '@/utils/groupSessions';
@@ -227,13 +229,128 @@ export interface TrackTotals {
 // skill's entry is cleared on failure so a later call can retry.
 const curriculumCache = new Map<CurriculumSlug, Promise<RemoteCurriculum>>();
 
+interface TrackDetectionCachePayload {
+  availableTracks: Track[];
+  trackTotals: Record<Track, TrackTotals>;
+  trackDefs: CurriculumTrackDefinition[] | undefined;
+}
+
+function trackDetectionCacheKey(slug: CurriculumSlug): string {
+  return "@play/track_detection_cache:" + slug;
+}
+
+async function getCachedTrackDetection(slug: CurriculumSlug): Promise<TrackDetectionCachePayload | null> {
+  try {
+    const raw = await AsyncStorage.getItem(trackDetectionCacheKey(slug));
+    if (!raw) return null;
+    return JSON.parse(raw) as TrackDetectionCachePayload;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheTrackDetection(slug: CurriculumSlug, payload: TrackDetectionCachePayload): Promise<void> {
+  try {
+    await AsyncStorage.setItem(trackDetectionCacheKey(slug), JSON.stringify(payload));
+  } catch {}
+}
+
+function computeTrackTotals(remote: RemoteCurriculum): Record<Track, TrackTotals> {
+  const totals = {} as Record<Track, TrackTotals>;
+
+  if (remote.tracks && remote.tracks.length > 0) {
+    for (const def of remote.tracks) {
+      if (def.kind === 'reading') {
+        const readingEntries = resolveReadingEntries(remote.questions, remote.signs, def);
+        totals[def.id] = {
+          totalQuestions: readingEntries.length,
+          totalSessions: Math.max(1, Math.ceil(readingEntries.length / 7)),
+        };
+      } else if (def.kind === 'full') {
+        totals[def.id] = {
+          totalQuestions: remote.questions.length,
+          totalSessions: deriveFullSessions(remote.questions).length,
+        };
+      } else {
+        let filtered = remote.questions;
+        if (def.filterRole) {
+          filtered = filtered.filter((q) => roleMatches(q.role, def.filterRole!));
+        }
+        if (def.filterFormat) {
+          const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
+          filtered = filtered.filter((q) => formats.includes(q.format));
+        }
+        if (def.filterTags) {
+          filtered = filtered.filter((q) => tagsMatch(q.tags, def.filterTags!));
+        }
+        totals[def.id] = {
+          totalQuestions: filtered.length,
+          totalSessions: Math.max(1, Math.ceil(filtered.length / 7)),
+        };
+      }
+    }
+  }
+
+  (Object.keys(TRACK_ROLE) as FilterTrack[]).forEach((t) => {
+    if (!totals[t]) {
+      const role = TRACK_ROLE[t];
+      const count = remote.questions.filter((q) => q.role === role).length;
+      totals[t] = { totalQuestions: count, totalSessions: Math.max(1, Math.ceil(count / 7)) };
+    }
+  });
+  if (!totals.full) {
+    totals.full = {
+      totalQuestions: remote.questions.length,
+      totalSessions: deriveFullSessions(remote.questions).length,
+    };
+  }
+  if (!totals.reading) {
+    const readingEntries = resolveReadingEntries(remote.questions, remote.signs);
+    totals.reading = {
+      totalQuestions: readingEntries.length,
+      totalSessions: Math.max(1, Math.ceil(readingEntries.length / 7)),
+    };
+  }
+
+  return totals;
+}
+
+// Quick connectivity check (not the useOnline() hook — this is plain
+// lib code, no component) so a known-offline device fails FAST and falls
+// back to the persisted cache immediately, instead of waiting out however
+// long fetch() takes to actually time out with no connection. NetInfo.fetch()
+// resolves near-instantly off its last-known state. Defaults to "online"
+// on any NetInfo error so a broken connectivity check never blocks a real
+// attempt that might still succeed.
+export async function isOnline(): Promise<boolean> {
+  try {
+    const state = await NetInfo.fetch();
+    return !!state.isConnected && state.isInternetReachable !== false;
+  } catch {
+    return true;
+  }
+}
+
 function loadCurriculumCached(slug: CurriculumSlug): Promise<RemoteCurriculum> {
   let cached = curriculumCache.get(slug);
   if (!cached) {
-    cached = loadRemoteCurriculum(slug).catch((e) => {
-      curriculumCache.delete(slug);
-      throw e;
-    });
+    cached = (async () => {
+      const online = await isOnline();
+      if (!online) throw new Error('offline');
+      return loadRemoteCurriculum(slug);
+    })()
+      .then((remote) => {
+        void cacheTrackDetection(slug, {
+          availableTracks: detectAvailableTracks(remote.questions, remote.signs, remote.tracks),
+          trackTotals: computeTrackTotals(remote),
+          trackDefs: remote.tracks,
+        });
+        return remote;
+      })
+      .catch((e) => {
+        curriculumCache.delete(slug);
+        throw e;
+      });
     curriculumCache.set(slug, cached);
   }
   return cached;
@@ -256,69 +373,11 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
   let cached = trackTotalsCache.get(slug);
   if (!cached) {
     cached = loadCurriculumCached(slug)
-      .then((remote) => {
-        const totals = {} as Record<Track, TrackTotals>;
-
-        // 1. If curriculum JSON defined custom tracks, compute counts for each
-        if (remote.tracks && remote.tracks.length > 0) {
-          for (const def of remote.tracks) {
-            if (def.kind === 'reading') {
-              const readingEntries = resolveReadingEntries(remote.questions, remote.signs, def);
-              totals[def.id] = {
-                totalQuestions: readingEntries.length,
-                totalSessions: Math.max(1, Math.ceil(readingEntries.length / 7)),
-              };
-            } else if (def.kind === 'full') {
-              totals[def.id] = {
-                totalQuestions: remote.questions.length,
-                totalSessions: deriveFullSessions(remote.questions).length,
-              };
-            } else {
-              let filtered = remote.questions;
-              if (def.filterRole) {
-                filtered = filtered.filter((q) => roleMatches(q.role, def.filterRole!));
-              }
-              if (def.filterFormat) {
-                const formats = Array.isArray(def.filterFormat) ? def.filterFormat : [def.filterFormat];
-                filtered = filtered.filter((q) => formats.includes(q.format));
-              }
-              if (def.filterTags) {
-                filtered = filtered.filter((q) => tagsMatch(q.tags, def.filterTags!));
-              }
-              totals[def.id] = {
-                totalQuestions: filtered.length,
-                totalSessions: Math.max(1, Math.ceil(filtered.length / 7)),
-              };
-            }
-          }
-        }
-
-        // 2. Also populate standard track keys for backwards-compatibility
-        (Object.keys(TRACK_ROLE) as FilterTrack[]).forEach((t) => {
-          if (!totals[t]) {
-            const role = TRACK_ROLE[t];
-            const count = remote.questions.filter((q) => q.role === role).length;
-            totals[t] = { totalQuestions: count, totalSessions: Math.max(1, Math.ceil(count / 7)) };
-          }
-        });
-        if (!totals.full) {
-          totals.full = {
-            totalQuestions: remote.questions.length,
-            totalSessions: deriveFullSessions(remote.questions).length,
-          };
-        }
-        if (!totals.reading) {
-          const readingEntries = resolveReadingEntries(remote.questions, remote.signs);
-          totals.reading = {
-            totalQuestions: readingEntries.length,
-            totalSessions: Math.max(1, Math.ceil(readingEntries.length / 7)),
-          };
-        }
-
-        return totals;
-      })
-      .catch((e) => {
+      .then((remote) => computeTrackTotals(remote))
+      .catch(async (e) => {
         trackTotalsCache.delete(slug);
+        const persisted = await getCachedTrackDetection(slug);
+        if (persisted) return persisted.trackTotals;
         throw e;
       });
     trackTotalsCache.set(slug, cached);
@@ -332,20 +391,32 @@ export function getTrackTotals(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Rec
  * loadCurriculumCached()'s fetch with getTrackTotals(), so calling both
  * for the same skill costs one network round-trip, not two.
  */
-export function getAvailableTracks(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Track[]> {
-  return loadCurriculumCached(slug).then((remote) =>
-    detectAvailableTracks(remote.questions, remote.signs, remote.tracks),
-  );
+export async function getAvailableTracks(slug: CurriculumSlug = DEFAULT_SLUG): Promise<Track[]> {
+  try {
+    const remote = await loadCurriculumCached(slug);
+    return detectAvailableTracks(remote.questions, remote.signs, remote.tracks);
+  } catch (e) {
+    const persisted = await getCachedTrackDetection(slug);
+    if (persisted) return persisted.availableTracks;
+    throw e;
+  }
 }
 
 /**
  * Returns any custom track definitions declared in the curriculum JSON,
  * or undefined if the curriculum only uses legacy auto-detection.
  */
-export function getCurriculumTrackDefs(
+export async function getCurriculumTrackDefs(
   slug: CurriculumSlug = DEFAULT_SLUG,
 ): Promise<CurriculumTrackDefinition[] | undefined> {
-  return loadCurriculumCached(slug).then((remote) => remote.tracks);
+  try {
+    const remote = await loadCurriculumCached(slug);
+    return remote.tracks;
+  } catch (e) {
+    const persisted = await getCachedTrackDetection(slug);
+    if (persisted) return persisted.trackDefs;
+    throw e;
+  }
 }
 
 interface CurriculumRow {

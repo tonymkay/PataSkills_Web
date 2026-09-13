@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadRemoteCurriculum, deriveTrack, Track } from './curriculum';
+import { loadRemoteCurriculum, deriveTrack, Track, isOnline } from './curriculum';
 import { loadSignAssets, loadSignPairs } from './signs';
 import { hydrateQuestionsList, hydrateSignCatalog } from '@/utils/hydrateQuestions';
 import { PlaySession } from '@/utils/groupSessions';
@@ -17,7 +17,7 @@ export interface DownloadProgress {
 
 export type DownloadResult =
   | { sessions: PlaySession[]; signCatalog: SignCatalogEntry[] }
-  | { error: string };
+  | { error: string; offline?: boolean };
 
 interface CachedSessionPayload {
   sessions: PlaySession[];
@@ -107,6 +107,20 @@ export async function downloadSession(
     backgroundPrefetchSkill(cached.sessions, cached.signCatalog, skillId);
     onProgress?.({ stage: 'images', fraction: 1 });
     return cached;
+  }
+
+  // No cache for this exact skill/track combo. Check connectivity BEFORE
+  // attempting the network fetch — a known-offline device otherwise sits
+  // through however long fetch() takes to actually time out (can be many
+  // seconds on some networks/carriers) before the catch block below ever
+  // runs. Failing fast here means DownloadingScreen can show a real
+  // "you're offline" message immediately instead of a long stall that
+  // looks identical to a slow-but-working download.
+  if (!(await isOnline())) {
+    return {
+      error: "You're offline — connect to the internet to download this skill.",
+      offline: true,
+    };
   }
 
   try {
