@@ -37,6 +37,7 @@ import {
 } from '@/lib/challengeCompanionSession';
 import { sendScoutFinish, sendScoutProgress, startScoutRace, stopScoutSession } from '@/lib/challengeScoutSession';
 import { submitChallengeResult } from '@/lib/challenges';
+import { logChallengeActivity } from '@/lib/challengeActivity';
 import { useChallengeCompanionSession } from '@/hooks/useChallengeCompanionSession';
 import { useChallengeScoutSession } from '@/hooks/useChallengeScoutSession';
 
@@ -194,6 +195,22 @@ export default function ChallengeRunScreen() {
     else if (pending.challengeId) {
       submitChallengeResult(pending.challengeId, { timeMs, score, total }).catch(() => { /* best-effort */ });
     }
+    // Unconditional activity log -- fires for every opponent kind, unlike
+    // the type-specific calls above which only sync the *result* to that
+    // opponent's own system. Reward keys aren't known yet at this instant
+    // (they're determined on the results/reward screen after standings
+    // are computed for every race type), so this logs 0 here -- the race
+    // itself, its score, and its outcome are what matter for a learner's
+    // activity record regardless of what they later claim.
+    void logChallengeActivity({
+      opponentKind: isCompanion ? 'companion' : isScout ? 'scout' : 'real',
+      curriculumSlug: pending.curriculumSlug,
+      total,
+      outcome: 'completed',
+      score,
+      timeMs,
+      realChallengeId: !isCompanion && !isScout ? pending.challengeId ?? null : null,
+    });
     router.replace('/challenge-results');
   }, [pending, total, isCompanion, isScout, router]);
 
@@ -245,6 +262,17 @@ export default function ChallengeRunScreen() {
 
   const confirmLeave = () => {
     setQuitOpen(false);
+    if (!finishedRef.current && pending) {
+      finishedRef.current = true;
+      void logChallengeActivity({
+        opponentKind: isCompanion ? 'companion' : isScout ? 'scout' : 'real',
+        curriculumSlug: pending.curriculumSlug,
+        total,
+        outcome: 'abandoned',
+        stoppedAtQuestion: qIndex,
+        realChallengeId: !isCompanion && !isScout ? pending.challengeId ?? null : null,
+      });
+    }
     if (isCompanion) stopCompanionSession();
     else if (isScout) stopScoutSession();
     router.back();

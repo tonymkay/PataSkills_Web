@@ -55,7 +55,13 @@ SELECT
         OR COALESCE(dp.premium_override, false)
     ) AS is_premium,
 
-    MAX(COALESCE(dp.streak_max, 0)) AS max_streak
+    MAX(COALESCE(dp.streak_max, 0)) AS max_streak,
+
+    -- Real last-activity signal, carried into play_accounts.updated_at
+    -- below instead of stamping every migrated row with now() (that bug
+    -- is what play_accounts_last_seen_backfill.sql corrects retroactively
+    -- -- this fixes it going forward for any future migration batch).
+    MAX(dp.last_seen_at) AS last_seen_at
 
 FROM public.device_profiles dp
 WHERE dp.email IS NOT NULL
@@ -80,7 +86,9 @@ SELECT
     email,
     key_balance,
     is_premium,
-    now()
+    -- Real last-seen when we have it; now() only as a last resort for
+    -- an old profile that somehow never recorded one.
+    COALESCE(last_seen_at, now())
 FROM migration_old_users
 ON CONFLICT (email)
 DO UPDATE SET
@@ -91,7 +99,14 @@ DO UPDATE SET
     is_premium =
         public.play_accounts.is_premium
         OR EXCLUDED.is_premium,
-    updated_at = now();
+    -- GREATEST, not now(): never overwrite a real post-migration
+    -- activity timestamp (a key spend/grant since this account was
+    -- first migrated) with an older historical last-seen value, and
+    -- never overwrite a genuine value with a bulk-stamped one either.
+    updated_at = GREATEST(
+        public.play_accounts.updated_at,
+        EXCLUDED.updated_at
+    );
 
 
 -- ============================================================
