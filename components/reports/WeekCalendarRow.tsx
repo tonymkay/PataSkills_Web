@@ -5,9 +5,14 @@ import { useTheme, Radius, Spacing, FontFamily, StaticColors } from '@/theme/tok
 
 const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 
+// Today sits in the 3rd of 4 slots (index 2) — 2 days back through today
+// are the "progress" slots, only the 4th (tomorrow) stays future/grey.
 function activeWeekLabels(todayIndex: number) {
   const todayJsIndex = (todayIndex + 1) % 7;
-  return Array.from({ length: 4 }, (_, i) => DAY_LABELS[(todayJsIndex + i) % 7]);
+  return Array.from({ length: 4 }, (_, i) => {
+    const offset = i - 2;
+    return DAY_LABELS[(((todayJsIndex + offset) % 7) + 7) % 7];
+  });
 }
 
 export type DayMark = 'done' | 'active' | 'future' | 'none';
@@ -20,7 +25,13 @@ interface WeekCalendarRowProps {
 export function WeekCalendarRow({ week, todayIndex }: WeekCalendarRowProps) {
   const { colors } = useTheme();
   const labels = activeWeekLabels(todayIndex);
-  const fourMarks: DayMark[] = Array.from({ length: 4 }, (_, i) => week[Math.min(6, todayIndex + i)] ?? 'future');
+  // Same 3-back-through-today window as activeWeekLabels — wraps in both
+  // directions so the marks stay aligned with the rotating day labels.
+  const fourMarks: DayMark[] = Array.from({ length: 4 }, (_, i) => {
+    const offset = i - 2;
+    const idx = (((todayIndex + offset) % 7) + 7) % 7;
+    return week[idx] ?? 'future';
+  });
 
   const highlightColor = colors.secondary || StaticColors.successLime;
   const onHighlightColor = colors.onSecondary || '#000000';
@@ -41,7 +52,7 @@ export function WeekCalendarRow({ week, todayIndex }: WeekCalendarRowProps) {
         {/* 4 Day Markers */}
         <View style={styles.markersRow}>
           {fourMarks.map((mark, i) => {
-            const isActive = i === 0;
+            const isActive = i === 2; // today's slot, 3rd of 4
             const isDone = mark === 'done';
             const isHighlighted = isActive || isDone;
 
