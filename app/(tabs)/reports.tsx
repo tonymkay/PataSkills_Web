@@ -36,6 +36,7 @@ export default function ReportsTab() {
 
   const [keyBadge, setKeyBadge] = useState<string>('0');
   const [maxStreak, setMaxStreak] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
   const [weekMarks, setWeekMarks] = useState<DayMark[]>(['active', 'future', 'future', 'future', 'future', 'future', 'future']);
   const [todayIndex, setTodayIndex] = useState(0);
   const [totalXp, setTotalXp] = useState(0);
@@ -51,6 +52,7 @@ export default function ReportsTab() {
       // 2. Refresh streak & calendar
       getStreakData().then((data) => {
         setMaxStreak(data.maxStreak || data.currentStreak);
+        setCurrentStreak(data.currentStreak);
 
         const now = new Date();
         const tIdx = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6
@@ -136,7 +138,7 @@ export default function ReportsTab() {
         </View>
 
         {/* 4-Day Calendar Strip */}
-        <WeekCalendarRow week={weekMarks} todayIndex={todayIndex} />
+        <WeekCalendarRow week={weekMarks} todayIndex={todayIndex} currentStreak={currentStreak} />
 
         {/* Keys and Quest Entry Row */}
         <Pressable
