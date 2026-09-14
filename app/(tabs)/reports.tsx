@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, Key } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, Typography, FontFamily, StaticColors } from '@/theme/tokens';
@@ -25,7 +25,7 @@ const rechargeArt = require('@/assets/homepage/recharge.webp');
  *  - AppHeader (Avatar + learner name + settings gear)
  *  - 2-column StatCard row (Max Streak with streak.webp, Recharges with recharge.webp)
  *  - WeekCalendarRow (4-day strip with today highlighted and progress track)
- *  - "Keys and Quest(N)" full-width link row
+ *  - "My Keys" full-width link row (key balance + How Keys Work)
  *  - LeaguePanel (amber XP + 3-tier trophy row + progress bar)
  *  - Per-skill progress report cards with XP, progress bar & Missed Questions drill-down
  */
@@ -144,9 +144,9 @@ export default function ReportsTab() {
         {/* 4-Day Calendar Strip */}
         <WeekCalendarRow week={weekMarks} todayIndex={todayIndex} currentStreak={currentStreak} />
 
-        {/* Keys and Quest Entry Row */}
+        {/* My Keys Entry Row */}
         <Pressable
-          onPress={() => router.push('/(tabs)/keys')}
+          onPress={() => router.push('/how-keys-work')}
           style={({ pressed }) => [
             styles.keysQuestRow,
             {
@@ -156,9 +156,17 @@ export default function ReportsTab() {
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Text style={[styles.keysQuestText, { color: colors.onSurface }]}>
-            {`Keys and Quest(${keyBadge})`}
-          </Text>
+          <Text style={[styles.keysCount, { color: StaticColors.achievementAmber }]}>{keyBadge}</Text>
+          <Key
+            size={34}
+            color={StaticColors.achievementAmber}
+            strokeWidth={2}
+            style={styles.keysIcon}
+          />
+          <View style={styles.keysTextCol}>
+            <Text style={[styles.keysTitle, { color: colors.onSurface }]}>My Keys</Text>
+            <Text style={[styles.keysSubtitle, { color: colors.onSurfaceVariant }]}>How Keys work</Text>
+          </View>
           <ChevronRight size={24} color={colors.onSurface} strokeWidth={2.6} />
         </Pressable>
 
@@ -212,16 +220,33 @@ const styles = StyleSheet.create({
   keysQuestRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     borderRadius: Radius.xl,
     borderWidth: 1.5,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.lg,
   },
-  keysQuestText: {
+  keysCount: {
     fontFamily: FontFamily.bold,
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 32,
+    lineHeight: 36,
+  },
+  keysIcon: {
+    marginLeft: Spacing.sm,
+    marginRight: Spacing.md,
+  },
+  keysTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  keysTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  keysSubtitle: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    lineHeight: 18,
   },
   skillsSection: {
     gap: Spacing.md,
