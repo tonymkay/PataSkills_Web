@@ -52,7 +52,11 @@ export default function ReportsTab() {
       // 2. Refresh streak & calendar
       getStreakData().then((data) => {
         setMaxStreak(data.maxStreak || data.currentStreak);
-        setCurrentStreak(data.currentStreak);
+        // currentStreak from getStreakData() excludes today unless today's
+        // session is already done. The calendar strip always shows today's
+        // slot as green regardless of completion, so pad by 1 in that case
+        // so the green-box count matches what's actually being displayed.
+        setCurrentStreak(data.todayActive ? data.currentStreak : data.currentStreak + 1);
 
         const now = new Date();
         const tIdx = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6

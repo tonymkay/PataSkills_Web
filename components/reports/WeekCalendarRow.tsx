@@ -20,9 +20,10 @@ export type DayMark = 'done' | 'active' | 'future' | 'none';
 interface WeekCalendarRowProps {
   week: DayMark[];
   todayIndex: number;
+  currentStreak: number;
 }
 
-export function WeekCalendarRow({ week, todayIndex }: WeekCalendarRowProps) {
+export function WeekCalendarRow({ week, todayIndex, currentStreak }: WeekCalendarRowProps) {
   const { colors } = useTheme();
   const labels = activeWeekLabels(todayIndex);
   // Same 3-back-through-today window as activeWeekLabels — wraps in both
@@ -33,6 +34,12 @@ export function WeekCalendarRow({ week, todayIndex }: WeekCalendarRowProps) {
     return week[idx] ?? 'future';
   });
 
+  // Today (slot index 2) is always green. Up to 2 slots before it turn
+  // green as the streak grows, capped at 3 total — slot 3 (tomorrow) never
+  // turns green. numGreen also drives how far the connector line extends.
+  const numGreen = Math.max(1, Math.min(currentStreak, 3));
+  const leftGreenIndex = 2 - (numGreen - 1);
+
   const highlightColor = colors.secondary || StaticColors.successLime;
   const onHighlightColor = colors.onSecondary || '#000000';
 
@@ -40,21 +47,33 @@ export function WeekCalendarRow({ week, todayIndex }: WeekCalendarRowProps) {
     <View style={styles.container}>
       <View style={styles.stripWrap}>
         {/* Background track line */}
+        {currentStreak > 3 && (
+          <View style={[styles.overflowStub, { backgroundColor: highlightColor }]} />
+        )}
         <View
           style={[
             styles.track,
             { backgroundColor: colors.surfaceContainerHigh || 'rgba(255, 255, 255, 0.08)' },
           ]}
         >
-          <View style={[styles.trackFill, { backgroundColor: highlightColor }]} />
+          {numGreen > 1 && (
+            <View
+              style={[
+                styles.trackFill,
+                {
+                  backgroundColor: highlightColor,
+                  left: `${leftGreenIndex * 25 + 12.5}%`,
+                  width: `${(numGreen - 1) * 25}%`,
+                },
+              ]}
+            />
+          )}
         </View>
 
         {/* 4 Day Markers */}
         <View style={styles.markersRow}>
-          {fourMarks.map((mark, i) => {
-            const isActive = i === 2; // today's slot, 3rd of 4
-            const isDone = mark === 'done';
-            const isHighlighted = isActive || isDone;
+          {fourMarks.map((_mark, i) => {
+            const isHighlighted = i >= leftGreenIndex && i <= 2; // slot 3 (tomorrow) never highlighted
 
             return (
               <View key={`${labels[i]}-${i}`} style={styles.markerCell}>
@@ -115,8 +134,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   trackFill: {
-    width: '30%',
+    position: 'absolute',
+    top: 0,
     height: '100%',
+    borderRadius: Radius.full,
+  },
+  overflowStub: {
+    position: 'absolute',
+    left: -16,
+    top: '50%',
+    marginTop: -4,
+    width: 16,
+    height: 8,
+    borderRadius: Radius.full,
+    zIndex: 1,
   },
   markersRow: {
     flexDirection: 'row',
