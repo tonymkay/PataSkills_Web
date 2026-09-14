@@ -142,6 +142,13 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
+    // Sora (custom TTF) gets extra ascent/descent padding from Android by
+    // default, asymmetric enough that the glyphs sit visibly above center
+    // even though this box itself is centered in the row alongside the
+    // avatar/gear icons. Stripping that padding lets textAlignVertical
+    // actually center the glyphs against those icons.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   nameBtn: {
     flex: 1,
