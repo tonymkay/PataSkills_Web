@@ -288,7 +288,7 @@ export default function SettingsScreen() {
         <SectionHeader title="Account" />
         <SettingsRow
           icon={<Mail size={IconSize.inline} color={iconColor} />}
-          label={email ? truncateEmailMiddle(email) : 'Sign in / Restore account'}
+          label={email ? truncateEmailMiddle(email) : 'Sign In'}
           onPress={() => setRestoreModalVisible(true)}
         />
         <SettingsRow

@@ -244,10 +244,10 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
               </View>
 
               <Text style={[styles.title, { color: colors.onSurface }]}>
-                Restore Account
+                Create Account
               </Text>
               <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-                Link with Google or your email to restore your keys and progress.
+                Link with Google or your email to continue.
               </Text>
 
               {/* Option 1: Continue with Google */}
@@ -314,7 +314,7 @@ export function RestoreAccountModal({ visible, onClose, onSuccess, currentEmail,
                 {busy ? (
                   <ActivityIndicator color="#000" size="small" />
                 ) : (
-                  <Text style={styles.emailRestoreBtnText}>RESTORE ACCOUNT</Text>
+                  <Text style={styles.emailRestoreBtnText}>CREATE ACCOUNT</Text>
                 )}
               </Pressable>
             </View>
