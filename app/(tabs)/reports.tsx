@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { ChevronRight, Key } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Spacing, Radius, Typography, FontFamily, StaticColors } from '@/theme/tokens';
@@ -18,6 +18,7 @@ import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
 const streakArt = require('@/assets/homepage/streak.webp');
 const rechargeArt = require('@/assets/homepage/recharge.webp');
+const keyArt = require('@/assets/premium/key.webp');
 
 /**
  * "Reports" tab — matches the layout, design system, and assets of
@@ -157,11 +158,10 @@ export default function ReportsTab() {
           ]}
         >
           <Text style={[styles.keysCount, { color: StaticColors.achievementAmber }]}>{keyBadge}</Text>
-          <Key
-            size={34}
-            color={StaticColors.achievementAmber}
-            strokeWidth={2}
+          <Image
+            source={keyArt}
             style={styles.keysIcon}
+            contentFit="contain"
           />
           <View style={styles.keysTextCol}>
             <Text style={[styles.keysTitle, { color: colors.onSurface }]}>My Keys</Text>
@@ -231,6 +231,8 @@ const styles = StyleSheet.create({
     lineHeight: 36,
   },
   keysIcon: {
+    width: 34,
+    height: 34,
     marginLeft: Spacing.sm,
     marginRight: Spacing.md,
   },
