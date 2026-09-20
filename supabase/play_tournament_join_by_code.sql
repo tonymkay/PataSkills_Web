@@ -88,6 +88,7 @@ create or replace function public.play_join_tournament_by_code(
 ) returns table (result text, tournament_id uuid)
 language plpgsql security definer
 as $$
+#variable_conflict use_column
 declare
   v_id uuid;
   v_status text;

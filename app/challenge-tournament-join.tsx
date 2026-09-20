@@ -161,12 +161,12 @@ export default function ChallengeTournamentJoinScreen() {
               <TextInput
                 value={code}
                 onChangeText={(t) => { setCode(t.toUpperCase()); if (error) setError(null); }}
-                placeholder="e.g. 7K3PQR"
+                placeholder="e.g. TOKYO_234"
                 placeholderTextColor={colors.onSurfaceVariant}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 autoComplete="off"
-                maxLength={8}
+                maxLength={12}
                 editable={!busy}
                 style={[styles.input, styles.codeInput, { color: colors.onSurface }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
               />

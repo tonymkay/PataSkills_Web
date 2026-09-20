@@ -83,6 +83,7 @@ create or replace function public.play_join_challenge_by_code(
 ) returns table (result text, challenge_id uuid)
 language plpgsql security definer
 as $$
+#variable_conflict use_column
 declare
   v_id uuid;
   v_status text;
