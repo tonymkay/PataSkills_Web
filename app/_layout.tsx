@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BackHandler, Platform, View } from 'react-native';
+import { AppState, BackHandler, Platform, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,7 +12,7 @@ import { fontAssets } from '@/constants/typography';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { initNotifications } from '@/lib/notifications';
-import { configureBilling } from '@/lib/billing';
+import { configureBilling, syncPremiumOverride } from '@/lib/billing';
 import { initAutoBackupOnReconnect } from '@/lib/backup';
 import { getHasEverLoggedIn, subscribeToLogout } from '@/lib/authGate';
 import { getStoredEmail } from '@/lib/email';
@@ -52,8 +52,14 @@ function RootLayoutInner() {
     onLayout();
     void initNotifications();
     void configureBilling();
+    const appStateSub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void syncPremiumOverride();
+    });
     const unsubscribeAutoBackup = initAutoBackupOnReconnect();
-    return unsubscribeAutoBackup;
+    return () => {
+      appStateSub.remove();
+      unsubscribeAutoBackup();
+    };
   }, [onLayout]);
 
   useEffect(() => {

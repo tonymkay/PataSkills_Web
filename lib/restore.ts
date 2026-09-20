@@ -46,7 +46,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 async function selectAccountWithRetry(email: string) {
   const attempt = () =>
-    supabase.from('play_accounts').select('balance, is_premium, reset_at, reset_count').eq('email', email).maybeSingle();
+    supabase.from('play_accounts').select('balance, is_premium, premium_permanent, reset_at, reset_count').eq('email', email).maybeSingle();
 
   let result = await attempt();
   if (result.error) {
@@ -76,6 +76,7 @@ async function applyRestoredState(
   isPremium: boolean,
   resetAtIso: string | null,
   resetCount: number,
+  permanent = false,
 ): Promise<void> {
   await AsyncStorage.setItem('@play/user_email', email);
   await AsyncStorage.removeItem('@play/logged_out_pending');
@@ -90,6 +91,13 @@ async function applyRestoredState(
   };
 
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(restoredState));
+
+  if (isPremium && permanent) {
+    await AsyncStorage.setItem('@play/premium_permanent', 'true');
+    await AsyncStorage.removeItem('@play/premium_expires_at');
+  } else {
+    await AsyncStorage.removeItem('@play/premium_permanent');
+  }
 
   // Join this device to the account immediately (previously only
   // lib/billing.ts's purchase flow did this -- a plain sign-in/restore,
@@ -173,7 +181,7 @@ export async function restoreAccountByEmail(rawEmail: string): Promise<RestoreRe
     if (!acctError && account) {
       const isPremium = !!account.is_premium;
       const balance = isPremium ? 999999 : account.balance;
-      await applyRestoredState(email, account.balance, isPremium, account.reset_at, account.reset_count ?? 0);
+      await applyRestoredState(email, account.balance, isPremium, account.reset_at, account.reset_count ?? 0, !!account.premium_permanent);
       await syncProgressWithCloud(email);
 
       return {

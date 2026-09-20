@@ -377,3 +377,41 @@ export async function markTrackCompleted(
 
   return updated;
 }
+
+
+const lastTrackKey = (skillId: CurriculumSlug | string) => `@play/last_track:${skillId}`;
+
+/** Remembers which track the learner last opened for a skill, so Home's
+ *  resume can reopen that exact (skill, track) cache — downloads are cached
+ *  per track, and resuming the wrong one looks "offline" with no connection. */
+export async function setLastTrack(skillId: CurriculumSlug | string, track: Track): Promise<void> {
+  try {
+    await AsyncStorage.setItem(lastTrackKey(skillId), String(track));
+  } catch {}
+}
+
+/** Last-opened track for a skill. With nothing stored yet (learners who
+ *  played before this existed), falls back to the cached track with the most
+ *  completed sessions. Null when the skill has no cached track at all. */
+export async function getLastTrack(skillId: CurriculumSlug | string): Promise<Track | null> {
+  try {
+    const stored = await AsyncStorage.getItem(lastTrackKey(skillId));
+    if (stored) return stored as Track;
+
+    const prefix = `@play/session_cache:${skillId}:`;
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(prefix));
+    let best: Track | null = null;
+    let bestCompleted = -1;
+    for (const key of keys) {
+      const track = key.slice(prefix.length) as Track;
+      const { completedSessions } = await getTrackProgress(skillId, track);
+      if (completedSessions > bestCompleted) {
+        best = track;
+        bestCompleted = completedSessions;
+      }
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}

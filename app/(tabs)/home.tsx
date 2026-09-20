@@ -8,7 +8,7 @@ import { SkillProgressCard, deriveSkillProgressState } from '@/components/home/S
 import { SkillProgressCardSkeleton } from '@/components/home/SkillProgressCardSkeleton';
 import { ChallengeCornerCard } from '@/components/home/ChallengeCornerCard';
 import { getCurriculaCatalog, getCachedCurricula } from '@/lib/curriculaCatalog';
-import { getLocalProgress } from '@/lib/progress';
+import { getLocalProgress, getLastTrack } from '@/lib/progress';
 import { LANDING_SKILLS } from '@/constants/skills';
 import type { CurriculumSlug } from '@/constants/curriculumAssets';
 
@@ -91,7 +91,7 @@ export default function HomeTab() {
     }, [loadSkills]),
   );
 
-  const handleCardPress = (skill: HomeSkillEntry) => {
+  const handleCardPress = async (skill: HomeSkillEntry) => {
     const { state } = deriveSkillProgressState(skill.completedTopics, skill.totalTopics);
     if (state === 'completed') {
       router.push('/(tabs)/reports');
@@ -100,7 +100,10 @@ export default function HomeTab() {
     // Resume straight into the session in the dedicated full-screen play route
     // (outside tabs so no bottom tab bar is visible) — SkillsFlow's param-driven
     // effect picks this up and resumes the session directly.
-    router.push({ pathname: '/play', params: { resume: 'true', skill: skill.slug } });
+    // Reopen the track this skill was last played on — downloads are cached
+    // per track, so resuming a different one looks "offline" without a connection.
+    const track = await getLastTrack(skill.slug);
+    router.push({ pathname: '/play', params: { resume: 'true', skill: skill.slug, ...(track ? { track } : {}) } });
   };
 
   return (

@@ -11,7 +11,7 @@ import { TrackDetailScreen } from '@/components/landing/TrackDetailScreen';
 import { DownloadingScreen } from '@/components/feedback/DownloadingScreen';
 import { downloadSession, DownloadProgress } from '@/lib/downloadSession';
 import { navDismissTo } from '@/lib/navDirection';
-import { areTabsUnlocked } from '@/lib/progress';
+import { areTabsUnlocked, setLastTrack } from '@/lib/progress';
 import { trackSessionStarted, trackTopicLoadingStarted } from '@/lib/deviceAnalytics';
 import { Track } from '@/lib/curriculum';
 import { PlaySession as PlaySessionData } from '@/utils/groupSessions';
@@ -124,6 +124,7 @@ export function SkillsFlow({ embedded = false, standalone = false, isOnboarding 
       setOffline(!!result.offline);
       return;
     }
+    void setLastTrack(skill, track);
     // Topic-level deep link (§E of the multi-skill architecture doc): jump
     // straight to whichever session contains this topicId instead of
     // session 1. Only meaningful for track=full on topic-grouped skills —

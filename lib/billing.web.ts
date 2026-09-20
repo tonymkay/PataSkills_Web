@@ -228,6 +228,7 @@ export async function claimPremiumOverride(): Promise<void> {
 
 export async function enforceLocalExpiry(): Promise<void> {
   try {
+    if ((await AsyncStorage.getItem('@play/premium_permanent')) === 'true') return;
     const localExpires = await AsyncStorage.getItem('@play/premium_expires_at');
     if (localExpires) {
       const expTime = new Date(localExpires).getTime();
@@ -247,11 +248,34 @@ export async function enforceLocalExpiry(): Promise<void> {
 }
 
 export async function syncPremiumOverride(): Promise<void> {
+  try {
+    const email = await AsyncStorage.getItem('@play/user_email');
+    if (email) {
+      const { data, error } = await supabase
+        .from('play_accounts')
+        .select('is_premium, premium_permanent')
+        .eq('email', email)
+        .maybeSingle();
+      if (!error && data) {
+        if (data.is_premium === true && data.premium_permanent === true) {
+          await AsyncStorage.setItem('@play/premium_permanent', 'true');
+          await AsyncStorage.removeItem('@play/premium_expires_at');
+          const { getKeysState, setPremium } = await import('@/lib/keys');
+          const state = await getKeysState();
+          if (!state.isPremium || state.expiresAt) await setPremium(true, null);
+          return;
+        }
+        await AsyncStorage.removeItem('@play/premium_permanent');
+      }
+    }
+  } catch {
+    /* best effort — fall through to the local expiry check */
+  }
   await enforceLocalExpiry();
 }
 
 export async function configureBilling(): Promise<void> {
-  await enforceLocalExpiry();
+  await syncPremiumOverride();
 }
 
 export async function restorePurchases(): Promise<boolean> {

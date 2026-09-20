@@ -47,7 +47,7 @@ export default function ReportsTab() {
     useCallback(() => {
       // 1. Refresh key balance
       getKeyBalance()
-        .then((balance) => setKeyBadge(balance === Infinity ? '∞' : String(balance)))
+        .then((balance) => setKeyBadge(balance >= 999999 ? '∞' : String(balance)))
         .catch(() => {});
 
       // 2. Refresh streak & calendar
