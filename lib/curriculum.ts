@@ -137,7 +137,7 @@ export function deriveTrack(
     if (customDef.filterTags) {
       filtered = filtered.filter((q) => tagsMatch(q.tags, customDef.filterTags!));
     }
-    return chunkIntoSessions(filtered, customDef.title || 'Practice');
+    return chunkIntoSessions(filtered, customDef.title || 'Practice', customDef.sessionSize ?? 7);
   }
 
   if (track === 'full') {
@@ -285,7 +285,7 @@ function computeTrackTotals(remote: RemoteCurriculum): Record<Track, TrackTotals
         }
         totals[def.id] = {
           totalQuestions: filtered.length,
-          totalSessions: Math.max(1, Math.ceil(filtered.length / 7)),
+          totalSessions: Math.max(1, Math.ceil(filtered.length / (def.sessionSize ?? 7))),
         };
       }
     }

@@ -37,6 +37,11 @@ export interface CurriculumTrackDefinition {
    * with filterRole/filterFormat — all present filters must match.
    */
   filterTags?: string | string[];
+  /**
+   * Questions per session for a filtered (tag/role/format) track.
+   * Defaults to 7 when omitted, so existing skills are unaffected.
+   */
+  sessionSize?: number;
   kind?: 'quiz' | 'reading' | 'full';
   /**
    * Groups this track with sibling tracks under one shared heading in

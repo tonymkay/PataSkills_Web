@@ -41,11 +41,11 @@ export function groupQuestionsBySession(questions: QuizQuestion[]): QuizPlaySess
   });
 }
 
-/** Slice an already-filtered, ordered question list into groups of 7. */
-export function chunkIntoSessions(questions: QuizQuestion[], label: string): QuizPlaySession[] {
+/** Slice an already-filtered, ordered question list into groups of `size` (default 7). */
+export function chunkIntoSessions(questions: QuizQuestion[], label: string, size: number = 7): QuizPlaySession[] {
   const sessions: QuizPlaySession[] = [];
-  for (let i = 0; i < questions.length; i += 7) {
-    const chunk = questions.slice(i, i + 7);
+  for (let i = 0; i < questions.length; i += size) {
+    const chunk = questions.slice(i, i + size);
     const setNumber = sessions.length + 1;
     sessions.push({
       kind: 'quiz',
