@@ -64,6 +64,12 @@ export const LANDING_SKILLS: LandingSkill[] = [
     subtitle: 'World Facts',
     tracks: ['reading', 'full'],
   },
+  {
+    id: 'kenyan-brands',
+    title: 'Test yourself with\n100 Kenyan brand\nquestions',
+    subtitle: 'Kenyan Brands',
+    tracks: ['reading', 'full'],
+  },
 ];
 
 // Generic fallback for any skill that exists only as a play_curricula DB

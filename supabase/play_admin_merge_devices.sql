@@ -19,15 +19,21 @@ begin
   update play_devices new_d
   set key_balance = greatest(coalesce(new_d.key_balance, 0), coalesce(old_d.key_balance, 0)),
       is_premium = new_d.is_premium or old_d.is_premium,
-      landing_views_count = new_d.landing_views_count + old_d.landing_views_count,
-      sessions_count = new_d.sessions_count + old_d.sessions_count,
-      topics_completed_count = new_d.topics_completed_count + old_d.topics_completed_count,
+      landing_views_count = coalesce(new_d.landing_views_count, 0) + coalesce(old_d.landing_views_count, 0),
+      sessions_count = coalesce(new_d.sessions_count, 0) + coalesce(old_d.sessions_count, 0),
+      topics_completed_count = coalesce(new_d.topics_completed_count, 0) + coalesce(old_d.topics_completed_count, 0),
       updated_at = now()
   from play_devices old_d
   where old_d.device_id = p_old_device_id
     and new_d.device_id = p_new_device_id;
 
-  -- 2. Fold play_user_stats.
+  -- 2. Fold play_user_stats. If only the OLD device has a stats row, carry
+  --    it over first -- step 6 deletes the old row, which used to lose that XP.
+  insert into play_user_stats (device_id, email, total_xp, active_days_count, updated_at)
+  select p_new_device_id, coalesce(v_new_email, os.email), os.total_xp, os.active_days_count, now()
+  from play_user_stats os
+  where os.device_id = p_old_device_id
+  on conflict (device_id) do nothing;
   update play_user_stats new_s
   set total_xp = greatest(new_s.total_xp, old_s.total_xp),
       active_days_count = greatest(new_s.active_days_count, old_s.active_days_count),
@@ -53,9 +59,9 @@ begin
   on conflict (device_id, skill_id) do update
     set completed_topics = greatest(play_progress.completed_topics, excluded.completed_topics),
         total_topics = greatest(play_progress.total_topics, excluded.total_topics),
-        completed_tracks = (
+        completed_tracks = coalesce((
           select jsonb_agg(distinct t) from jsonb_array_elements_text(play_progress.completed_tracks || excluded.completed_tracks) t
-        ),
+        ), '[]'::jsonb),
         updated_at = now();
 
   -- 5. Re-point device_events and question_attempts so the old device's

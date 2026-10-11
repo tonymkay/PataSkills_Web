@@ -13,6 +13,7 @@ export const CurriculumCoverImagePaths: Record<string, string> = {
   'true-false': 'curricula/true-false.webp',
   'bible-trivia': 'curricula/bible-trivia.webp',
   'world-facts': 'curricula/world-facts.webp',
+  'kenyan-brands': 'curricula/kenyan-brands.webp',
 };
 
 // Opaque skill identifier. Was a closed union (keyof typeof
